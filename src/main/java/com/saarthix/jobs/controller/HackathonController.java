@@ -18,7 +18,7 @@ import org.springframework.security.core.Authentication;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/hackathons")
+@RequestMapping("/hackathons")
 @CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 public class HackathonController {
 

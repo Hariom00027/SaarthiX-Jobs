@@ -20,7 +20,7 @@ import java.util.Map;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/jobs")
+@RequestMapping("/jobs")
 @CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 public class JobController {
 
