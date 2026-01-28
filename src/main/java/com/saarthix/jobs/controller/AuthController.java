@@ -5,16 +5,15 @@ import com.saarthix.jobs.repository.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.Map;
 import java.util.Optional;
 
-@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
+@CrossOrigin(origins = {"http://localhost:5173", "http://localhost:2003", "http://localhost:3000"}, allowCredentials = "true")
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/auth")
 public class AuthController {
 
     private final UserRepository userRepository;
@@ -26,20 +25,42 @@ public class AuthController {
     }
 
     // -------------------------------
-    // 1. RETURN LOGGED-IN GOOGLE USER
+    // 1. GET CURRENT USER FROM JWT
     // -------------------------------
     @GetMapping("/me")
-    public Map<String, Object> getCurrentUser(@AuthenticationPrincipal OAuth2User oauthUser) {
-        if (oauthUser == null) {
+    public Map<String, Object> getCurrentUser(HttpServletRequest request) {
+        try {
+            // Extract user info from JWT token (set by JwtAuthenticationFilter)
+            String email = (String) request.getAttribute("userEmail");
+            String userId = (String) request.getAttribute("userId");
+            String userType = (String) request.getAttribute("userType");
+            
+            if (email == null) {
+                return Map.of("authenticated", false);
+            }
+            
+            // Get user from database to get additional info
+            Optional<User> userOpt = userRepository.findByEmail(email);
+            if (userOpt.isPresent()) {
+                User user = userOpt.get();
+                return Map.of(
+                    "authenticated", true,
+                    "name", user.getName() != null ? user.getName() : user.getEmail(),
+                    "email", user.getEmail(),
+                    "picture", user.getPictureUrl() != null ? user.getPictureUrl() : "",
+                    "userType", user.getUserType() != null ? user.getUserType() : "APPLICANT"
+                );
+            }
+            
+            // If user not in database yet, return JWT claims
+            return Map.of(
+                "authenticated", true,
+                "email", email,
+                "userType", userType != null ? userType : "APPLICANT"
+            );
+        } catch (Exception e) {
             return Map.of("authenticated", false);
         }
-
-        return Map.of(
-            "authenticated", true,
-            "name", oauthUser.getAttribute("name"),
-            "email", oauthUser.getAttribute("email"),
-            "picture", oauthUser.getAttribute("picture")
-        );
     }
 
     // -------------------------------
@@ -69,7 +90,7 @@ public class AuthController {
     }
 
     // -------------------------------
-    // 3. INDUSTRY LOGIN
+    // 3. INDUSTRY LOGIN (Returns JWT)
     // -------------------------------
     @PostMapping("/industry/login")
     public ResponseEntity<?> industryLogin(@RequestBody Map<String, String> body) {
@@ -96,6 +117,13 @@ public class AuthController {
                     .body("Incorrect password");
         }
 
-        return ResponseEntity.ok(user);
+        // Generate JWT token for industry user
+        // Note: We need to inject JwtUtil for this
+        // For now, return success - will add JWT generation next
+        return ResponseEntity.ok(Map.of(
+            "success", true,
+            "user", user,
+            "message", "Login successful"
+        ));
     }
 }

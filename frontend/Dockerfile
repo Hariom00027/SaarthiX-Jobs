@@ -6,9 +6,11 @@ COPY package*.json ./
 # Install dependencies
 RUN npm install --legacy-peer-deps
 
-# Accept build argument
+# Accept build arguments
 ARG VITE_BACKEND_URL
 ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
+ARG VITE_RAPIDAPI_KEY
+ENV VITE_RAPIDAPI_KEY=$VITE_RAPIDAPI_KEY
 
 # Copy source files (excluding node_modules)
 COPY src ./src
@@ -21,8 +23,8 @@ RUN npm run build
 FROM nginx:alpine
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-# Copy built files from builder stage
-COPY --from=builder /app/dist /usr/share/nginx/html
+# Copy built files from builder stage to subpath directory
+COPY --from=builder /app/dist /usr/share/nginx/html/jobs
 # Expose port 80
 EXPOSE 80
 # Start nginx
