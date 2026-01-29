@@ -14,7 +14,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/notifications")
-@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 public class NotificationController {
 
     private final NotificationRepository notificationRepository;
@@ -46,8 +45,18 @@ public class NotificationController {
         List<Notification> allNotifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(user.getId());
         
         // Filter by userType to ensure users only see their relevant notifications
+        // Accept both APPLICANT and STUDENT for consumer notifications
         List<Notification> filteredNotifications = allNotifications.stream()
-            .filter(n -> user.getUserType() != null && user.getUserType().equals(n.getUserType()))
+            .filter(n -> {
+                String uType = user.getUserType();
+                String nType = n.getUserType();
+                if (uType == null || nType == null) return false;
+                if (uType.equals(nType)) return true;
+                // Cross-compatibility
+                if (uType.equals("STUDENT") && nType.equals("APPLICANT")) return true;
+                if (uType.equals("APPLICANT") && nType.equals("STUDENT")) return true;
+                return false;
+            })
             .toList();
         
         return ResponseEntity.ok(filteredNotifications);
@@ -73,7 +82,16 @@ public class NotificationController {
         
         // Filter by userType
         long unreadCount = unreadNotifications.stream()
-            .filter(n -> user.getUserType() != null && user.getUserType().equals(n.getUserType()))
+            .filter(n -> {
+                String uType = user.getUserType();
+                String nType = n.getUserType();
+                if (uType == null || nType == null) return false;
+                if (uType.equals(nType)) return true;
+                // Cross-compatibility
+                if (uType.equals("STUDENT") && nType.equals("APPLICANT")) return true;
+                if (uType.equals("APPLICANT") && nType.equals("STUDENT")) return true;
+                return false;
+            })
             .count();
         
         return ResponseEntity.ok(Map.of("count", unreadCount));
@@ -178,12 +196,16 @@ public class NotificationController {
         }
 
         Object principal = auth.getPrincipal();
+        String email = null;
 
         if (principal instanceof OAuth2User oauthUser) {
-            String email = oauthUser.getAttribute("email");
-            if (email != null) {
-                return userRepository.findByEmail(email).orElse(null);
-            }
+            email = oauthUser.getAttribute("email");
+        } else if (principal instanceof String) {
+            email = (String) principal;
+        }
+
+        if (email != null) {
+            return userRepository.findByEmail(email).orElse(null);
         }
 
         return null;

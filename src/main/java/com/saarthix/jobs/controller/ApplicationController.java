@@ -22,7 +22,6 @@ import java.util.Optional;
 
 @RestController
 @RequestMapping("/applications")
-@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 public class ApplicationController {
 
     private final ApplicationRepository applicationRepository;
@@ -86,9 +85,9 @@ public class ApplicationController {
                 return ResponseEntity.status(401).body("User not found");
             }
 
-            // Check if user is APPLICANT type
-            if (!"APPLICANT".equals(user.getUserType())) {
-                return ResponseEntity.status(403).body("Only APPLICANT users can apply to jobs. Your current type: " + user.getUserType());
+            // Check if user is APPLICANT or STUDENT type
+            if (!"APPLICANT".equals(user.getUserType()) && !"STUDENT".equals(user.getUserType())) {
+                return ResponseEntity.status(403).body("Only APPLICANT or STUDENT users can apply to jobs. Your current type: " + user.getUserType());
             }
 
             String jobId = (String) applicationData.get("jobId");
@@ -666,12 +665,16 @@ public class ApplicationController {
         }
 
         Object principal = auth.getPrincipal();
+        String email = null;
 
         if (principal instanceof OAuth2User oauthUser) {
-            String email = oauthUser.getAttribute("email");
-            if (email != null) {
-                return userRepository.findByEmail(email).orElse(null);
-            }
+            email = oauthUser.getAttribute("email");
+        } else if (principal instanceof String) {
+            email = (String) principal;
+        }
+
+        if (email != null) {
+            return userRepository.findByEmail(email).orElse(null);
         }
 
         return null;

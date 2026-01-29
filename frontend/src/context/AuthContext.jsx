@@ -37,7 +37,7 @@ export const AuthProvider = ({ children }) => {
     if (token) {
       // Store JWT token from SomethingX redirect
       console.log('[AuthContext] Detected JWT token in URL, storing...');
-      localStorage.setItem('authToken', token);
+      localStorage.setItem('token', token);
 
       // Clean URL
       window.history.replaceState({}, '', window.location.pathname);
@@ -46,7 +46,7 @@ export const AuthProvider = ({ children }) => {
       loadAuth();
     } else {
       // Check if we already have a token
-      const existingToken = localStorage.getItem('authToken');
+      const existingToken = localStorage.getItem('token');
       if (existingToken) {
         console.log('[AuthContext] Found existing token, validating...');
         loadAuth();
@@ -73,7 +73,7 @@ export const AuthProvider = ({ children }) => {
   const clearAuth = () => {
     setUser(null);
     setIsAuthenticated(false);
-    localStorage.removeItem('authToken');
+    localStorage.removeItem('token');
   };
 
   // Helper to check if user is INDUSTRY type

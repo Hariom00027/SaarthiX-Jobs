@@ -3,12 +3,26 @@ import apiClient from './apiClient';
 import { API_BASE_URL } from '../config/apiConfig';
 
 // Use environment variable for API key, fallback for development
-const API_KEY = import.meta.env.VITE_RAPIDAPI_KEY || 'af93a5aec5msh431daab4f70e59fp1726b9jsn6d555bb1cda3';
+const API_KEY = import.meta.env.VITE_RAPIDAPI_KEY || 'f0235cd2b0mshac603cc0e4cabafp1ffb39jsnd44cae2de884';
 const HOST = 'jsearch.p.rapidapi.com';
 const BASE_URL = `https://${HOST}`;
 
 // Search for jobs
 export const fetchJobs = async (query = 'developer jobs', location = 'us', page = 1) => {
+  // Try to load from session storage first to save API quota (429 errors)
+  const cacheKey = `jobs_search_${query}_${location}_${page}`;
+  const cachedData = sessionStorage.getItem(cacheKey);
+
+  if (cachedData) {
+    try {
+      const parsed = JSON.parse(cachedData);
+      console.log('[API] Returning cached jobs for:', cacheKey);
+      return parsed;
+    } catch (e) {
+      sessionStorage.removeItem(cacheKey);
+    }
+  }
+
   const options = {
     method: 'GET',
     url: `${BASE_URL}/search`,
@@ -27,8 +41,14 @@ export const fetchJobs = async (query = 'developer jobs', location = 'us', page 
 
   try {
     const response = await axios.request(options);
-    console.log(response.data);
-    return response.data.data || [];
+    const jobs = response.data.data || [];
+
+    // Cache the result
+    if (jobs.length > 0) {
+      sessionStorage.setItem(cacheKey, JSON.stringify(jobs));
+    }
+
+    return jobs;
   } catch (error) {
     console.error('Error fetching jobs:', error);
     throw error;
@@ -37,6 +57,20 @@ export const fetchJobs = async (query = 'developer jobs', location = 'us', page 
 
 // Get job details by job_id
 export const fetchJobDetails = async (jobId, country = 'us') => {
+  // Try to load from session storage first
+  const cacheKey = `job_details_${jobId}`;
+  const cachedData = sessionStorage.getItem(cacheKey);
+
+  if (cachedData) {
+    try {
+      const parsed = JSON.parse(cachedData);
+      console.log('[API] Returning cached job details for:', jobId);
+      return parsed;
+    } catch (e) {
+      sessionStorage.removeItem(cacheKey);
+    }
+  }
+
   const options = {
     method: 'GET',
     url: `${BASE_URL}/job-details`,
@@ -52,7 +86,14 @@ export const fetchJobDetails = async (jobId, country = 'us') => {
 
   try {
     const response = await axios.request(options);
-    return response.data.data?.[0] || null;
+    const details = response.data.data?.[0] || null;
+
+    // Cache the result
+    if (details) {
+      sessionStorage.setItem(cacheKey, JSON.stringify(details));
+    }
+
+    return details;
   } catch (error) {
     console.error('Error fetching job details:', error);
     throw error;
