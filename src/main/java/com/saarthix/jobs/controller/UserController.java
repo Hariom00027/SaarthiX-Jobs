@@ -14,7 +14,6 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/user")
-@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 public class UserController {
 
     private final UserRepository userRepository;
@@ -38,8 +37,8 @@ public class UserController {
         if (req.email() == null || req.email().trim().isEmpty()) {
             return ResponseEntity.badRequest().body("Email is required");
         }
-        if (req.userType() == null || (!req.userType().equals("APPLICANT") && !req.userType().equals("INDUSTRY"))) {
-            return ResponseEntity.badRequest().body("Invalid user type. Must be APPLICANT or INDUSTRY");
+        if (req.userType() == null || (!req.userType().equals("APPLICANT") && !req.userType().equals("INDUSTRY") && !req.userType().equals("STUDENT"))) {
+            return ResponseEntity.badRequest().body("Invalid user type. Must be APPLICANT, INDUSTRY or STUDENT");
         }
 
         // Check if user already exists

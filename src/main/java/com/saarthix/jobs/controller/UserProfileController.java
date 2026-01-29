@@ -15,7 +15,6 @@ import java.util.Optional;
 
 @RestController
 @RequestMapping("/profile")
-@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 public class UserProfileController {
 
     private final UserProfileRepository userProfileRepository;
@@ -82,10 +81,10 @@ public class UserProfileController {
 
             System.out.println("User found: " + user.getEmail() + ", UserType: " + user.getUserType());
 
-            // Check if user is APPLICANT type
-            if (!"APPLICANT".equals(user.getUserType())) {
-                System.err.println("ERROR: User is not APPLICANT type: " + user.getUserType());
-                return ResponseEntity.status(403).body("Only APPLICANT users can create profiles");
+            // Check if user is APPLICANT or STUDENT type
+            if (!"APPLICANT".equals(user.getUserType()) && !"STUDENT".equals(user.getUserType())) {
+                System.err.println("ERROR: User is not APPLICANT or STUDENT type: " + user.getUserType());
+                return ResponseEntity.status(403).body("Only APPLICANT or STUDENT users can create profiles");
             }
 
             // Check if profile already exists
@@ -501,12 +500,16 @@ public class UserProfileController {
         }
 
         Object principal = auth.getPrincipal();
+        String email = null;
 
         if (principal instanceof OAuth2User oauthUser) {
-            String email = oauthUser.getAttribute("email");
-            if (email != null) {
-                return userRepository.findByEmail(email).orElse(null);
-            }
+            email = oauthUser.getAttribute("email");
+        } else if (principal instanceof String) {
+            email = (String) principal;
+        }
+
+        if (email != null) {
+            return userRepository.findByEmail(email).orElse(null);
         }
 
         return null;

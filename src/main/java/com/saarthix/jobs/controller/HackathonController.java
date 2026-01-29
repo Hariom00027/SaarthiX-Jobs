@@ -19,7 +19,6 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/hackathons")
-@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 public class HackathonController {
 
     private final HackathonRepository hackathonRepository;

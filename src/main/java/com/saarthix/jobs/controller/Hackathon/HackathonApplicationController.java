@@ -18,7 +18,6 @@ import java.util.Optional;
 
 @RestController
 @RequestMapping("/hackathon-applications")
-@CrossOrigin(origins = "http://localhost:5173", allowCredentials = "true")
 public class HackathonApplicationController {
 
     private final HackathonApplicationRepository applicationRepository;
@@ -61,10 +60,10 @@ public class HackathonApplicationController {
             }
             
             System.out.println("User Type: " + user.getUserType());
-            if (!"APPLICANT".equals(user.getUserType())) {
-                System.err.println("User is not an applicant: " + user.getUserType());
+            if (!"APPLICANT".equals(user.getUserType()) && !"STUDENT".equals(user.getUserType())) {
+                System.err.println("User is not an applicant or student: " + user.getUserType());
                 return ResponseEntity.status(403)
-                        .body("Only applicants can apply for hackathons. You are: " + user.getUserType());
+                        .body("Only applicants or students can apply for hackathons. You are: " + user.getUserType());
             }
 
             // 2️⃣ Validate hackathon existence
@@ -138,9 +137,9 @@ public class HackathonApplicationController {
             System.out.println("User Email: " + user.getEmail());
             System.out.println("User Type: " + user.getUserType());
             
-            if (!"APPLICANT".equals(user.getUserType())) {
-                System.err.println("User is not an applicant: " + user.getUserType());
-                return ResponseEntity.status(403).body("Only applicants can view their applications. You are: " + user.getUserType());
+            if (!"APPLICANT".equals(user.getUserType()) && !"STUDENT".equals(user.getUserType())) {
+                System.err.println("User is not an applicant or student: " + user.getUserType());
+                return ResponseEntity.status(403).body("Only applicants or students can view their applications. You are: " + user.getUserType());
             }
             
             System.out.println("Fetching applications for applicant ID: " + user.getId());
@@ -164,11 +163,23 @@ public class HackathonApplicationController {
     // Helper — resolve logged-in user from OAuth
     // --------------------------------------------
     private User resolveUser(Authentication auth) {
-        if (auth == null) return null;
-        if (auth.getPrincipal() instanceof OAuth2User oauth) {
-            String email = oauth.getAttribute("email");
+        if (auth == null || auth.getPrincipal() == null) {
+            return null;
+        }
+
+        Object principal = auth.getPrincipal();
+        String email = null;
+
+        if (principal instanceof OAuth2User oauthUser) {
+            email = oauthUser.getAttribute("email");
+        } else if (principal instanceof String) {
+            email = (String) principal;
+        }
+
+        if (email != null) {
             return userRepository.findByEmail(email).orElse(null);
         }
+
         return null;
     }
 }

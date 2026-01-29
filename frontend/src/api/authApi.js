@@ -2,7 +2,7 @@ import { API_BASE_URL } from '../config/apiConfig';
 
 // Helper to get JWT token from localStorage
 const getAuthToken = () => {
-  return localStorage.getItem('authToken');
+  return localStorage.getItem('token');
 };
 
 // Helper to create headers with JWT token
@@ -39,7 +39,7 @@ export const checkAuth = async () => {
 
     if (!response.ok) {
       // Token might be expired or invalid
-      localStorage.removeItem('authToken');
+      localStorage.removeItem('token');
       return { authenticated: false };
     }
 
@@ -61,7 +61,7 @@ export const checkAuth = async () => {
 export const logout = async (clearAuthCallback) => {
   try {
     // Clear local storage
-    localStorage.removeItem('authToken');
+    localStorage.removeItem('token');
 
     // Clear auth state if callback provided
     if (clearAuthCallback) {
@@ -73,7 +73,7 @@ export const logout = async (clearAuthCallback) => {
   } catch (error) {
     console.error('Error logging out:', error);
     // Still clear local state even if something fails
-    localStorage.removeItem('authToken');
+    localStorage.removeItem('token');
     if (clearAuthCallback) {
       clearAuthCallback();
     }
@@ -83,4 +83,3 @@ export const logout = async (clearAuthCallback) => {
 
 // Export helper for other API files to use
 export { getAuthHeaders };
-
