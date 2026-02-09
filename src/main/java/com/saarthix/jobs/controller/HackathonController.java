@@ -33,10 +33,20 @@ public class HackathonController {
 
     // --- KEEP ONLY THIS METHOD ---
     private User resolveUser(Authentication auth) {
-        if (auth == null) return null;
+        if (auth == null || auth.getPrincipal() == null) {
+            return null;
+        }
 
-        if (auth.getPrincipal() instanceof OAuth2User oauth) {
-            String email = oauth.getAttribute("email");
+        Object principal = auth.getPrincipal();
+        String email = null;
+
+        if (principal instanceof OAuth2User oauth) {
+            email = oauth.getAttribute("email");
+        } else if (principal instanceof String) {
+            email = (String) principal;
+        }
+
+        if (email != null) {
             return userRepository.findByEmail(email).orElse(null);
         }
 

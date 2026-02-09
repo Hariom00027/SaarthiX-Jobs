@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { AuthProvider } from './context/AuthContext';
-import Header from './components/Header';
+import Navbar from './components/Navbar';
 import Dashboard from './components/Dashboard';
 import Login from './components/Login';
 import JobList from './components/JobList';
@@ -22,14 +22,14 @@ function App() {
   // Get basename calculated in main.jsx
   // This is set synchronously before React renders, ensuring Router gets correct basename
   const basename = window.__JOBS_BASENAME__ || '/';
-  
+
   console.log('[Jobs App] Using basename:', basename, 'Current pathname:', window.location.pathname);
-  
+
   return (
     <AuthProvider>
       <Router basename={basename}>
         <div className="min-h-screen bg-gray-50">
-          <Header />
+          <Navbar />
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/login" element={<Login />} />

@@ -123,7 +123,7 @@ export default function Dashboard() {
             <span className="text-3xl">💼</span>
           </div>
           <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-4 tracking-tight">
-            Welcome to Saarthix Jobs
+            Welcome to <span style={{ fontFamily: "'Times New Roman', serif", fontWeight: 'bold', fontStyle: 'italic' }}>Saarthix</span> Jobs
           </h1>
           <p className="text-gray-600 text-xl max-w-2xl mx-auto leading-relaxed font-light">
             Connect with opportunities that match your career goals. Browse jobs or post positions to find the right talent.

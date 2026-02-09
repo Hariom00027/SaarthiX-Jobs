@@ -138,7 +138,7 @@ export default function Login() {
               <span className="text-3xl">💼</span>
             </div>
             <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-3 tracking-tight">
-              {step === 1 ? 'Welcome to Saarthix Jobs' : 'Sign in with Google'}
+              {step === 1 ? <>Welcome to <span style={{ fontFamily: "'Times New Roman', serif", fontWeight: 'bold', fontStyle: 'italic' }}>Saarthix</span> Jobs</> : 'Sign in with Google'}
             </h1>
             <p className="text-gray-600 text-lg">
               {step === 1 

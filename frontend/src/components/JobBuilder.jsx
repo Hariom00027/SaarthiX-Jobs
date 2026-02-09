@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import apiClient from '../api/apiClient';
 import { API_BASE_URL } from '../config/apiConfig';
 
 // Common suggestions data
@@ -28,15 +28,15 @@ export default function JobBuilder() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isAuthenticated, loading: authLoading, isIndustry } = useAuth();
-  
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
-  
+
   const [activeTab, setActiveTab] = useState('basic');
   const [completedTabs, setCompletedTabs] = useState(new Set());
-  
+
   const [formData, setFormData] = useState({
     title: '',
     company: '',
@@ -86,11 +86,8 @@ export default function JobBuilder() {
   const loadJob = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(
-        `${API_BASE_URL}/jobs/${editingJobId}`,
-        { withCredentials: true }
-      );
-      
+      const response = await apiClient.get(`/jobs/${editingJobId}`);
+
       const job = response.data;
       if (job) {
         setFormData({
@@ -165,11 +162,11 @@ export default function JobBuilder() {
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
-    
+
     // Handle salary validation
     if (name === 'minSalary' || name === 'maxSalary') {
       const numValue = value === '' ? '' : parseFloat(value);
-      
+
       if (name === 'minSalary') {
         setFormData((prev) => {
           const newData = { ...prev, [name]: value };
@@ -194,7 +191,7 @@ export default function JobBuilder() {
         return;
       }
     }
-    
+
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
@@ -223,10 +220,10 @@ export default function JobBuilder() {
   const handleSave = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     // Prevent multiple simultaneous saves
     if (saving) return;
-    
+
     // For saving as draft, silently save without validation or toasts
     setSaving(true);
     setError(null);
@@ -251,20 +248,18 @@ export default function JobBuilder() {
       let response;
       // Use savedJobId if we've already saved a draft, otherwise use editingJobId
       const jobIdToUpdate = savedJobId || editingJobId;
-      
+
       if (jobIdToUpdate) {
         // Update existing job
-        response = await axios.put(
-          `${API_BASE_URL}/jobs/${jobIdToUpdate}`,
-          jobData,
-          { withCredentials: true }
+        response = await apiClient.put(
+          `/jobs/${jobIdToUpdate}`,
+          jobData
         );
       } else {
         // Create new draft job
-        response = await axios.post(
-          `${API_BASE_URL}/jobs`,
-          jobData,
-          { withCredentials: true }
+        response = await apiClient.post(
+          '/jobs',
+          jobData
         );
         // Store the ID of the newly created draft job
         if (response.data && response.data.id) {
@@ -273,7 +268,7 @@ export default function JobBuilder() {
       }
 
       console.log('Job saved as draft');
-      
+
       // Automatically move to next section
       const currentTabIndex = JOB_TABS.findIndex(tab => tab.id === activeTab);
       if (currentTabIndex < JOB_TABS.length - 1) {
@@ -290,10 +285,10 @@ export default function JobBuilder() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     // Prevent multiple simultaneous submissions
     if (saving) return;
-    
+
     // Check for missing required fields
     const missingFields = [];
     if (!formData.title) missingFields.push('Job Title');
@@ -308,7 +303,7 @@ export default function JobBuilder() {
     if (formData.minSalary && formData.maxSalary) {
       const minSalary = parseFloat(formData.minSalary);
       const maxSalary = parseFloat(formData.maxSalary);
-      
+
       if (maxSalary < minSalary) {
         setSalaryError('Maximum salary cannot be less than minimum salary');
         toast.error('Please fill in all required details about the job', {
@@ -359,40 +354,38 @@ export default function JobBuilder() {
       let response;
       // Use savedJobId if we've saved a draft, otherwise use editingJobId
       const jobIdToUpdate = savedJobId || editingJobId;
-      
+
       if (jobIdToUpdate) {
         // Update existing job (convert draft to active or update active job)
-        response = await axios.put(
-          `${API_BASE_URL}/jobs/${jobIdToUpdate}`,
-          jobData,
-          { withCredentials: true }
+        response = await apiClient.put(
+          `/jobs/${jobIdToUpdate}`,
+          jobData
         );
       } else {
         // Create new active job
-        response = await axios.post(
-          `${API_BASE_URL}/jobs`,
-          jobData,
-          { withCredentials: true }
+        response = await apiClient.post(
+          '/jobs',
+          jobData
         );
       }
 
       console.log('Job posted successfully:', response.data);
-      
+
       // Show success toast
       toast.success('Job posted successfully!', {
         position: "top-right",
         autoClose: 3000,
       });
-      
+
       setTimeout(() => {
         navigate('/manage-applications');
       }, 2000);
     } catch (err) {
       console.error('Error posting job:', err);
-      const errorMessage = err.response?.data?.message || 
-                          err.response?.data || 
-                          err.message || 
-                          'Failed to post job. Please check your connection and try again.';
+      const errorMessage = err.response?.data?.message ||
+        err.response?.data ||
+        err.message ||
+        'Failed to post job. Please check your connection and try again.';
       setError(errorMessage);
       // Show error toast for missing details
       toast.error('Please fill in all required details about the job', {
@@ -432,7 +425,7 @@ export default function JobBuilder() {
           >
             ← Back to Dashboard
           </button>
-          
+
           <div className="mb-6">
             <h1 className="text-4xl md:text-5xl font-bold text-gray-900 tracking-tight mb-2">
               {editingJobId ? 'Edit Job Posting' : 'Create Job Posting'}
@@ -467,17 +460,16 @@ export default function JobBuilder() {
             {JOB_TABS.map((tab) => {
               const isComplete = completedTabs.has(tab.id);
               const isActive = activeTab === tab.id;
-              
+
               return (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex-1 px-6 py-4 text-sm font-medium transition-all duration-200 relative ${
-                    isActive
+                  className={`flex-1 px-6 py-4 text-sm font-medium transition-all duration-200 relative ${isActive
                       ? 'text-indigo-700 border-b-2 border-indigo-600 bg-indigo-50'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-center justify-center gap-2">
                     <span className="text-lg">{tab.icon}</span>
@@ -498,7 +490,7 @@ export default function JobBuilder() {
         </div>
 
         {/* Form Content */}
-        <form 
+        <form
           onSubmit={(e) => {
             // Only submit if on last section (compensation)
             if (activeTab === 'compensation') {
@@ -656,7 +648,7 @@ export default function JobBuilder() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Required Skills
                 </label>
-                
+
                 <div className="relative mb-4">
                   <input
                     type="text"
@@ -676,10 +668,10 @@ export default function JobBuilder() {
                     placeholder="Type a skill and press Enter or select from suggestions"
                     className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-700 placeholder-gray-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100"
                   />
-                  
+
                   {showSkillsSuggestions && skillsInput && (
                     <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                      {COMMON_SKILLS.filter(skill => 
+                      {COMMON_SKILLS.filter(skill =>
                         skill.toLowerCase().includes(skillsInput.toLowerCase()) &&
                         !formData.skills.includes(skill)
                       ).slice(0, 5).map((skill, index) => (
@@ -787,11 +779,10 @@ export default function JobBuilder() {
                     onChange={handleInputChange}
                     placeholder="e.g., 1500000"
                     min={formData.minSalary || "0"}
-                    className={`w-full rounded-lg border px-4 py-3 text-sm text-gray-700 placeholder-gray-400 transition-colors focus:outline-none focus:ring-1 ${
-                      salaryError 
-                        ? "border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50" 
+                    className={`w-full rounded-lg border px-4 py-3 text-sm text-gray-700 placeholder-gray-400 transition-colors focus:outline-none focus:ring-1 ${salaryError
+                        ? "border-red-500 focus:border-red-500 focus:ring-red-500 bg-red-50"
                         : "border-gray-300 bg-white focus:border-indigo-300 focus:ring-indigo-100"
-                    }`}
+                      }`}
                   />
                   {salaryError && (
                     <p className="mt-1 text-sm text-red-600">{salaryError}</p>
