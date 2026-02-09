@@ -4,6 +4,7 @@ import { loginWithGoogle, logout } from '../api/authApi';
 import { getUserProfile } from '../api/jobApi';
 import { useAuth } from '../context/AuthContext';
 import NotificationCenter from './NotificationCenter';
+import LogoImage from './logo_png.png';
 
 export default function Header() {
   const { user, loading, clearAuth, isAuthenticated } = useAuth();
@@ -82,8 +83,19 @@ export default function Header() {
     <header className="bg-white/95 backdrop-blur-sm border-b border-gray-200 sticky top-0 z-50 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center py-4">
-          <Link to="/" className="text-2xl font-bold text-gray-900 hover:text-gray-700 transition-colors duration-200 tracking-tight">
-            Saarthix Jobs
+          <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity duration-200">
+            <img 
+              src={LogoImage} 
+              alt="SaarthiX Logo" 
+              className="h-10 w-auto object-contain"
+            />
+            <span className="text-2xl text-gray-900 transition-colors duration-200 tracking-tight" style={{
+              fontFamily: "'Times New Roman', serif",
+              fontWeight: 'bold',
+              fontStyle: 'italic'
+            }}>
+              Saarthix Jobs
+            </span>
           </Link>
 
           {/* Navigation Links */}

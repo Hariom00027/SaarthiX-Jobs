@@ -10,18 +10,7 @@ const BASE_URL = `https://${HOST}`;
 // Search for jobs
 export const fetchJobs = async (query = 'developer jobs', location = 'us', page = 1) => {
   // Try to load from session storage first to save API quota (429 errors)
-  const cacheKey = `jobs_search_${query}_${location}_${page}`;
-  const cachedData = sessionStorage.getItem(cacheKey);
-
-  if (cachedData) {
-    try {
-      const parsed = JSON.parse(cachedData);
-      console.log('[API] Returning cached jobs for:', cacheKey);
-      return parsed;
-    } catch (e) {
-      sessionStorage.removeItem(cacheKey);
-    }
-  }
+  // Reverted: user requested no changes to jobs app
 
   const options = {
     method: 'GET',
@@ -44,9 +33,7 @@ export const fetchJobs = async (query = 'developer jobs', location = 'us', page 
     const jobs = response.data.data || [];
 
     // Cache the result
-    if (jobs.length > 0) {
-      sessionStorage.setItem(cacheKey, JSON.stringify(jobs));
-    }
+    // Reverted: user requested no changes to jobs app
 
     return jobs;
   } catch (error) {
@@ -58,18 +45,7 @@ export const fetchJobs = async (query = 'developer jobs', location = 'us', page 
 // Get job details by job_id
 export const fetchJobDetails = async (jobId, country = 'us') => {
   // Try to load from session storage first
-  const cacheKey = `job_details_${jobId}`;
-  const cachedData = sessionStorage.getItem(cacheKey);
-
-  if (cachedData) {
-    try {
-      const parsed = JSON.parse(cachedData);
-      console.log('[API] Returning cached job details for:', jobId);
-      return parsed;
-    } catch (e) {
-      sessionStorage.removeItem(cacheKey);
-    }
-  }
+  // Reverted: user requested no changes to jobs app
 
   const options = {
     method: 'GET',
@@ -89,9 +65,7 @@ export const fetchJobDetails = async (jobId, country = 'us') => {
     const details = response.data.data?.[0] || null;
 
     // Cache the result
-    if (details) {
-      sessionStorage.setItem(cacheKey, JSON.stringify(details));
-    }
+    // Reverted: user requested no changes to jobs app
 
     return details;
   } catch (error) {
@@ -261,12 +235,7 @@ export const getMyPostedJobs = async () => {
 
 export const getApplicationsByJobId = async (jobId) => {
   try {
-    const response = await axios.get(
-      `${API_BASE_URL}/applications/job/${jobId}`,
-      {
-        withCredentials: true,
-      }
-    );
+    const response = await apiClient.get(`/applications/job/${jobId}`);
     return response.data || [];
   } catch (error) {
     console.error('Error fetching applications for job:', error);
@@ -276,15 +245,9 @@ export const getApplicationsByJobId = async (jobId) => {
 
 export const updateApplicationStatusByIndustry = async (applicationId, status) => {
   try {
-    const response = await axios.put(
-      `${API_BASE_URL}/applications/${applicationId}/status`,
-      { status },
-      {
-        withCredentials: true,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
+    const response = await apiClient.put(
+      `/applications/${applicationId}/status`,
+      { status }
     );
     return response.data;
   } catch (error) {
@@ -296,15 +259,9 @@ export const updateApplicationStatusByIndustry = async (applicationId, status) =
 // Update a job (INDUSTRY users only)
 export const updateJob = async (jobId, jobData) => {
   try {
-    const response = await axios.put(
-      `${API_BASE_URL}/jobs/${jobId}`,
-      jobData,
-      {
-        withCredentials: true,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
+    const response = await apiClient.put(
+      `/jobs/${jobId}`,
+      jobData
     );
     return response.data;
   } catch (error) {
@@ -316,12 +273,7 @@ export const updateJob = async (jobId, jobData) => {
 // Delete a job (INDUSTRY users only)
 export const deleteJob = async (jobId) => {
   try {
-    const response = await axios.delete(
-      `${API_BASE_URL}/jobs/${jobId}`,
-      {
-        withCredentials: true,
-      }
-    );
+    const response = await apiClient.delete(`/jobs/${jobId}`);
     return response.data;
   } catch (error) {
     console.error('Error deleting job:', error);
@@ -332,12 +284,7 @@ export const deleteJob = async (jobId) => {
 // Get applicant profiles for a job (INDUSTRY users only)
 export const getApplicantProfilesByJobId = async (jobId) => {
   try {
-    const response = await axios.get(
-      `${API_BASE_URL}/applications/job/${jobId}/profiles`,
-      {
-        withCredentials: true,
-      }
-    );
+    const response = await apiClient.get(`/applications/job/${jobId}/profiles`);
     return response.data || [];
   } catch (error) {
     console.error('Error fetching applicant profiles:', error);
@@ -348,12 +295,7 @@ export const getApplicantProfilesByJobId = async (jobId) => {
 // Get recommended jobs for authenticated applicant
 export const getRecommendedJobs = async () => {
   try {
-    const response = await axios.get(
-      `${API_BASE_URL}/jobs/recommended/jobs`,
-      {
-        withCredentials: true,
-      }
-    );
+    const response = await apiClient.get('/jobs/recommended/jobs');
     return response.data || [];
   } catch (error) {
     console.error('Error fetching recommended jobs:', error);
@@ -364,12 +306,7 @@ export const getRecommendedJobs = async () => {
 // Hackathon API functions
 export const getAllHackathons = async () => {
   try {
-    const response = await axios.get(
-      `${API_BASE_URL}/hackathons`,
-      {
-        withCredentials: true,
-      }
-    );
+    const response = await apiClient.get('/hackathons');
     return Array.isArray(response.data) ? response.data : [];
   } catch (error) {
     console.error('Error fetching all hackathons:', error);
@@ -379,12 +316,7 @@ export const getAllHackathons = async () => {
 
 export const getMyHackathons = async () => {
   try {
-    const response = await axios.get(
-      `${API_BASE_URL}/hackathons/my-hackathons`,
-      {
-        withCredentials: true,
-      }
-    );
+    const response = await apiClient.get('/hackathons/my-hackathons');
     return Array.isArray(response.data) ? response.data : [];
   } catch (error) {
     console.error('Error fetching my hackathons:', error);
@@ -394,15 +326,9 @@ export const getMyHackathons = async () => {
 
 export const createHackathon = async (hackathonData) => {
   try {
-    const response = await axios.post(
-      `${API_BASE_URL}/hackathons`,
-      hackathonData,
-      {
-        withCredentials: true,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
+    const response = await apiClient.post(
+      '/hackathons',
+      hackathonData
     );
     return response.data;
   } catch (error) {
@@ -413,12 +339,7 @@ export const createHackathon = async (hackathonData) => {
 
 export const deleteHackathon = async (hackathonId) => {
   try {
-    const response = await axios.delete(
-      `${API_BASE_URL}/hackathons/${hackathonId}`,
-      {
-        withCredentials: true,
-      }
-    );
+    const response = await apiClient.delete(`/hackathons/${hackathonId}`);
     return response.data;
   } catch (error) {
     console.error('Error deleting hackathon:', error);
@@ -428,15 +349,9 @@ export const deleteHackathon = async (hackathonId) => {
 
 export const updateHackathon = async (hackathonId, hackathonData) => {
   try {
-    const response = await axios.put(
-      `${API_BASE_URL}/hackathons/${hackathonId}`,
-      hackathonData,
-      {
-        withCredentials: true,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
+    const response = await apiClient.put(
+      `/hackathons/${hackathonId}`,
+      hackathonData
     );
     return response.data;
   } catch (error) {
@@ -448,15 +363,9 @@ export const updateHackathon = async (hackathonId, hackathonData) => {
 // Hackathon Application API functions (for Applicants)
 export const applyForHackathon = async (hackathonId, applicationData) => {
   try {
-    const response = await axios.post(
-      `${API_BASE_URL}/hackathon-applications/${hackathonId}/apply`,
-      applicationData,
-      {
-        withCredentials: true,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      }
+    const response = await apiClient.post(
+      `/hackathon-applications/${hackathonId}/apply`,
+      applicationData
     );
     return response.data;
   } catch (error) {
@@ -467,12 +376,7 @@ export const applyForHackathon = async (hackathonId, applicationData) => {
 
 export const getMyHackathonApplications = async () => {
   try {
-    const response = await axios.get(
-      `${API_BASE_URL}/hackathon-applications/my-applications`,
-      {
-        withCredentials: true,
-      }
-    );
+    const response = await apiClient.get('/hackathon-applications/my-applications');
     return Array.isArray(response.data) ? response.data : [];
   } catch (error) {
     console.error('Error fetching my hackathon applications:', error);
@@ -483,12 +387,7 @@ export const getMyHackathonApplications = async () => {
 // Get applicants for a specific hackathon (Industry only)
 export const getHackathonApplicants = async (hackathonId) => {
   try {
-    const response = await axios.get(
-      `${API_BASE_URL}/hackathons/${hackathonId}/applicants`,
-      {
-        withCredentials: true,
-      }
-    );
+    const response = await apiClient.get(`/hackathons/${hackathonId}/applicants`);
     return Array.isArray(response.data) ? response.data : [];
   } catch (error) {
     console.error('Error fetching hackathon applicants:', error);
@@ -499,13 +398,7 @@ export const getHackathonApplicants = async (hackathonId) => {
 // Toggle hackathon enable/disable status (Industry only)
 export const toggleHackathonStatus = async (hackathonId) => {
   try {
-    const response = await axios.put(
-      `${API_BASE_URL}/hackathons/${hackathonId}/toggle-status`,
-      {},
-      {
-        withCredentials: true,
-      }
-    );
+    const response = await apiClient.put(`/hackathons/${hackathonId}/toggle-status`, {});
     return response.data;
   } catch (error) {
     console.error('Error toggling hackathon status:', error);

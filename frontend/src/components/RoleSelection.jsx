@@ -348,7 +348,7 @@ export default function RoleSelection() {
 
       <div className="w-full max-w-2xl bg-white rounded-lg shadow-md p-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          {currentUser?.userType ? 'Update Your Role' : 'Welcome to Saarthix Jobs'}
+          {currentUser?.userType ? 'Update Your Role' : <>Welcome to <span style={{ fontFamily: "'Times New Roman', serif", fontWeight: 'bold', fontStyle: 'italic' }}>Saarthix</span> Jobs</>}
         </h1>
         <p className="text-gray-600 mb-8">
           {currentUser?.userType 
