@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   base: '/jobs/', // Consistent with Gateway subpath
   server: {
-    port: 5173,
+    port: 3500,
   },
 });
 
