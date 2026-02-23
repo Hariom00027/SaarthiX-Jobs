@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
-import axios from "axios";
 import { toast } from "react-toastify";
 import { fetchJobs, fetchJobDetails, getRecommendedJobs, getUserProfile } from "../api/jobApi";
 import { loginWithGoogle } from "../api/authApi";
 import { useAuth } from "../context/AuthContext";
-import { API_BASE_URL } from "../config/apiConfig";
+import apiClient from "../api/apiClient";
 import JobApplicationForm from "./JobApplicationForm";
 
 // Component to format and display job description in an organized way
@@ -328,9 +327,7 @@ export default function JobList() {
       setError(null);
 
       const [localResult, externalResult] = await Promise.allSettled([
-        axios.get(`${API_BASE_URL}/jobs`, {
-          withCredentials: true,
-        }),
+        apiClient.get('/jobs'),
         fetchJobs("software developer in India"),
       ]);
 
@@ -710,14 +707,14 @@ export default function JobList() {
             Hackathons
           </Link>
           <Link
-            to="/manage-applications"
+            to="/job-tracker"
             className={`px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg font-semibold text-sm sm:text-base bg-white text-blue-600 border-2 border-blue-600 hover:bg-blue-50 transition-all duration-200 no-underline ${
-              location.pathname === '/manage-applications'
+              location.pathname === '/job-tracker'
                 ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
                 : 'bg-white text-blue-600 border-2 border-blue-600 hover:bg-blue-50'
             }`}
           >
-            Manage Applications
+            My Applications
           </Link>
         </div>
 

@@ -33,16 +33,30 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
+    const email = urlParams.get('email');
+    const name = urlParams.get('name');
+    const userType = urlParams.get('userType');
 
     if (token) {
       // Store JWT token from SomethingX redirect
       console.log('[AuthContext] Detected JWT token in URL, storing...');
       localStorage.setItem('token', token);
 
-      // Clean URL
-      window.history.replaceState({}, '', window.location.pathname);
+      // Also store user info if provided (for immediate display while auth check happens)
+      if (email || name || userType) {
+        const userInfo = {
+          email: email || '',
+          name: name || '',
+          userType: userType || 'APPLICANT'
+        };
+        console.log('[AuthContext] Storing user info from URL:', userInfo);
+      }
 
-      // Load user data
+      // Clean URL - remove query parameters
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
+
+      // Load user data from backend to verify token
       loadAuth();
     } else {
       // Check if we already have a token

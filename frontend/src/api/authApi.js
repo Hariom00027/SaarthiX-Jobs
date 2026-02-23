@@ -1,3 +1,4 @@
+import apiClient from './apiClient';
 import { API_BASE_URL } from '../config/apiConfig';
 
 // Helper to get JWT token from localStorage
@@ -33,17 +34,16 @@ export const checkAuth = async () => {
       return { authenticated: false };
     }
 
-    const response = await fetch(`${API_BASE_URL}/auth/me`, {
-      headers: getAuthHeaders()
-    });
+    // Use apiClient which automatically adds the Authorization header
+    const response = await apiClient.get('/auth/me');
 
-    if (!response.ok) {
+    if (!response.data) {
       // Token might be expired or invalid
       localStorage.removeItem('token');
       return { authenticated: false };
     }
 
-    const data = await response.json();
+    const data = response.data;
     return {
       authenticated: data.authenticated !== false,
       name: data.name,
@@ -53,6 +53,10 @@ export const checkAuth = async () => {
     };
   } catch (error) {
     console.error('Error checking auth:', error);
+    // Token might be expired or invalid
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+    }
     return { authenticated: false };
   }
 };

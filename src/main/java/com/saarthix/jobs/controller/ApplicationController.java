@@ -15,6 +15,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.*;
 import com.saarthix.jobs.service.NotificationService;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.List;
 import java.util.Map;
@@ -49,13 +50,13 @@ public class ApplicationController {
      * Get all applications for the current authenticated user
      */
     @GetMapping
-    public ResponseEntity<?> getMyApplications(Authentication auth) {
+    public ResponseEntity<?> getMyApplications(Authentication auth, HttpServletRequest request) {
         // Check authentication
         if (auth == null || !auth.isAuthenticated()) {
             return ResponseEntity.status(401).body("Must be logged in to view applications");
         }
 
-        User user = resolveUserFromOAuth(auth);
+        User user = resolveUserFromOAuth(auth, request);
         if (user == null) {
             return ResponseEntity.status(401).body("User not found");
         }
@@ -73,14 +74,14 @@ public class ApplicationController {
      * Create a new application (alternative endpoint for frontend)
      */
     @PostMapping
-    public ResponseEntity<?> createApplication(@RequestBody Map<String, Object> applicationData, Authentication auth) {
+    public ResponseEntity<?> createApplication(@RequestBody Map<String, Object> applicationData, Authentication auth, HttpServletRequest request) {
         try {
             // Check authentication
             if (auth == null || !auth.isAuthenticated()) {
                 return ResponseEntity.status(401).body("Must be logged in to apply");
             }
 
-            User user = resolveUserFromOAuth(auth);
+            User user = resolveUserFromOAuth(auth, request);
             if (user == null) {
                 return ResponseEntity.status(401).body("User not found");
             }
@@ -256,13 +257,13 @@ public class ApplicationController {
      * IMPORTANT: This must be defined BEFORE @PutMapping("/{id}") to avoid path conflict
      */
     @GetMapping("/my-jobs")
-    public ResponseEntity<?> getMyPostedJobs(Authentication auth) {
+    public ResponseEntity<?> getMyPostedJobs(Authentication auth, HttpServletRequest request) {
         // Check authentication
         if (auth == null || !auth.isAuthenticated()) {
             return ResponseEntity.status(401).body("Must be logged in to view your jobs");
         }
 
-        User user = resolveUserFromOAuth(auth);
+        User user = resolveUserFromOAuth(auth, request);
         if (user == null) {
             return ResponseEntity.status(401).body("User not found");
         }
@@ -325,13 +326,14 @@ public class ApplicationController {
     @GetMapping("/job/{jobId}")
     public ResponseEntity<?> getApplicationsByJobId(
             @PathVariable String jobId,
-            Authentication auth) {
+            Authentication auth,
+            HttpServletRequest request) {
         // Check authentication
         if (auth == null || !auth.isAuthenticated()) {
             return ResponseEntity.status(401).body("Must be logged in to view applications");
         }
 
-        User user = resolveUserFromOAuth(auth);
+        User user = resolveUserFromOAuth(auth, request);
         if (user == null) {
             return ResponseEntity.status(401).body("User not found");
         }
@@ -415,13 +417,14 @@ public class ApplicationController {
     @GetMapping("/job/{jobId}/profiles")
     public ResponseEntity<?> getApplicantProfilesByJobId(
             @PathVariable String jobId,
-            Authentication auth) {
+            Authentication auth,
+            HttpServletRequest request) {
         // Check authentication
         if (auth == null || !auth.isAuthenticated()) {
             return ResponseEntity.status(401).body("Must be logged in to view applicant profiles");
         }
 
-        User user = resolveUserFromOAuth(auth);
+        User user = resolveUserFromOAuth(auth, request);
         if (user == null) {
             return ResponseEntity.status(401).body("User not found");
         }
@@ -528,13 +531,14 @@ public class ApplicationController {
     public ResponseEntity<?> updateApplicationStatusByIndustry(
             @PathVariable String id,
             @RequestBody Map<String, String> body,
-            Authentication auth) {
+            Authentication auth,
+            HttpServletRequest request) {
         // Check authentication
         if (auth == null || !auth.isAuthenticated()) {
             return ResponseEntity.status(401).body("Must be logged in to update application status");
         }
 
-        User user = resolveUserFromOAuth(auth);
+        User user = resolveUserFromOAuth(auth, request);
         if (user == null) {
             return ResponseEntity.status(401).body("User not found");
         }
@@ -612,13 +616,13 @@ public class ApplicationController {
      * Get applications by email (for admin or user verification)
      */
     @GetMapping("/by-email/{email}")
-    public ResponseEntity<?> getApplicationsByEmail(@PathVariable String email, Authentication auth) {
+    public ResponseEntity<?> getApplicationsByEmail(@PathVariable String email, Authentication auth, HttpServletRequest request) {
         // Check authentication
         if (auth == null || !auth.isAuthenticated()) {
             return ResponseEntity.status(401).body("Must be logged in");
         }
 
-        User user = resolveUserFromOAuth(auth);
+        User user = resolveUserFromOAuth(auth, request);
         if (user == null) {
             return ResponseEntity.status(401).body("User not found");
         }
@@ -636,13 +640,13 @@ public class ApplicationController {
      * Get all resume and details for the current authenticated user
      */
     @GetMapping("/resume-details")
-    public ResponseEntity<?> getMyResumeAndDetails(Authentication auth) {
+    public ResponseEntity<?> getMyResumeAndDetails(Authentication auth, HttpServletRequest request) {
         // Check authentication
         if (auth == null || !auth.isAuthenticated()) {
             return ResponseEntity.status(401).body("Must be logged in to view resume and details");
         }
 
-        User user = resolveUserFromOAuth(auth);
+        User user = resolveUserFromOAuth(auth, request);
         if (user == null) {
             return ResponseEntity.status(401).body("User not found");
         }
@@ -657,24 +661,68 @@ public class ApplicationController {
     }
 
     /**
-     * Helper method to extract user from OAuth2 principal
+     * Helper method to extract user from OAuth2 principal or JWT token
+     * Automatically creates user if they don't exist (from JWT claims)
      */
-    private User resolveUserFromOAuth(Authentication auth) {
+    private User resolveUserFromOAuth(Authentication auth, HttpServletRequest request) {
         if (auth == null || auth.getPrincipal() == null) {
             return null;
         }
 
         Object principal = auth.getPrincipal();
         String email = null;
+        String userId = null;
+        String userType = null;
+        String name = null;
 
-        if (principal instanceof OAuth2User oauthUser) {
-            email = oauthUser.getAttribute("email");
-        } else if (principal instanceof String) {
-            email = (String) principal;
+        // First, try to get from JWT token attributes (set by JwtAuthenticationFilter)
+        if (request != null) {
+            email = (String) request.getAttribute("userEmail");
+            userId = (String) request.getAttribute("userId");
+            userType = (String) request.getAttribute("userType");
+            name = (String) request.getAttribute("userName");
+        }
+
+        // Fallback to OAuth2 principal
+        if (email == null) {
+            if (principal instanceof OAuth2User oauthUser) {
+                email = oauthUser.getAttribute("email");
+                name = oauthUser.getAttribute("name");
+            } else if (principal instanceof String) {
+                email = (String) principal;
+            }
         }
 
         if (email != null) {
-            return userRepository.findByEmail(email).orElse(null);
+            Optional<User> userOpt = userRepository.findByEmail(email);
+            if (userOpt.isPresent()) {
+                return userOpt.get();
+            }
+
+            // User doesn't exist - create from JWT token claims
+            if (userId != null || userType != null) {
+                User newUser = new User();
+                newUser.setEmail(email);
+                if (userId != null) {
+                    newUser.setId(userId);
+                }
+                if (userType != null) {
+                    newUser.setUserType(userType);
+                } else {
+                    newUser.setUserType("APPLICANT"); // Default
+                }
+                if (name != null) {
+                    newUser.setName(name);
+                } else {
+                    newUser.setName(email.split("@")[0]); // Use email prefix as name
+                }
+                newUser.setActive(true);
+                newUser.setCreatedAt(java.time.LocalDateTime.now());
+                
+                User savedUser = userRepository.save(newUser);
+                System.out.println("Auto-created user from JWT: " + email + " (type: " + userType + ")");
+                return savedUser;
+            }
         }
 
         return null;

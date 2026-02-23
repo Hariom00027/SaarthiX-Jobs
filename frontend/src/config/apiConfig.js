@@ -8,15 +8,15 @@ const getBackendUrl = () => {
   const isDocker = window.location.port === '2003' || (window.location.port === '' && window.location.hostname === 'localhost');
 
   // When running in Docker (port 2003), the frontend is served by nginx
-  // which proxies /api/* to the backend at jobs-backend:8080/api/
+  // which proxies /jobs-api/* to the backend at jobs-backend:8080/jobs-api/
   // When running in development (port 5173), connect directly to backend on port 2000
   if (isDevelopment && isDocker) {
-    // Running in Docker - use relative path (nginx will proxy /api/ to backend)
-    return '';
+    // Running in Docker - use /jobs-api path (nginx will proxy to backend)
+    return '/jobs-api';
   } else if (isDevelopment) {
     // Running in dev mode - connect directly to backend
-    // In production, use /jobs-api path through gateway
-    return `${window.location.protocol}//${window.location.host}/jobs-api`;
+    // Backend runs on port 2000 with context path /jobs-api
+    return 'http://localhost:2000/jobs-api';
   }
 
   // Production fallback - use the unified Gateway routing prefix
