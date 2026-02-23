@@ -1,10 +1,9 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 import { toast } from "react-toastify";
 import { useAuth } from "../context/AuthContext";
 import { loginWithGoogle } from "../api/authApi";
-import { API_BASE_URL } from "../config/apiConfig";
+import apiClient from "../api/apiClient";
 
 export default function PostJobs() {
   const navigate = useNavigate();
@@ -117,12 +116,9 @@ export default function PostJobs() {
           : [],
       };
 
-      const response = await axios.post(
-        `${API_BASE_URL}/jobs`,
-        jobData,
-        {
-          withCredentials: true,
-        }
+      const response = await apiClient.post(
+        '/jobs',
+        jobData
       );
 
       console.log("Job Posted Successfully:", response.data);

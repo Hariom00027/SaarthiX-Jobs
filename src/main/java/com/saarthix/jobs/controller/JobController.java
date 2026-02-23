@@ -14,6 +14,7 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.*;
 import com.saarthix.jobs.service.EmailService;
 import com.saarthix.jobs.service.JobService;
+import jakarta.servlet.http.HttpServletRequest;
 
 import java.util.List;
 import java.util.Map;
@@ -53,14 +54,14 @@ public class JobController {
 
     // ✅ GET recommended jobs for authenticated applicant
     @GetMapping("/recommended/jobs")
-    public ResponseEntity<?> getRecommendedJobs(Authentication auth) {
+    public ResponseEntity<?> getRecommendedJobs(Authentication auth, HttpServletRequest request) {
         try {
             // Check if user is authenticated
             if (auth == null || !auth.isAuthenticated()) {
                 return ResponseEntity.status(401).body("Must be logged in to view recommended jobs");
             }
 
-            User user = resolveUserFromOAuth(auth);
+            User user = resolveUserFromOAuth(auth, request);
             if (user == null) {
                 return ResponseEntity.status(401).body("User not found");
             }
@@ -89,7 +90,7 @@ public class JobController {
 
     // ✅ POST a new job (INDUSTRY users only)
     @PostMapping
-    public ResponseEntity<?> createJob(@RequestBody Job job, Authentication auth) {
+    public ResponseEntity<?> createJob(@RequestBody Job job, Authentication auth, HttpServletRequest request) {
         try {
             // Log the received job data for debugging
             System.out.println("=== Received Job Data ===");
@@ -109,7 +110,7 @@ public class JobController {
             }
 
             // Get user from OAuth principal
-            User user = resolveUserFromOAuth(auth);
+            User user = resolveUserFromOAuth(auth, request);
             if (user == null) {
                 return ResponseEntity.status(401).body("User not found");
             }
@@ -142,13 +143,13 @@ public class JobController {
 
     // ✅ PUT update a job (INDUSTRY users only)
     @PutMapping("/{id}")
-    public ResponseEntity<?> updateJob(@PathVariable String id, @RequestBody Job updatedJob, Authentication auth) {
+    public ResponseEntity<?> updateJob(@PathVariable String id, @RequestBody Job updatedJob, Authentication auth, HttpServletRequest request) {
         // Check authentication
         if (auth == null || !auth.isAuthenticated()) {
             return ResponseEntity.status(401).body("Must be logged in to update jobs");
         }
 
-        User user = resolveUserFromOAuth(auth);
+        User user = resolveUserFromOAuth(auth, request);
         if (user == null || !"INDUSTRY".equals(user.getUserType())) {
             return ResponseEntity.status(403).body("Only INDUSTRY users can update jobs");
         }
@@ -182,13 +183,13 @@ public class JobController {
 
     // ✅ DELETE a job (INDUSTRY users only)
     @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteJob(@PathVariable String id, Authentication auth) {
+    public ResponseEntity<?> deleteJob(@PathVariable String id, Authentication auth, HttpServletRequest request) {
         // Check authentication
         if (auth == null || !auth.isAuthenticated()) {
             return ResponseEntity.status(401).body("Must be logged in to delete jobs");
         }
 
-        User user = resolveUserFromOAuth(auth);
+        User user = resolveUserFromOAuth(auth, request);
         if (user == null || !"INDUSTRY".equals(user.getUserType())) {
             return ResponseEntity.status(403).body("Only INDUSTRY users can delete jobs");
         }
@@ -211,13 +212,13 @@ public class JobController {
 
     // ✅ Apply to job (APPLICANT users only)
     @PostMapping("/{jobId}/apply")
-    public ResponseEntity<?> applyToJob(@PathVariable String jobId, Authentication auth) {
+    public ResponseEntity<?> applyToJob(@PathVariable String jobId, Authentication auth, HttpServletRequest request) {
         // Check authentication
         if (auth == null || !auth.isAuthenticated()) {
             return ResponseEntity.status(401).body("Must be logged in to apply");
         }
 
-        User user = resolveUserFromOAuth(auth);
+        User user = resolveUserFromOAuth(auth, request);
         if (user == null || (!"APPLICANT".equals(user.getUserType()) && !"STUDENT".equals(user.getUserType()))) {
             return ResponseEntity.status(403).body("Only APPLICANT or STUDENT users can apply to jobs. Current type: " + (user != null ? user.getUserType() : "UNKNOWN"));
         }
@@ -269,24 +270,68 @@ public class JobController {
     }
 
     /**
-     * Helper method to extract user from OAuth2 principal
+     * Helper method to extract user from OAuth2 principal or JWT token
+     * Automatically creates user if they don't exist (from JWT claims)
      */
-    private User resolveUserFromOAuth(Authentication auth) {
+    private User resolveUserFromOAuth(Authentication auth, HttpServletRequest request) {
         if (auth == null || auth.getPrincipal() == null) {
             return null;
         }
 
         Object principal = auth.getPrincipal();
         String email = null;
+        String userId = null;
+        String userType = null;
+        String name = null;
 
-        if (principal instanceof OAuth2User oauthUser) {
-            email = oauthUser.getAttribute("email");
-        } else if (principal instanceof String) {
-            email = (String) principal;
+        // First, try to get from JWT token attributes (set by JwtAuthenticationFilter)
+        if (request != null) {
+            email = (String) request.getAttribute("userEmail");
+            userId = (String) request.getAttribute("userId");
+            userType = (String) request.getAttribute("userType");
+            name = (String) request.getAttribute("userName");
+        }
+
+        // Fallback to OAuth2 principal
+        if (email == null) {
+            if (principal instanceof OAuth2User oauthUser) {
+                email = oauthUser.getAttribute("email");
+                name = oauthUser.getAttribute("name");
+            } else if (principal instanceof String) {
+                email = (String) principal;
+            }
         }
 
         if (email != null) {
-            return userRepository.findByEmail(email).orElse(null);
+            Optional<User> userOpt = userRepository.findByEmail(email);
+            if (userOpt.isPresent()) {
+                return userOpt.get();
+            }
+
+            // User doesn't exist - create from JWT token claims
+            if (userId != null || userType != null) {
+                User newUser = new User();
+                newUser.setEmail(email);
+                if (userId != null) {
+                    newUser.setId(userId);
+                }
+                if (userType != null) {
+                    newUser.setUserType(userType);
+                } else {
+                    newUser.setUserType("APPLICANT"); // Default
+                }
+                if (name != null) {
+                    newUser.setName(name);
+                } else {
+                    newUser.setName(email.split("@")[0]); // Use email prefix as name
+                }
+                newUser.setActive(true);
+                newUser.setCreatedAt(java.time.LocalDateTime.now());
+                
+                User savedUser = userRepository.save(newUser);
+                System.out.println("Auto-created user from JWT: " + email + " (type: " + userType + ")");
+                return savedUser;
+            }
         }
 
         return null;

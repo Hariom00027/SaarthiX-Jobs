@@ -15,6 +15,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.core.Authentication;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @RestController
@@ -32,22 +34,65 @@ public class HackathonController {
     }
 
     // --- KEEP ONLY THIS METHOD ---
-    private User resolveUser(Authentication auth) {
+    private User resolveUser(Authentication auth, HttpServletRequest request) {
         if (auth == null || auth.getPrincipal() == null) {
             return null;
         }
 
         Object principal = auth.getPrincipal();
         String email = null;
+        String userId = null;
+        String userType = null;
+        String name = null;
 
-        if (principal instanceof OAuth2User oauth) {
-            email = oauth.getAttribute("email");
-        } else if (principal instanceof String) {
-            email = (String) principal;
+        // First, try to get from JWT token attributes (set by JwtAuthenticationFilter)
+        if (request != null) {
+            email = (String) request.getAttribute("userEmail");
+            userId = (String) request.getAttribute("userId");
+            userType = (String) request.getAttribute("userType");
+            name = (String) request.getAttribute("userName");
+        }
+
+        // Fallback to OAuth2 principal
+        if (email == null) {
+            if (principal instanceof OAuth2User oauth) {
+                email = oauth.getAttribute("email");
+                name = oauth.getAttribute("name");
+            } else if (principal instanceof String) {
+                email = (String) principal;
+            }
         }
 
         if (email != null) {
-            return userRepository.findByEmail(email).orElse(null);
+            Optional<User> userOpt = userRepository.findByEmail(email);
+            if (userOpt.isPresent()) {
+                return userOpt.get();
+            }
+
+            // User doesn't exist - create from JWT token claims
+            if (userId != null || userType != null) {
+                User newUser = new User();
+                newUser.setEmail(email);
+                if (userId != null) {
+                    newUser.setId(userId);
+                }
+                if (userType != null) {
+                    newUser.setUserType(userType);
+                } else {
+                    newUser.setUserType("APPLICANT"); // Default
+                }
+                if (name != null) {
+                    newUser.setName(name);
+                } else {
+                    newUser.setName(email.split("@")[0]); // Use email prefix as name
+                }
+                newUser.setActive(true);
+                newUser.setCreatedAt(java.time.LocalDateTime.now());
+                
+                User savedUser = userRepository.save(newUser);
+                System.out.println("Auto-created user from JWT: " + email + " (type: " + userType + ")");
+                return savedUser;
+            }
         }
 
         return null;
@@ -62,9 +107,9 @@ public class HackathonController {
 
     // GET hackathons posted by the authenticated industry user
     @GetMapping("/my-hackathons")
-    public ResponseEntity<?> getMyHackathons(Authentication auth) {
+    public ResponseEntity<?> getMyHackathons(Authentication auth, HttpServletRequest request) {
         try {
-            User user = resolveUser(auth);
+            User user = resolveUser(auth, request);
 
             if (user == null) {
                 System.err.println("User resolution failed - auth is null or not OAuth2");
@@ -97,9 +142,9 @@ public class HackathonController {
 
     // POST create hackathon (industry only)
     @PostMapping
-    public ResponseEntity<?> createHackathon(@RequestBody Hackathon hackathon, Authentication auth) {
+    public ResponseEntity<?> createHackathon(@RequestBody Hackathon hackathon, Authentication auth, HttpServletRequest request) {
         try {
-            User user = resolveUser(auth);
+            User user = resolveUser(auth, request);
 
             if (user == null) {
                 System.err.println("User resolution failed - auth is null or not OAuth2");
@@ -131,9 +176,9 @@ public class HackathonController {
 
     // PUT update hackathon (industry only)
     @PutMapping("/{hackathonId}")
-    public ResponseEntity<?> updateHackathon(@PathVariable String hackathonId, @RequestBody Hackathon updatedHackathon, Authentication auth) {
+    public ResponseEntity<?> updateHackathon(@PathVariable String hackathonId, @RequestBody Hackathon updatedHackathon, Authentication auth, HttpServletRequest request) {
 
-        User user = resolveUser(auth);
+        User user = resolveUser(auth, request);
 
         if (user == null || !"INDUSTRY".equals(user.getUserType())) {
             return ResponseEntity.status(403).body("Only industry users can update hackathons");
@@ -180,9 +225,9 @@ public class HackathonController {
 
     // DELETE hackathon (industry only)
     @DeleteMapping("/{hackathonId}")
-    public ResponseEntity<?> deleteHackathon(@PathVariable String hackathonId, Authentication auth) {
+    public ResponseEntity<?> deleteHackathon(@PathVariable String hackathonId, Authentication auth, HttpServletRequest request) {
 
-        User user = resolveUser(auth);
+        User user = resolveUser(auth, request);
 
         if (user == null || !"INDUSTRY".equals(user.getUserType())) {
             return ResponseEntity.status(403).body("Only industry users can delete hackathons");
@@ -204,9 +249,9 @@ public class HackathonController {
 
     // GET applicants for a specific hackathon (industry only)
     @GetMapping("/{hackathonId}/applicants")
-    public ResponseEntity<?> getHackathonApplicants(@PathVariable String hackathonId, Authentication auth) {
+    public ResponseEntity<?> getHackathonApplicants(@PathVariable String hackathonId, Authentication auth, HttpServletRequest request) {
         try {
-            User user = resolveUser(auth);
+            User user = resolveUser(auth, request);
 
             if (user == null) {
                 return ResponseEntity.status(401).body("Authentication failed. Please log in again.");
@@ -237,9 +282,9 @@ public class HackathonController {
 
     // PUT toggle enable/disable hackathon (industry only)
     @PutMapping("/{hackathonId}/toggle-status")
-    public ResponseEntity<?> toggleHackathonStatus(@PathVariable String hackathonId, Authentication auth) {
+    public ResponseEntity<?> toggleHackathonStatus(@PathVariable String hackathonId, Authentication auth, HttpServletRequest request) {
         try {
-            User user = resolveUser(auth);
+            User user = resolveUser(auth, request);
 
             if (user == null) {
                 return ResponseEntity.status(401).body("Authentication failed. Please log in again.");

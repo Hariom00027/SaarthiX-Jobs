@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import axios from 'axios';
+import apiClient from '../api/apiClient';
 import { useAuth } from '../context/AuthContext';
-import { API_BASE_URL } from '../config/apiConfig';
 
 // Common skills and technologies for hackathons
 const COMMON_SKILLS = [
@@ -108,9 +107,8 @@ export default function HackathonForm() {
   const loadHackathon = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(
-        `${API_BASE_URL}/hackathons/${editingHackathonId}`,
-        { withCredentials: true }
+      const response = await apiClient.get(
+        `/hackathons/${editingHackathonId}`
       );
 
       const hackathon = response.data;
@@ -310,16 +308,14 @@ export default function HackathonForm() {
       const hackathonIdToUpdate = savedHackathonId || editingHackathonId;
 
       if (hackathonIdToUpdate) {
-        response = await axios.put(
-          `${API_BASE_URL}/hackathons/${hackathonIdToUpdate}`,
-          hackathonData,
-          { withCredentials: true }
+        response = await apiClient.put(
+          `/hackathons/${hackathonIdToUpdate}`,
+          hackathonData
         );
       } else {
-        response = await axios.post(
-          `${API_BASE_URL}/hackathons`,
-          hackathonData,
-          { withCredentials: true }
+        response = await apiClient.post(
+          `/hackathons`,
+          hackathonData
         );
         if (response.data && response.data.id) {
           setSavedHackathonId(response.data.id);
@@ -405,16 +401,14 @@ export default function HackathonForm() {
       const hackathonIdToUpdate = savedHackathonId || editingHackathonId;
 
       if (hackathonIdToUpdate) {
-        response = await axios.put(
-          `${API_BASE_URL}/hackathons/${hackathonIdToUpdate}`,
-          hackathonData,
-          { withCredentials: true }
+        response = await apiClient.put(
+          `/hackathons/${hackathonIdToUpdate}`,
+          hackathonData
         );
       } else {
-        response = await axios.post(
-          `${API_BASE_URL}/hackathons`,
-          hackathonData,
-          { withCredentials: true }
+        response = await apiClient.post(
+          `/hackathons`,
+          hackathonData
         );
       }
 
