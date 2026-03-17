@@ -42,21 +42,25 @@ public class AuthController {
             Optional<User> userOpt = userRepository.findByEmail(email);
             if (userOpt.isPresent()) {
                 User user = userOpt.get();
-                return Map.of(
-                    "authenticated", true,
-                    "name", user.getName() != null ? user.getName() : user.getEmail(),
-                    "email", user.getEmail(),
-                    "picture", user.getPictureUrl() != null ? user.getPictureUrl() : "",
-                    "userType", user.getUserType() != null ? user.getUserType() : "APPLICANT"
-                );
+                Map<String, Object> userMap = new java.util.HashMap<>();
+                userMap.put("authenticated", true);
+                userMap.put("id", user.getId());
+                userMap.put("name", user.getName() != null ? user.getName() : user.getEmail());
+                userMap.put("email", user.getEmail());
+                userMap.put("picture", user.getPictureUrl() != null ? user.getPictureUrl() : "");
+                userMap.put("userType", user.getUserType() != null ? user.getUserType() : "APPLICANT");
+                return userMap;
             }
             
             // If user not in database yet, return JWT claims
-            return Map.of(
-                "authenticated", true,
-                "email", email,
-                "userType", userType != null ? userType : "APPLICANT"
-            );
+            Map<String, Object> userMap = new java.util.HashMap<>();
+            userMap.put("authenticated", true);
+            if (userId != null) {
+                userMap.put("id", userId);
+            }
+            userMap.put("email", email);
+            userMap.put("userType", userType != null ? userType : "APPLICANT");
+            return userMap;
         } catch (Exception e) {
             return Map.of("authenticated", false);
         }

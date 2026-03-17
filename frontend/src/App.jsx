@@ -17,6 +17,12 @@ import IndustryApplications from './components/IndustryApplications';
 import IndustryHackathons from './components/IndustryHackathons';
 import HackathonForm from './components/HackathonForm';
 import ApplicantHackathons from './components/ApplicantHackathons';
+import HackathonApplicationDashboard from './components/HackathonApplicationDashboard';
+import ApplicantResults from './components/ApplicantResults';
+import IndustryHackathonDashboard from './components/IndustryHackathonDashboard';
+import IndustryHackathonResults from './components/IndustryHackathonResults';
+import StudentDatabase from './components/StudentDatabase';
+import DemoViewSwitcher from './components/DemoViewSwitcher';
 
 function App() {
   // Get basename calculated in main.jsx
@@ -30,6 +36,7 @@ function App() {
       <Router basename={basename}>
         <div className="min-h-screen bg-gray-50">
           <Navbar />
+          <DemoViewSwitcher />
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/login" element={<Login />} />
@@ -46,6 +53,11 @@ function App() {
             <Route path="/create-hackathon" element={<HackathonForm />} />
             <Route path="/edit-hackathon" element={<HackathonForm />} />
             <Route path="/browse-hackathons" element={<ApplicantHackathons />} />
+            <Route path="/hackathon-application/:applicationId" element={<HackathonApplicationDashboard />} />
+            <Route path="/hackathon-application/:applicationId/results" element={<ApplicantResults />} />
+            <Route path="/industry/hackathon/:hackathonId/dashboard" element={<IndustryHackathonDashboard />} />
+            <Route path="/industry/hackathon/:hackathonId/results" element={<IndustryHackathonResults />} />
+            <Route path="/student-database" element={<StudentDatabase />} />
           </Routes>
           <ToastContainer
             position="top-right"

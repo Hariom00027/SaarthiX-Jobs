@@ -405,3 +405,229 @@ export const toggleHackathonStatus = async (hackathonId) => {
     throw error;
   }
 };
+
+// Generate hackathon form field content using AI
+export const generateHackathonFieldWithAI = async (fieldType, context = '') => {
+  try {
+    const response = await apiClient.post('/hackathons/ai/generate', {
+      fieldType,
+      context
+    });
+    return response.data.content;
+  } catch (error) {
+    console.error('Error generating AI content:', error);
+    throw error;
+  }
+};
+
+// Hackathon AI content generation
+export const generateHackathonAIContent = async (fieldName, currentFormData) => {
+  try {
+    const response = await apiClient.post('/hackathons/ai/generate', {
+      fieldName,
+      currentFormData
+    });
+    return response.data;
+  } catch (error) {
+    console.error(`Error generating AI content for ${fieldName}:`, error);
+    throw error;
+  }
+};
+
+// Get hackathon by ID
+export const getHackathonById = async (hackathonId) => {
+  try {
+    const response = await apiClient.get(`/hackathons/${hackathonId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching hackathon by ID:', error);
+    throw error;
+  }
+};
+
+// Submit hackathon phase submission
+export const submitHackathonPhase = async (applicationId, phaseId, submissionData) => {
+  try {
+    const response = await apiClient.post(
+      `/hackathon-applications/${applicationId}/phases/${phaseId}/submit`,
+      submissionData
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error submitting hackathon phase:', error);
+    throw error;
+  }
+};
+
+// Get hackathon application details
+export const getHackathonApplicationDetails = async (applicationId) => {
+  try {
+    const response = await apiClient.get(
+      `/hackathon-applications/${applicationId}`
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching hackathon application details:', error);
+    throw error;
+  }
+};
+
+// Review hackathon phase (Industry only)
+export const reviewHackathonPhase = async (applicationId, phaseId, reviewData) => {
+  try {
+    const response = await apiClient.put(
+      `/hackathon-applications/${applicationId}/phases/${phaseId}/review`,
+      reviewData
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error reviewing hackathon phase:', error);
+    throw error;
+  }
+};
+
+// Get hackathon applications (Industry only)
+export const getHackathonApplications = async (hackathonId) => {
+  try {
+    const response = await apiClient.get(
+      `/hackathon-applications/hackathon/${hackathonId}`
+    );
+    return response.data || [];
+  } catch (error) {
+    console.error('Error fetching hackathon applications:', error);
+    throw error;
+  }
+};
+
+// Delete hackathon application (Industry only)
+export const deleteHackathonApplication = async (applicationId) => {
+  try {
+    const response = await apiClient.delete(
+      `/hackathon-applications/${applicationId}`
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error deleting hackathon application:', error);
+    throw error;
+  }
+};
+
+// Reject hackathon application (Industry only)
+export const rejectHackathonApplication = async (applicationId, rejectionMessage) => {
+  try {
+    const response = await apiClient.put(
+      `/hackathon-applications/${applicationId}/reject`,
+      { rejectionMessage }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error rejecting hackathon application:', error);
+    throw error;
+  }
+};
+
+// Request re-upload (Industry only)
+export const requestReupload = async (applicationId, phaseId, message) => {
+  try {
+    const response = await apiClient.put(
+      `/hackathon-applications/${applicationId}/phases/${phaseId}/request-reupload`,
+      { message }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error requesting re-upload:', error);
+    throw error;
+  }
+};
+
+// Get application results (Student)
+export const getApplicationResults = async (applicationId) => {
+  try {
+    const response = await apiClient.get(
+      `/hackathon-applications/${applicationId}/results`
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching application results:', error);
+    throw error;
+  }
+};
+
+// Finalize hackathon results (Industry only)
+export const finalizeHackathonResults = async (hackathonId, payload) => {
+  try {
+    const response = await apiClient.post(
+      `/hackathon-applications/hackathon/${hackathonId}/finalize-results`,
+      payload
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error finalizing hackathon results:', error);
+    throw error;
+  }
+};
+
+// Get hackathon results (Industry only)
+export const getHackathonResults = async (hackathonId) => {
+  try {
+    const response = await apiClient.get(
+      `/hackathon-applications/hackathon/${hackathonId}/results`
+    );
+    return response.data || [];
+  } catch (error) {
+    console.error('Error fetching hackathon results:', error);
+    throw error;
+  }
+};
+
+// Publish showcase content (Industry only)
+export const publishShowcaseContent = async (applicationId, showcaseData) => {
+  try {
+    const response = await apiClient.put(
+      `/hackathon-applications/${applicationId}/showcase`,
+      showcaseData
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error publishing showcase content:', error);
+    throw error;
+  }
+};
+
+// Get hackathon submissions (Industry only)
+export const getHackathonSubmissions = async (hackathonId) => {
+  try {
+    const response = await apiClient.get(`/hackathons/${hackathonId}/submissions`);
+    return response.data || [];
+  } catch (error) {
+    console.error('Error fetching hackathon submissions:', error);
+    throw error;
+  }
+};
+
+// Evaluate submission (Industry only)
+export const evaluateSubmission = async (submissionId, evaluationData) => {
+  try {
+    const response = await apiClient.put(
+      `/hackathons/submissions/${submissionId}/evaluate`,
+      evaluationData
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error evaluating submission:', error);
+    throw error;
+  }
+};
+
+// Generate certificate (Industry only)
+export const generateCertificate = async (submissionId) => {
+  try {
+    const response = await apiClient.post(
+      `/hackathons/submissions/${submissionId}/generate-certificate`
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error generating certificate:', error);
+    throw error;
+  }
+};

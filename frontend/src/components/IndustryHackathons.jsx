@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
-import { getMyHackathons, getAllHackathons, deleteHackathon, getHackathonApplicants, toggleHackathonStatus } from '../api/jobApi';
+import { getMyHackathons, getAllHackathons, deleteHackathon, getHackathonApplicants, toggleHackathonStatus, getHackathonApplications } from '../api/jobApi';
 
 export default function IndustryHackathons() {
   const navigate = useNavigate();
@@ -19,6 +19,7 @@ export default function IndustryHackathons() {
   const [applicants, setApplicants] = useState([]);
   const [showApplicantsModal, setShowApplicantsModal] = useState(false);
   const [loadingApplicants, setLoadingApplicants] = useState(false);
+  const [applicantCounts, setApplicantCounts] = useState({}); // { hackathonId: count }
 
   useEffect(() => {
     if (!authLoading) {
@@ -51,6 +52,8 @@ export default function IndustryHackathons() {
         setMyHackathons([]);
       } else {
         setMyHackathons(myHackathonsData);
+        // Load applicant counts for owned hackathons
+        loadApplicantCounts(myHackathonsData);
       }
 
       if (!Array.isArray(allHackathonsData)) {
@@ -82,6 +85,25 @@ export default function IndustryHackathons() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadApplicantCounts = async (hackathons) => {
+    if (!user || !isIndustry) return;
+    
+    const counts = {};
+    // Load counts for all hackathons in "My Hackathons" (they're all owned by the user)
+    const promises = hackathons.map(async (hackathon) => {
+      try {
+        const applications = await getHackathonApplications(hackathon.id);
+        counts[hackathon.id] = Array.isArray(applications) ? applications.length : 0;
+      } catch (err) {
+        console.error(`Error loading applicants for hackathon ${hackathon.id}:`, err);
+        counts[hackathon.id] = 0;
+      }
+    });
+    
+    await Promise.all(promises);
+    setApplicantCounts(counts);
   };
 
   const handleDeleteClick = (hackathon) => {
@@ -129,21 +151,8 @@ export default function IndustryHackathons() {
   };
 
   const handleViewApplicants = async (hackathon) => {
-    setSelectedHackathon(hackathon);
-    setLoadingApplicants(true);
-    try {
-      const applicantsData = await getHackathonApplicants(hackathon.id);
-      setApplicants(applicantsData);
-      setShowApplicantsModal(true);
-    } catch (err) {
-      console.error('Error loading applicants:', err);
-      toast.error('Failed to load applicants', {
-        position: "top-right",
-        autoClose: 3000,
-      });
-    } finally {
-      setLoadingApplicants(false);
-    }
+    // Navigate to the industry hackathon dashboard
+    navigate(`/industry/hackathon/${hackathon.id}/dashboard`);
   };
 
   const handleToggleStatus = async (hackathon) => {
@@ -398,8 +407,8 @@ export default function IndustryHackathons() {
                   </div>
                 )}
 
-                {/* Status Badge */}
-                <div className="mb-3">
+                {/* Status Badge and Applicant Count */}
+                <div className="mb-3 flex items-center justify-between gap-2">
                   <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
                     hackathon.enabled 
                       ? 'bg-green-50 text-green-700 border border-green-200' 
@@ -407,25 +416,51 @@ export default function IndustryHackathons() {
                   }`}>
                     {hackathon.enabled ? '✓ Active' : '○ Disabled'}
                   </span>
+                  {activeTab === 'my-hackathons' && applicantCounts[hackathon.id] !== undefined && (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 12H9m6 0a6 6 0 11-12 0 6 6 0 0112 0z" />
+                      </svg>
+                      {applicantCounts[hackathon.id]} {applicantCounts[hackathon.id] === 1 ? 'Applicant' : 'Applicants'}
+                    </span>
+                  )}
                 </div>
 
-                {/* Actions - Only show for owned hackathons */}
+                {/* Actions - Show for all hackathons in "My Hackathons" tab (all are owned by user) */}
                 {activeTab === 'my-hackathons' && (
                   <div className="pt-4 border-t border-gray-100">
-                    <div className="flex gap-2 mb-3 flex-wrap">
+                    {/* Primary Action - Manage Applications */}
+                    <button
+                      onClick={() => handleViewApplicants(hackathon)}
+                      className="w-full mb-3 px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors text-sm shadow-md hover:shadow-lg flex items-center justify-center gap-2"
+                      title="Manage applicants, review submissions, and finalize results"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Manage Applications
+                      {applicantCounts[hackathon.id] !== undefined && applicantCounts[hackathon.id] > 0 && (
+                        <span className="ml-1 px-2 py-0.5 bg-white/20 rounded-full text-xs font-bold">
+                          {applicantCounts[hackathon.id]}
+                        </span>
+                      )}
+                    </button>
+                    
+                    {/* Secondary Actions */}
+                    <div className="flex gap-2 mb-2">
                       <button
-                        onClick={() => handleViewApplicants(hackathon)}
-                        className="flex-1 min-w-[120px] p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors text-xs font-semibold flex items-center justify-center gap-1"
-                        title="View applicants for this hackathon"
+                        onClick={() => handleEditClick(hackathon)}
+                        className="flex-1 p-2 text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors text-xs font-semibold flex items-center justify-center gap-1"
+                        title="Edit this hackathon"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 12H9m6 0a6 6 0 11-12 0 6 6 0 0112 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
-                        Applicants
+                        Edit
                       </button>
                       <button
                         onClick={() => handleToggleStatus(hackathon)}
-                        className={`flex-1 min-w-[100px] p-2 rounded-lg transition-colors text-xs font-semibold flex items-center justify-center gap-1 ${
+                        className={`flex-1 p-2 rounded-lg transition-colors text-xs font-semibold flex items-center justify-center gap-1 ${
                           hackathon.enabled 
                             ? 'text-orange-600 bg-orange-50 hover:bg-orange-100' 
                             : 'text-green-600 bg-green-50 hover:bg-green-100'
@@ -437,20 +472,10 @@ export default function IndustryHackathons() {
                         </svg>
                         {hackathon.enabled ? 'Disable' : 'Enable'}
                       </button>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => handleEditClick(hackathon)}
-                        className="flex-1 p-2 text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors text-xs font-semibold flex items-center justify-center gap-1"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                        Edit
-                      </button>
                       <button
                         onClick={() => handleDeleteClick(hackathon)}
                         className="flex-1 p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors text-xs font-semibold flex items-center justify-center gap-1"
+                        title="Delete this hackathon"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -488,7 +513,7 @@ export default function IndustryHackathons() {
             <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-gray-100 animate-slideIn max-h-[80vh] overflow-y-auto">
               <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900">Hackathon Applicants</h2>
+                  <h2 className="text-xl font-bold text-gray-900">Hackathon Submissions</h2>
                   <p className="text-sm text-gray-600 mt-1">{selectedHackathon.title}</p>
                 </div>
                 <button
@@ -511,9 +536,9 @@ export default function IndustryHackathons() {
                   </div>
                 ) : applicants.length === 0 ? (
                   <div className="text-center py-8">
-                    <div className="text-4xl mb-3">👥</div>
-                    <p className="text-gray-600 font-medium">No applicants yet</p>
-                    <p className="text-gray-500 text-sm">Applicants will appear here when they apply for this hackathon</p>
+                    <div className="text-4xl mb-3">📋</div>
+                    <p className="text-gray-600 font-medium">No submissions yet</p>
+                    <p className="text-gray-500 text-sm">Submissions will appear here when participants apply and submit their work</p>
                   </div>
                 ) : (
                   <div className="space-y-3">

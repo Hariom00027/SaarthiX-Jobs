@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
 import { getAllHackathons, getMyHackathonApplications, applyForHackathon } from '../api/jobApi';
+import { redirectToSomethingX } from '../config/redirectUrls';
 
 export default function ApplicantHackathons() {
   const navigate = useNavigate();
-  const { isAuthenticated, loading: authLoading, isApplicant, user } = useAuth();
+  const { isAuthenticated, loading: authLoading, isApplicantOrStudent, user } = useAuth();
   const [activeTab, setActiveTab] = useState('browse'); // 'browse' or 'my-applications'
   const [allHackathons, setAllHackathons] = useState([]);
   const [myApplications, setMyApplications] = useState([]);
@@ -25,15 +26,15 @@ export default function ApplicantHackathons() {
 
   useEffect(() => {
     if (!authLoading) {
-      if (!isAuthenticated || !isApplicant) {
+      if (!isAuthenticated || !isApplicantOrStudent) {
         navigate('/');
         return;
       }
-      if (isAuthenticated && isApplicant) {
+      if (isAuthenticated && isApplicantOrStudent) {
         loadHackathons();
       }
     }
-  }, [isAuthenticated, isApplicant, authLoading, navigate]);
+  }, [isAuthenticated, isApplicantOrStudent, authLoading, navigate]);
 
   const loadHackathons = async () => {
     try {
@@ -220,7 +221,7 @@ export default function ApplicantHackathons() {
     );
   }
 
-  if (!isAuthenticated || !isApplicant) {
+  if (!isAuthenticated || !isApplicantOrStudent) {
     return null;
   }
 
@@ -242,10 +243,102 @@ export default function ApplicantHackathons() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
             </div>
-            <div>
+            <div className="flex-1">
               <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-2 tracking-tight">Hackathons</h1>
               <p className="text-gray-600 text-base">Browse and apply for exciting hackathons</p>
             </div>
+          </div>
+          
+          {/* Navigation Buttons */}
+          <div className="flex gap-3 mb-6 flex-wrap">
+            <button
+              onClick={() => {
+                const token = localStorage.getItem('token') || localStorage.getItem('somethingx_auth_token');
+                const userData = localStorage.getItem('user') || localStorage.getItem('somethingx_auth_user');
+                const user = userData ? JSON.parse(userData) : null;
+                redirectToSomethingX('/students/apply-jobs', token, user);
+              }}
+              style={{
+                padding: '0.625rem 1.25rem',
+                backgroundColor: '#ffffff',
+                color: '#115FD5',
+                fontWeight: '600',
+                borderRadius: '0.5rem',
+                transition: 'all 0.2s',
+                fontSize: '0.875rem',
+                border: '1px solid #115FD5',
+                cursor: 'pointer',
+                outline: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: 'fit-content'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#f0f7ff';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = '#ffffff';
+              }}
+            >
+              Apply for Jobs
+            </button>
+            <button
+              onClick={() => {
+                // Already on Hackathons page, no action needed
+              }}
+              style={{
+                padding: '0.625rem 1.25rem',
+                backgroundColor: '#115FD5',
+                color: '#ffffff',
+                fontWeight: '600',
+                borderRadius: '0.5rem',
+                transition: 'all 0.2s',
+                fontSize: '0.875rem',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+                border: 'none',
+                cursor: 'pointer',
+                outline: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: 'fit-content'
+              }}
+            >
+              Hackathons
+            </button>
+            <button
+              onClick={() => {
+                const token = localStorage.getItem('token') || localStorage.getItem('somethingx_auth_token');
+                const userData = localStorage.getItem('user') || localStorage.getItem('somethingx_auth_user');
+                const user = userData ? JSON.parse(userData) : null;
+                redirectToSomethingX('/students/manage-applications', token, user);
+              }}
+              style={{
+                padding: '0.625rem 1.25rem',
+                backgroundColor: '#ffffff',
+                color: '#115FD5',
+                fontWeight: '600',
+                borderRadius: '0.5rem',
+                transition: 'all 0.2s',
+                fontSize: '0.875rem',
+                border: '1px solid #115FD5',
+                cursor: 'pointer',
+                outline: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: 'fit-content'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = '#f0f7ff';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = '#ffffff';
+              }}
+            >
+              My Applications
+            </button>
           </div>
         </div>
 
@@ -471,8 +564,31 @@ export default function ApplicantHackathons() {
                         )}
                       </div>
 
-                      <div className="text-xs text-gray-500">
-                        Applied on {new Date(application.appliedAt).toLocaleDateString()}
+                      {/* Application Dashboard Button */}
+                      <div className="mb-4">
+                        <button
+                          onClick={() => navigate(`/hackathon-application/${application.id}`)}
+                          className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-lg transition-colors text-sm flex items-center justify-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          View Application Dashboard
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs text-gray-500">
+                        <span>Applied on {new Date(application.appliedAt).toLocaleDateString()}</span>
+                        {hackathon?.submissionUrl && (
+                          <a
+                            href={hackathon.submissionUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-700 font-semibold"
+                          >
+                            Open link →
+                          </a>
+                        )}
                       </div>
                     </div>
                   );

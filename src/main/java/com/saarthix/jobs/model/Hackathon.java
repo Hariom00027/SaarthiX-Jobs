@@ -2,8 +2,12 @@ package com.saarthix.jobs.model;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import java.util.List;
 
 @Document(collection = "hackathons")
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class Hackathon {
 
     @Id
@@ -35,7 +39,9 @@ public class Hackathon {
     private String venueTime;             // Venue time (for offline/hybrid)
     private String submissionProcedure;   // What participants must submit
     private Integer participantLimit;     // Max number of participants/teams
-    private String phases;                // JSON string containing hackathon phases
+    @JsonDeserialize(using = HackathonPhaseDeserializer.class)
+    private List<HackathonPhase> phases;  // List of hackathon phases (supports both String and List formats)
+    private Boolean resultsPublished = false; // Whether results have been announced
 
     // Getters + Setters
     public String getId() { return id; }
@@ -113,6 +119,9 @@ public class Hackathon {
     public Integer getParticipantLimit() { return participantLimit; }
     public void setParticipantLimit(Integer participantLimit) { this.participantLimit = participantLimit; }
 
-    public String getPhases() { return phases; }
-    public void setPhases(String phases) { this.phases = phases; }
+    public List<HackathonPhase> getPhases() { return phases; }
+    public void setPhases(List<HackathonPhase> phases) { this.phases = phases; }
+    
+    public Boolean getResultsPublished() { return resultsPublished != null ? resultsPublished : false; }
+    public void setResultsPublished(Boolean resultsPublished) { this.resultsPublished = resultsPublished != null ? resultsPublished : false; }
 }

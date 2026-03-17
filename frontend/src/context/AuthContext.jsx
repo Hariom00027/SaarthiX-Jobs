@@ -96,8 +96,14 @@ export const AuthProvider = ({ children }) => {
   // Helper to check if user is APPLICANT type
   const isApplicant = user?.userType === 'APPLICANT';
 
+  // Helper to check if user is STUDENT type
+  const isStudent = user?.userType === 'STUDENT';
+
+  // Helper to check if user is APPLICANT or STUDENT (for pages accessible to both)
+  const isApplicantOrStudent = isApplicant || isStudent;
+
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, loading, updateAuth, clearAuth, isIndustry, isApplicant }}>
+    <AuthContext.Provider value={{ user, isAuthenticated, loading, updateAuth, clearAuth, isIndustry, isApplicant, isStudent, isApplicantOrStudent }}>
       {children}
     </AuthContext.Provider>
   );

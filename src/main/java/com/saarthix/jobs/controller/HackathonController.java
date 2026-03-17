@@ -247,7 +247,7 @@ public class HackathonController {
         return ResponseEntity.ok("Hackathon deleted successfully");
     }
 
-    // GET applicants for a specific hackathon (industry only)
+    // GET applicants for a specific hackathon (industry only) - must come before /{hackathonId}
     @GetMapping("/{hackathonId}/applicants")
     public ResponseEntity<?> getHackathonApplicants(@PathVariable String hackathonId, Authentication auth, HttpServletRequest request) {
         try {
@@ -314,6 +314,22 @@ public class HackathonController {
             System.err.println("Error toggling hackathon status: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity.status(500).body("Error toggling status: " + e.getMessage());
+        }
+    }
+
+    // GET hackathon by ID (public) - must be last to avoid conflicts with more specific routes
+    @GetMapping("/{hackathonId}")
+    public ResponseEntity<?> getHackathonById(@PathVariable String hackathonId) {
+        try {
+            Optional<Hackathon> hackathonOpt = hackathonRepository.findById(hackathonId);
+            if (hackathonOpt.isEmpty()) {
+                return ResponseEntity.status(404).body("Hackathon not found");
+            }
+            return ResponseEntity.ok(hackathonOpt.get());
+        } catch (Exception e) {
+            System.err.println("Error fetching hackathon by ID: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(500).body("Error fetching hackathon: " + e.getMessage());
         }
     }
 }

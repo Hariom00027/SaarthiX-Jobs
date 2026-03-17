@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import apiClient from '../api/apiClient';
 import { useAuth } from '../context/AuthContext';
+import { generateHackathonFieldWithAI } from '../api/jobApi';
 
 // Common skills and technologies for hackathons
 const COMMON_SKILLS = [
@@ -25,6 +26,7 @@ const HACKATHON_TABS = [
   { id: 'eligibility', label: 'Eligibility', icon: '👥', required: false },
   { id: 'dates', label: 'Dates & Mode', icon: '📅', required: true },
   { id: 'submission', label: 'Submission', icon: '📤', required: false },
+  { id: 'ai', label: 'AI Applications', icon: '🤖', required: false },
   { id: 'capacity', label: 'Capacity & Prizes', icon: '⚙️', required: false }
 ];
 
@@ -78,6 +80,7 @@ export default function HackathonForm() {
   const [showSkillsSuggestions, setShowSkillsSuggestions] = useState(false);
   const [savedHackathonId, setSavedHackathonId] = useState(null);
   const [nextPhaseId, setNextPhaseId] = useState(2);
+  const [generatingAI, setGeneratingAI] = useState({});
 
   const editingHackathonId = location.state?.hackathonId || null;
 
@@ -137,6 +140,7 @@ export default function HackathonForm() {
           enabled: hackathon.enabled !== undefined ? hackathon.enabled : true
         });
         setSkillsInput('');
+        setAiApplicationsInput('');
         setSavedHackathonId(hackathon.id);
       }
     } catch (err) {
@@ -152,6 +156,9 @@ export default function HackathonForm() {
     if (fieldName === 'skillsRequired') {
       return Array.isArray(value) && value.length > 0;
     }
+    if (fieldName === 'aiApplications') {
+      return Array.isArray(value) && value.length > 0;
+    }
     return value !== null && value !== undefined && value !== '';
   };
 
@@ -161,6 +168,9 @@ export default function HackathonForm() {
         return isFieldFilled('title') && isFieldFilled('company') && isFieldFilled('description');
       case 'problem':
         return isFieldFilled('problemStatement');
+      case 'ai':
+        // Complete only if at least one AI application is added
+        return isFieldFilled('aiApplications');
       case 'phases':
         // Complete if at least one phase has name and formats
         return formData.phases && formData.phases.length > 0 && formData.phases.some(phase => phase.name && phase.formats && phase.formats.length > 0);
@@ -228,6 +238,43 @@ export default function HackathonForm() {
       ...prev,
       skillsRequired: prev.skillsRequired.filter(skill => skill !== skillToRemove)
     }));
+  };
+
+  const handleGenerateWithAI = async (fieldName, fieldType) => {
+    setGeneratingAI(prev => ({ ...prev, [fieldName]: true }));
+    try {
+      // Build context from existing form data
+      const context = [
+        formData.title ? `Title: ${formData.title}` : '',
+        formData.company ? `Company: ${formData.company}` : '',
+        formData.skillsRequired.length > 0 ? `Skills: ${formData.skillsRequired.join(', ')}` : '',
+        formData.description ? `Description: ${formData.description.substring(0, 200)}` : ''
+      ].filter(Boolean).join('\n');
+
+      const generatedContent = await generateHackathonFieldWithAI(fieldType, context);
+      
+      setFormData(prev => ({
+        ...prev,
+        [fieldName]: generatedContent
+      }));
+      
+      toast.success('Content generated successfully!', {
+        position: "top-right",
+        autoClose: 3000,
+      });
+    } catch (err) {
+      console.error('Error generating AI content:', err);
+      const errorMsg = err.response?.data || err.message || 'Failed to generate content';
+      toast.error(errorMsg.includes('API key') || errorMsg.includes('not configured') 
+        ? 'AI service is not configured. Please configure OpenAI API key in backend.'
+        : 'Failed to generate content. Please try again.',
+      {
+        position: "top-right",
+        autoClose: 5000,
+      });
+    } finally {
+      setGeneratingAI(prev => ({ ...prev, [fieldName]: false }));
+    }
   };
 
   const handleAddPhase = () => {
@@ -576,9 +623,31 @@ export default function HackathonForm() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
                   Hackathon Description *
                 </label>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateWithAI('description', 'description')}
+                    disabled={generatingAI.description}
+                    className="text-xs px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                  >
+                    {generatingAI.description ? (
+                      <>
+                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-purple-600 border-t-transparent"></div>
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        Generate with AI
+                      </>
+                    )}
+                  </button>
+                </div>
                 <textarea
                   name="description"
                   value={formData.description}
@@ -597,9 +666,31 @@ export default function HackathonForm() {
               <h2 className="text-2xl font-bold text-gray-900">Problem Statement & Skills</h2>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
                   Problem Statement *
                 </label>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateWithAI('problemStatement', 'problemStatement')}
+                    disabled={generatingAI.problemStatement}
+                    className="text-xs px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                  >
+                    {generatingAI.problemStatement ? (
+                      <>
+                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-purple-600 border-t-transparent"></div>
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        Generate with AI
+                      </>
+                    )}
+                  </button>
+                </div>
                 <textarea
                   name="problemStatement"
                   value={formData.problemStatement}
@@ -660,6 +751,58 @@ export default function HackathonForm() {
                   )}
                 </div>
                 <p className="text-xs text-gray-500 mt-2">Added: {formData.skillsRequired.length} skills</p>
+              </div>
+            </div>
+          )}
+
+          {/* SECTION: AI APPLICATIONS / USE-CASES */}
+          {activeTab === 'ai' && (
+            <div className="space-y-6 animate-fadeIn">
+              <h2 className="text-2xl font-bold text-gray-900">AI Applications (Use-cases)</h2>
+              <p className="text-sm text-gray-600">
+                Add AI application areas relevant to this hackathon (e.g., Healthcare, Finance, Education, Retail, Cybersecurity).
+              </p>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  AI Applications
+                </label>
+
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {formData.aiApplications.map(item => (
+                    <div key={item} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full flex items-center gap-2 text-sm font-medium">
+                      {item}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAiApplication(item)}
+                        className="hover:text-blue-900"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <input
+                  type="text"
+                  value={aiApplicationsInput}
+                  onChange={handleAiApplicationsInputChange}
+                  placeholder="Type an AI application area and press Enter (e.g., Healthcare)"
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddAiApplication(aiApplicationsInput);
+                    }
+                  }}
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition"
+                />
+                <p className="text-xs text-gray-500 mt-2">Added: {formData.aiApplications.length} item(s)</p>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p className="text-sm text-blue-800">
+                  <span className="font-semibold">Tip:</span> These help participants understand where to apply AI/ML in their solution.
+                </p>
               </div>
             </div>
           )}
@@ -840,9 +983,31 @@ export default function HackathonForm() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
                   Eligibility Criteria
                 </label>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateWithAI('eligibilityCriteria', 'eligibilityCriteria')}
+                    disabled={generatingAI.eligibilityCriteria}
+                    className="text-xs px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                  >
+                    {generatingAI.eligibilityCriteria ? (
+                      <>
+                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-purple-600 border-t-transparent"></div>
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        Generate with AI
+                      </>
+                    )}
+                  </button>
+                </div>
                 <textarea
                   name="eligibilityCriteria"
                   value={formData.eligibilityCriteria}
@@ -944,9 +1109,31 @@ export default function HackathonForm() {
               <h2 className="text-2xl font-bold text-gray-900">Submission & Requirements</h2>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
                   Submission Procedure
                 </label>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateWithAI('submissionProcedure', 'submissionProcedure')}
+                    disabled={generatingAI.submissionProcedure}
+                    className="text-xs px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                  >
+                    {generatingAI.submissionProcedure ? (
+                      <>
+                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-purple-600 border-t-transparent"></div>
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        Generate with AI
+                      </>
+                    )}
+                  </button>
+                </div>
                 <textarea
                   name="submissionProcedure"
                   value={formData.submissionProcedure}
@@ -958,9 +1145,31 @@ export default function HackathonForm() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
                   Additional Requirements & Resources
                 </label>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateWithAI('requirements', 'requirements')}
+                    disabled={generatingAI.requirements}
+                    className="text-xs px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                  >
+                    {generatingAI.requirements ? (
+                      <>
+                        <div className="h-3 w-3 animate-spin rounded-full border-2 border-purple-600 border-t-transparent"></div>
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        Generate with AI
+                      </>
+                    )}
+                  </button>
+                </div>
                 <textarea
                   name="requirements"
                   value={formData.requirements}

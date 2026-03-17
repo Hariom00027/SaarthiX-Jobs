@@ -110,5 +110,53 @@ public class NotificationService {
         notificationRepository.save(notification);
         System.out.println("Created new application notification for industry user: " + industryUser.getEmail());
     }
+
+    /**
+     * Create notification when an industry shortlists a profile (for APPLICANT)
+     * @param applicantId - ID of the applicant whose profile was shortlisted
+     * @param applicantEmail - Email of the applicant
+     * @param applicantName - Name of the applicant
+     * @param industryEmail - Email of the industry user who shortlisted
+     * @param companyName - Company name of the industry user (optional)
+     */
+    public void createProfileShortlistNotification(
+            String applicantId, 
+            String applicantEmail,
+            String applicantName,
+            String industryEmail,
+            String companyName) {
+        
+        // Verify the applicant user exists
+        Optional<User> applicantOpt = userRepository.findByEmail(applicantEmail);
+        if (applicantOpt.isEmpty()) {
+            System.out.println("Warning: Applicant user not found for email: " + applicantEmail);
+            return;
+        }
+
+        User applicant = applicantOpt.get();
+        
+        // Get industry user details for the notification
+        Optional<User> industryUserOpt = userRepository.findByEmail(industryEmail);
+        String industryDisplayName = companyName;
+        if (industryDisplayName == null || industryDisplayName.isEmpty()) {
+            industryDisplayName = industryUserOpt.map(User::getName).orElse("An industry");
+        }
+        
+        // Create notification for the applicant
+        Notification notification = new Notification();
+        notification.setUserId(applicant.getId());
+        notification.setUserType("APPLICANT");
+        notification.setType("profile_shortlisted");
+        notification.setTitle("Profile Shortlisted!");
+        notification.setMessage(String.format(
+            "Great news! %s has shortlisted your profile. They're interested in your skills and experience.",
+            industryDisplayName
+        ));
+        notification.setCompanyName(companyName);
+        notification.setRead(false);
+
+        notificationRepository.save(notification);
+        System.out.println("Created profile shortlist notification for applicant: " + applicantEmail);
+    }
 }
 

@@ -7,4 +7,5 @@ import java.util.List;
 public interface HackathonApplicationRepository extends MongoRepository<HackathonApplication, String> {
     List<HackathonApplication> findByApplicantId(String applicantId);
     List<HackathonApplication> findByHackathonId(String hackathonId);
+    List<HackathonApplication> findByHackathonIdAndApplicantId(String hackathonId, String applicantId);
 }
