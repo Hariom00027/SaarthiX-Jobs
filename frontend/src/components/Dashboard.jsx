@@ -145,9 +145,9 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Two/Three Card Layout */}
+        {/* Two/Three/Four Card Layout */}
         <div className={`grid gap-6 ${
-          isAuthenticated && isIndustry ? 'md:grid-cols-3' :
+          isAuthenticated && isIndustry ? 'md:grid-cols-2 lg:grid-cols-4' :
           isAuthenticated && !isIndustry ? 'md:grid-cols-1 max-w-2xl mx-auto' : 
           'md:grid-cols-2'
         }`}>
@@ -238,6 +238,33 @@ export default function Dashboard() {
                 </p>
                 <button className="w-full bg-gray-900 hover:bg-gray-800 text-white font-semibold py-3.5 px-6 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg">
                   Manage Hackathons
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Student Database Card - Only for Industry users */}
+          {isAuthenticated && isIndustry && (
+            <div
+              onClick={() => navigate("/student-database")}
+              className="group cursor-pointer animate-fadeIn"
+              style={{ animationDelay: '0.25s' }}
+            >
+              <div className="h-full bg-white rounded-2xl border border-gray-200 hover:border-gray-300 hover:shadow-xl transition-all duration-300 p-12 flex flex-col items-center justify-center text-center hover-lift"
+              >
+                <div className="w-20 h-20 bg-gradient-to-br from-indigo-50 to-blue-50 rounded-2xl flex items-center justify-center mb-8 group-hover:scale-110 transition-transform duration-300">
+                  <svg className="w-10 h-10 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                </div>
+                <h2 className="text-3xl font-bold text-gray-900 mb-4">
+                  Student Database
+                </h2>
+                <p className="text-gray-600 mb-10 text-base leading-relaxed max-w-sm">
+                  Browse and filter registered student profiles. Find the perfect candidates for your job openings.
+                </p>
+                <button className="w-full bg-gray-900 hover:bg-gray-800 text-white font-semibold py-3.5 px-6 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg">
+                  Access Database
                 </button>
               </div>
             </div>
