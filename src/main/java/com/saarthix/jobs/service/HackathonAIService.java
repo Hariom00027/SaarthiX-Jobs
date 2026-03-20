@@ -16,10 +16,8 @@ public class HackathonAIService {
     private String apiKey;
 
     /**
-     * Generate hackathon form content using AI based on provided context
-     * @param fieldType The type of field to generate (description, problemStatement, requirements, etc.)
-     * @param context Additional context like title, company, skills, etc.
-     * @return Generated content
+     * Enhance existing hackathon field content using AI based on provided context.
+     * The enhancement must preserve user intent and should not invent new requirements.
      */
     public String generateFieldContent(String fieldType, String context) {
         if (apiKey == null || apiKey.trim().isEmpty() || apiKey.equals("your-openai-api-key-here")) {
@@ -69,45 +67,47 @@ public class HackathonAIService {
     private String buildSystemPrompt(String fieldType) {
         switch (fieldType.toLowerCase()) {
             case "description":
-                return "You are an expert hackathon organizer. Generate a compelling, professional hackathon description that " +
-                       "explains the event's purpose, themes, goals, and what participants will be doing. Make it engaging and clear. " +
-                       "Keep it between 150-300 words. Do not include markdown formatting.";
+                return "You are an expert hackathon editor. Rewrite the provided description to improve grammar, clarity, tone, and professionalism. " +
+                       "Do not add new facts, constraints, deadlines, or claims that are not already present in the input text. " +
+                       "Keep the meaning unchanged. Return plain text only.";
             
             case "problemstatement":
-                return "You are an expert hackathon problem designer. Generate a clear, detailed problem statement that " +
-                       "participants need to solve. Include the problem context, challenges, and desired outcomes. " +
-                       "Make it specific and actionable. Keep it between 200-400 words. Do not include markdown formatting.";
+                return "You are an expert hackathon editor. Rewrite the provided problem statement to be clear, professional, and easy to understand. " +
+                       "Do not add new scope, assumptions, metrics, or requirements. Preserve original intent and facts. " +
+                       "Return plain text only.";
             
             case "requirements":
-                return "You are an expert hackathon organizer. Generate a comprehensive list of requirements, tools, libraries, " +
-                       "APIs, or resources that participants can or should use. Include technical requirements and any constraints. " +
-                       "Make it clear and organized. Keep it between 100-250 words. Do not include markdown formatting.";
+                return "You are an expert technical editor. Improve the provided requirements text for clarity and professionalism only. " +
+                       "Do not introduce any new tools, APIs, constraints, or rules. Keep content faithful to the original text. " +
+                       "Return plain text only.";
             
             case "submissionprocedure":
-                return "You are an expert hackathon organizer. Generate clear submission procedures explaining what participants " +
-                       "must submit, file formats, naming conventions, deadlines, and how to submit. Make it step-by-step and easy to follow. " +
-                       "Keep it between 150-300 words. Do not include markdown formatting.";
+                return "You are an expert process editor. Improve the provided submission procedure text for readability and professional tone. " +
+                       "Do not add new steps, deadlines, or file requirements that are not in the original text. " +
+                       "Return plain text only.";
             
             case "eligibilitycriteria":
-                return "You are an expert hackathon organizer. Generate eligibility criteria for participants including " +
-                       "academic requirements, skill levels, team composition rules, and any other relevant criteria. " +
-                       "Make it clear and fair. Keep it between 100-200 words. Do not include markdown formatting.";
+                return "You are an expert policy editor. Rewrite the provided eligibility criteria to be concise, clear, and professional. " +
+                       "Do not add or remove rules; only improve wording. Return plain text only.";
             
             default:
-                return "You are an expert hackathon organizer. Generate professional, clear content for hackathon forms. " +
-                       "Do not include markdown formatting.";
+                return "You are an expert editor. Improve language quality without changing meaning or adding new information. " +
+                       "Return plain text only.";
         }
     }
 
     private String buildUserPrompt(String fieldType, String context) {
-        String basePrompt = "Generate content for a hackathon " + fieldType + " field.";
+        String basePrompt = "Enhance the existing text for the hackathon " + fieldType + " field.";
         
         if (context != null && !context.trim().isEmpty()) {
             basePrompt += "\n\nContext provided:\n" + context;
         }
         
-        basePrompt += "\n\nGenerate appropriate, professional content based on this context. " +
-                     "If context is minimal, generate a generic but professional template that can be customized.";
+        basePrompt += "\n\nImportant constraints:\n" +
+                     "1) Work only with the existing sentence/content.\n" +
+                     "2) Do not invent new requirements, timelines, entities, or facts.\n" +
+                     "3) Keep the same intent and meaning.\n" +
+                     "4) Return only the enhanced text.";
         
         return basePrompt;
     }

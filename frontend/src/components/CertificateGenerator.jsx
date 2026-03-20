@@ -1,6 +1,7 @@
 import React from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import LogoImage from './logo_png.png';
 
 // Generate unique certificate code in format: dd/mm/yyyy-UNIQUECODE
 export const generateCertificateCode = () => {
@@ -14,6 +15,19 @@ export const generateCertificateCode = () => {
     const uniqueCode = String(timestamp % 1000000).padStart(6, '0');
 
     return `${day}/${month}/${year}-${uniqueCode}`;
+};
+
+const ensureCertificateFonts = () => {
+    if (typeof document === 'undefined') return;
+    const fontLinkId = 'certificate-google-fonts';
+    if (document.getElementById(fontLinkId)) return;
+
+    const link = document.createElement('link');
+    link.id = fontLinkId;
+    link.rel = 'stylesheet';
+    link.href =
+        'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Great+Vibes&family=Poppins:wght@300;400;600&display=swap';
+    document.head.appendChild(link);
 };
 
 // Shared helpers
@@ -86,6 +100,8 @@ const CertificateTemplate = ({
     signatureLeftUrl,
     signatureRightUrl
 }) => {
+    ensureCertificateFonts();
+
     // Resolve context primarily from certificateFor, with isTeam as a backward-compatible fallback
     const resolvedCertificateFor = certificateFor || (isTeam ? 'TEAM' : 'INDIVIDUAL');
     const displayName = resolvedCertificateFor === 'TEAM' ? teamName : participantName;
@@ -159,187 +175,251 @@ const CertificateTemplate = ({
         </div>
     );
 
-    // Template 1: Classic Achievement (matches latest uploaded design)
+    // Template 1: exact layout/style based on provided HTML
     const template1 = () => {
-        // Use rankTitle from backend as single source of truth
-        const displayRankTitle = rankTitle || 'Participation Certificate/Rank';
-        const displayCertificateType = certificateType || 'Certificate of Participation/Achievement';
+        const isAchievement = (certificateType || '').toLowerCase().includes('achievement');
+        const subtitle = isAchievement ? 'Of Achievement' : 'Of Participation';
+        const descriptionText = customMessage || 'Your commitment and contribution have been truly commendable and serve as an inspiration to others.';
+        const platformLogo = platformLogoUrl || LogoImage;
 
         return baseWrap(
-            <div style={{ background: '#f8fbff', width: '100%', height: '100%', borderRadius: '16px', boxShadow: '0 8px 30px rgba(0,0,0,0.08)', position: 'relative', overflow: 'hidden' }}>
-                {/* Top ribbon */}
-                <div style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    height: '180px',
-                    background: 'linear-gradient(135deg, #0d3f84 0%, #0b74c2 50%, #0d3f84 100%)',
-                    clipPath: 'ellipse(160% 100% at 50% 0%)'
-                }} />
+            <div style={{ width: '100%', height: '100%', background: '#d9e3ec', position: 'relative' }}>
+                <div
+                    style={{
+                        width: 1200,
+                        height: 750,
+                        position: 'absolute',
+                        left: '50%',
+                        top: '50%',
+                        transform: 'translate(-50%, -50%) scale(0.935)',
+                        transformOrigin: 'center',
+                        background: 'linear-gradient(135deg, #9fb4c7, #b8c9d8)',
+                        overflow: 'hidden'
+                    }}
+                >
+                    <div
+                        style={{
+                            position: 'absolute',
+                            inset: 0,
+                            backgroundImage: 'radial-gradient(rgba(255,255,255,0.25) 1px, transparent 1px)',
+                            backgroundSize: '14px 14px',
+                            opacity: 0.4
+                        }}
+                    />
+                    <div
+                        style={{
+                            position: 'absolute',
+                            bottom: -150,
+                            right: -150,
+                            width: 600,
+                            height: 600,
+                            background: 'repeating-radial-gradient(circle, rgba(255,255,255,0.25) 0px, rgba(255,255,255,0.25) 2px, transparent 3px, transparent 12px)',
+                            borderRadius: '50%',
+                            opacity: 0.4
+                        }}
+                    />
 
-                {/* Bottom ribbon */}
-                <div style={{
-                    position: 'absolute',
-                    bottom: -20,
-                    left: 0,
-                    right: 0,
-                    height: '220px',
-                    background: 'linear-gradient(135deg, #0d3f84 0%, #0b74c2 50%, #0d3f84 100%)',
-                    clipPath: 'ellipse(160% 100% at 50% 100%)',
-                    transform: 'scaleX(-1)'
-                }} />
+                    <div
+                        style={{
+                            width: 900,
+                            height: 600,
+                            background: 'rgba(255,255,255,0.75)',
+                            margin: 'auto',
+                            position: 'relative',
+                            top: 70,
+                            borderRadius: 18,
+                            backdropFilter: 'blur(6px)',
+                            boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
+                            textAlign: 'center',
+                            padding: '22px 70px 40px',
+                            boxSizing: 'border-box'
+                        }}
+                    >
+                        <div
+                            style={{
+                                position: 'absolute',
+                                inset: 12,
+                                border: '1.5px solid rgba(0,0,0,0.35)',
+                                borderRadius: 14,
+                                pointerEvents: 'none'
+                            }}
+                        />
 
-                {/* Inner panel */}
-                <div style={{
-                    position: 'absolute',
-                    top: 70,
-                    left: 70,
-                    right: 70,
-                    bottom: 70,
-                    background: 'linear-gradient(180deg, #ffffff 0%, #f7fbff 100%)',
-                    border: '2px solid #c8d7e8',
-                    boxShadow: '0 2px 14px rgba(0,0,0,0.05)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    padding: '50px 70px 70px'
-                }}>
-                    {renderHeaderLogos('#0f3d91')}
-                    <div style={{ fontSize: '20px', fontWeight: 900, letterSpacing: '3px', color: '#0d3f84', marginBottom: '8px' }}>{displayCertificateType.toUpperCase()}</div>
-                    <div style={{ fontSize: '14px', letterSpacing: '2px', color: '#666', marginBottom: '30px' }}>{displayRankTitle}</div>
-
-                    <div style={{ fontSize: '12px', color: '#444', letterSpacing: '1px', marginBottom: '28px', textAlign: 'center' }}>
-                        THIS CERTIFICATE IS PROUDLY PRESENTED TO
-                    </div>
-
-                    <div style={{ fontFamily: "'Playfair Display', serif", fontSize: '46px', color: '#0f172a', marginBottom: '18px' }}>
-                        {displayName}
-                    </div>
-
-                    <div style={{ width: '220px', height: '1px', background: '#9ca3af', marginBottom: '22px' }} />
-
-                    <div style={{ fontSize: '13px', color: '#4b5563', lineHeight: 1.6, textAlign: 'center', maxWidth: '620px', marginBottom: '36px' }}
-                        dangerouslySetInnerHTML={{ __html: getAchievementText() }} />
-
-                    {/* Signatures and seal - Only show if signatures are uploaded */}
-                    {(signatureLeftUrl || signatureRightUrl) && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: '20px' }}>
-                            <div style={{ width: '220px', textAlign: 'center' }}>
-                                {signatureLeftUrl && <img src={signatureLeftUrl} alt="Signature left" style={{ maxHeight: '50px', objectFit: 'contain', margin: '0 auto 6px' }} />}
-                                {signatureLeftUrl && (
-                                    <>
-                                        <div style={{ fontSize: '11px', color: '#4b5563', fontWeight: 700 }}>{signerLeft?.name || 'Representative'}</div>
-                                        <div style={{ fontSize: '10px', color: '#6b7280' }}>{signerLeft?.title || 'REPRESENTATIVE'}</div>
-                                    </>
-                                )}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <img
+                                    src={platformLogo}
+                                    alt="SaarthiX"
+                                    style={{ height: 36, width: 'auto', objectFit: 'contain' }}
+                                />
                             </div>
-
-                            <div style={{ width: '120px', height: '120px', borderRadius: '50%', border: '2px solid #cdd7e2', display: 'grid', placeItems: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
-                                <div style={{ width: '88px', height: '88px', borderRadius: '50%', border: '2px dashed #cdd7e2', display: 'grid', placeItems: 'center' }}>
-                                    <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#d6dee9' }} />
-                                </div>
-                            </div>
-
-                            <div style={{ width: '220px', textAlign: 'center' }}>
-                                {signatureRightUrl && <img src={signatureRightUrl} alt="Signature right" style={{ maxHeight: '50px', objectFit: 'contain', margin: '0 auto 6px' }} />}
-                                {signatureRightUrl && (
-                                    <>
-                                        <div style={{ fontSize: '11px', color: '#4b5563', fontWeight: 700 }}>{signerRight?.name || 'Representative'}</div>
-                                        <div style={{ fontSize: '10px', color: '#6b7280' }}>{signerRight?.title || 'REPRESENTATIVE'}</div>
-                                    </>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                {logoUrl ? (
+                                    <img
+                                        src={logoUrl}
+                                        alt="Organization"
+                                        style={{ height: 34, width: 'auto', objectFit: 'contain', maxWidth: 110 }}
+                                    />
+                                ) : (
+                                    <div style={{ height: 34, minWidth: 92, border: '1px dashed #9ca3af', borderRadius: 6, fontSize: 10, color: '#6b7280', display: 'grid', placeItems: 'center', padding: '0 8px' }}>
+                                        Industry Logo
+                                    </div>
                                 )}
                             </div>
                         </div>
-                    )}
 
-                    {/* Footer with date & unique certificate code */}
-                    <div style={{ marginTop: '24px', width: '100%', display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#6b7280', letterSpacing: '0.06em' }}>
-                        <span>Issued on: {date}</span>
-                        {certificateCode && <span>Certificate ID: {certificateCode}</span>}
+                        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 68, letterSpacing: 4, color: '#2e2e2e' }}>
+                            CERTIFICATE
+                        </div>
+                        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 28, marginTop: 5, marginBottom: 15 }}>
+                            {subtitle}
+                        </div>
+                        <div style={{ fontSize: 12, letterSpacing: 2, color: '#444', margin: '15px 0' }}>
+                            THE FOLLOWING AWARD IS GIVEN TO
+                        </div>
+                        <div style={{ fontFamily: "'Great Vibes', cursive", fontSize: 48, margin: '25px 0', color: '#2e2e2e' }}>
+                            {displayName}
+                        </div>
+                        <div style={{ fontSize: 14, color: '#444', width: '70%', margin: '0 auto', lineHeight: 1.6 }}>
+                            {descriptionText}
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 50, padding: '0 26px' }}>
+                            <div style={{ width: '40%', textAlign: 'center' }}>
+                                {signatureLeftUrl && (
+                                    <img src={signatureLeftUrl} alt="Signature left" style={{ maxHeight: 38, maxWidth: 170, objectFit: 'contain', margin: '0 auto 2px' }} />
+                                )}
+                                <div style={{ fontFamily: "'Great Vibes', cursive", fontSize: 22 }}>{signerLeft?.name || 'Chad Gibbons'}</div>
+                                <div style={{ width: '60%', height: 1, background: '#333', margin: '5px auto' }} />
+                                <div style={{ fontSize: 12, color: '#444' }}>{signerLeft?.title || 'Head of Event'}</div>
+                            </div>
+                            <div style={{ width: '40%', textAlign: 'center' }}>
+                                {signatureRightUrl && (
+                                    <img src={signatureRightUrl} alt="Signature right" style={{ maxHeight: 38, maxWidth: 170, objectFit: 'contain', margin: '0 auto 2px' }} />
+                                )}
+                                <div style={{ fontFamily: "'Great Vibes', cursive", fontSize: 22 }}>{signerRight?.name || 'Juliana Silva'}</div>
+                                <div style={{ width: '60%', height: 1, background: '#333', margin: '5px auto' }} />
+                                <div style={{ fontSize: 12, color: '#444' }}>{signerRight?.title || 'Mentor'}</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         );
     };
 
-    // Template 2: Playful Participation (matches provided teal design)
+    // Template 2: exact layout/style based on provided HTML
     const template2 = () => {
-        const displayRankTitle = rankTitle || 'Participation Certificate/Rank';
-        const displayCertificateType = certificateType || 'Certificate of Participation/Achievement';
+        const isAchievement = (certificateType || '').toLowerCase().includes('achievement');
+        const subtitle = isAchievement ? 'OF ACHIEVEMENT' : 'OF PARTICIPATION';
+        const descriptionText = customMessage || 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce varius suscipit turpis, in efficitur elit luctus eget. Aenean in consectetur nulla. Suspendisse efficitur sollicitudin magna ut cursus.';
+        const platformLogo = platformLogoUrl || LogoImage;
+
         return baseWrap(
-            <div style={{
-                background: '#f7fffd',
-                width: '100%',
-                height: '100%',
-                borderRadius: '18px',
-                border: '1px solid #d1fae5',
-                position: 'relative',
-                overflow: 'hidden',
-                padding: '60px 70px'
-            }}>
-                {/* Decorative shapes */}
-                <div style={{ position: 'absolute', top: 16, right: 22, width: 120, height: 120, borderRadius: '32px', background: 'linear-gradient(135deg,#3cc0d3,#2ab3ad)', transform: 'rotate(12deg)' }} />
-                <div style={{ position: 'absolute', top: 24, left: 0, width: 110, height: 110, borderRadius: '28px', background: 'linear-gradient(135deg,#23b8c0,#2196af)', clipPath: 'polygon(0 0, 100% 0, 0 100%)' }} />
-                <div style={{ position: 'absolute', bottom: 8, left: 0, width: 180, height: 180, borderRadius: '40px', background: 'linear-gradient(135deg,#2ab3ad,#2a83da)', clipPath: 'polygon(0 0, 100% 100%, 0 100%)' }} />
-                <div style={{ position: 'absolute', bottom: 10, right: 8, width: 120, height: 120, borderRadius: '28px', background: 'linear-gradient(135deg,#2f9bd2,#2ab3ad)', clipPath: 'polygon(0 100%, 100% 0, 100% 100%)' }} />
+            <div style={{ width: '100%', height: '100%', background: '#e6e6e6', position: 'relative' }}>
+                <div
+                    style={{
+                        width: 1100,
+                        height: 720,
+                        position: 'absolute',
+                        left: '50%',
+                        top: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        background: 'linear-gradient(135deg, #17b3a3 50%, #6faea6 50%)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        overflow: 'hidden'
+                    }}
+                >
+                    <div
+                        style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: '40%',
+                            width: 300,
+                            height: '100%',
+                            background: 'rgba(255,255,255,0.15)',
+                            transform: 'skewX(-20deg)'
+                        }}
+                    />
+                    <div
+                        style={{
+                            position: 'absolute',
+                            bottom: 0,
+                            right: 0,
+                            width: 350,
+                            height: 200,
+                            background: 'rgba(255,255,255,0.25)',
+                            clipPath: 'polygon(100% 0, 0 100%, 100% 100%)'
+                        }}
+                    />
 
-                {/* Inline shapes */}
-                <div style={{ position: 'absolute', top: 90, right: 210, width: 52, height: 52, borderRadius: '20px', border: '6px solid #00a8c6', boxSizing: 'border-box' }} />
-                <div style={{ position: 'absolute', top: 130, right: 160, width: 18, height: 18, background: '#00a8c6', borderRadius: '999px' }} />
-                <div style={{ position: 'absolute', top: 210, right: 40, width: 36, height: 36, borderRadius: '8px', border: '4px solid #00a8c6', transform: 'rotate(-8deg)' }} />
-                <div style={{ position: 'absolute', top: 170, left: 110, width: 22, height: 22, borderRadius: '50%', border: '5px solid #00a8c6' }} />
-                <div style={{ position: 'absolute', bottom: 160, right: 200, width: 30, height: 30, border: '4px solid #00a8c6', borderRadius: '6px', transform: 'rotate(12deg)' }} />
-                <div style={{ position: 'absolute', bottom: 120, left: 220, width: 26, height: 26, border: '4px solid #00a8c6', borderRadius: '6px', transform: 'rotate(-14deg)' }} />
-                <div style={{ position: 'absolute', bottom: 100, left: 60, display: 'flex', gap: 10 }}>
-                    {[...Array(5)].map((_, i) => <div key={i} style={{ width: 12, height: 12, borderRadius: '50%', background: '#00a8c6' }} />)}
-                </div>
+                    <div
+                        style={{
+                            width: 900,
+                            height: 570,
+                            background: '#efefef',
+                            padding: '22px 60px 46px',
+                            boxSizing: 'border-box',
+                            textAlign: 'center',
+                            position: 'relative'
+                        }}
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                            <img src={platformLogo} alt="SaarthiX" style={{ height: 34, width: 'auto', objectFit: 'contain' }} />
+                            {logoUrl ? (
+                                <img src={logoUrl} alt="Organization" style={{ height: 32, width: 'auto', objectFit: 'contain', maxWidth: 110 }} />
+                            ) : (
+                                <div style={{ height: 32, minWidth: 92, border: '1px dashed #9ca3af', borderRadius: 6, fontSize: 10, color: '#6b7280', display: 'grid', placeItems: 'center', padding: '0 8px' }}>
+                                    Industry Logo
+                                </div>
+                            )}
+                        </div>
 
-                {/* Content */}
-                <div style={{ position: 'relative', zIndex: 1 }}>
-                    {renderHeaderLogos('#0f172a')}
-                    <div style={{ marginBottom: '18px' }}>
-                        <div style={{ fontSize: '38px', fontWeight: 900, color: '#07b4aa', letterSpacing: '-1px' }}>{displayCertificateType}</div>
-                        <div style={{ fontSize: '14px', fontWeight: 700, letterSpacing: '2px', color: '#0f172a', marginTop: '6px' }}>{displayRankTitle}</div>
-                    </div>
+                        <div style={{ fontFamily: "'Great Vibes', cursive", fontSize: 72, color: '#1aa191', marginBottom: 10 }}>
+                            Certificate
+                        </div>
+                        <div style={{ fontSize: 14, letterSpacing: 2, marginBottom: 25 }}>
+                            {subtitle}
+                        </div>
+                        <div style={{ fontSize: 13, letterSpacing: 4, color: '#444', marginBottom: 15 }}>
+                            This certificate is awarded to :
+                        </div>
+                        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 36, color: '#1aa191', marginBottom: 20 }}>
+                            {displayName}
+                        </div>
+                        <div style={{ fontSize: 14, color: '#333', lineHeight: 1.7, width: '80%', margin: '0 auto 60px' }}>
+                            {descriptionText}
+                        </div>
 
-                    <div style={{ marginTop: '28px', fontSize: '14px', color: '#0f172a', fontWeight: 600 }}>
-                        This Certificate Presented to :
-                    </div>
-
-                    <div style={{ marginTop: '12px', fontSize: '46px', fontWeight: 900, color: '#08b2a8', letterSpacing: '-0.5px' }}>
-                        {displayName}
-                    </div>
-
-                    <div style={{ marginTop: '16px', fontSize: '14px', color: '#0f172a', maxWidth: '720px', lineHeight: 1.5 }}
-                        dangerouslySetInnerHTML={{ __html: customMessage || getAchievementText() }} />
-                
-
-                    {/* Signatures - Only show if signatures are uploaded */}
-                    {(signatureLeftUrl || signatureRightUrl) && (
-                        <div style={{ marginTop: '40px', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '40px', maxWidth: '520px' }}>
-                            <div style={{ textAlign: 'center' }}>
-                                {signatureLeftUrl && <img src={signatureLeftUrl} alt="Signature left" style={{ maxHeight: '44px', objectFit: 'contain', margin: '0 auto 6px' }} />}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 26 }}>
+                            <div style={{ width: '40%', textAlign: 'center' }}>
                                 {signatureLeftUrl && (
-                                    <>
-                                        <div style={{ width: '110px', height: '1px', background: '#0f172a', margin: '0 auto 10px' }} />
-                                        <div style={{ fontSize: '11px', fontWeight: 700, color: '#0f172a' }}>{signerLeft?.name || 'SUPERVISOR'}</div>
-                                        <div style={{ fontSize: '10px', color: '#475569', textTransform: 'uppercase' }}>{signerLeft?.title || 'SUPERVISOR'}</div>
-                                    </>
+                                    <img src={signatureLeftUrl} alt="Signature left" style={{ maxHeight: 34, maxWidth: 170, objectFit: 'contain', margin: '0 auto 4px' }} />
                                 )}
+                                <div style={{ height: 2, background: '#1aa191', marginBottom: 10 }} />
+                                <div style={{ color: '#1aa191', fontWeight: 600, fontSize: 14 }}>
+                                    {(signerLeft?.name || 'JAMIE CHASTAIN').toUpperCase()}
+                                </div>
+                                <div style={{ fontSize: 13, color: '#333' }}>
+                                    {(signerLeft?.title || 'DIRECTOR').toUpperCase()}
+                                </div>
                             </div>
-                            <div style={{ textAlign: 'center' }}>
-                                {signatureRightUrl && <img src={signatureRightUrl} alt="Signature right" style={{ maxHeight: '44px', objectFit: 'contain', margin: '0 auto 6px' }} />}
+                            <div style={{ width: '40%', textAlign: 'center' }}>
                                 {signatureRightUrl && (
-                                    <>
-                                        <div style={{ width: '110px', height: '1px', background: '#0f172a', margin: '0 auto 10px' }} />
-                                        <div style={{ fontSize: '11px', fontWeight: 700, color: '#0f172a' }}>{signerRight?.name || 'VP FOR OPERATION'}</div>
-                                        <div style={{ fontSize: '10px', color: '#475569', textTransform: 'uppercase' }}>{signerRight?.title || 'VP FOR OPERATION'}</div>
-                                    </>
+                                    <img src={signatureRightUrl} alt="Signature right" style={{ maxHeight: 34, maxWidth: 170, objectFit: 'contain', margin: '0 auto 4px' }} />
                                 )}
+                                <div style={{ height: 2, background: '#1aa191', marginBottom: 10 }} />
+                                <div style={{ color: '#1aa191', fontWeight: 600, fontSize: 14 }}>
+                                    {(signerRight?.name || 'CLAUDIA ALVES').toUpperCase()}
+                                </div>
+                                <div style={{ fontSize: 13, color: '#333' }}>
+                                    {(signerRight?.title || 'GENERAL MANAGER').toUpperCase()}
+                                </div>
                             </div>
                         </div>
-                    )}
+                    </div>
                 </div>
             </div>
         );
@@ -466,6 +546,8 @@ export const generateCertificatePDF = async (certificateData) => {
     console.log('templateStyle:', templateStyle);
     console.log('logoUrl:', logoUrl);
     console.log('platformLogoUrl:', platformLogoUrl);
+
+    ensureCertificateFonts();
 
     const container = document.createElement('div');
     container.style.position = 'fixed';

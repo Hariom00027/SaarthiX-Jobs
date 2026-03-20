@@ -56,6 +56,16 @@ export default function HackathonApplicationDashboard() {
     };
 
     // Certificate data comes from backend ONLY - no localStorage fallback
+    const getCertificateSigners = () => ({
+        signerLeft: {
+            name: application?.certificateSignerLeftName || 'Platform Director',
+            title: application?.certificateSignerLeftTitle || 'SaarthiX'
+        },
+        signerRight: {
+            name: application?.certificateSignerRightName || 'Event Organizer',
+            title: application?.certificateSignerRightTitle || hackathon?.company || 'Organizer'
+        }
+    });
 
     const handleDownloadCertificate = async () => {
         try {
@@ -74,8 +84,7 @@ export default function HackathonApplicationDashboard() {
                 logoUrl: application.certificateLogoUrl,
                 platformLogoUrl: application.certificatePlatformLogoUrl,
                 customMessage: application.certificateCustomMessage,
-                signerLeft: null,
-                signerRight: null,
+                ...getCertificateSigners(),
                 signatureLeftUrl: application.certificateSignatureLeftUrl,
                 signatureRightUrl: application.certificateSignatureRightUrl,
                 date: new Date().toLocaleDateString('en-US', {
@@ -112,8 +121,7 @@ export default function HackathonApplicationDashboard() {
                 logoUrl: application.certificateLogoUrl,
                 platformLogoUrl: application.certificatePlatformLogoUrl,
                 customMessage: application.certificateCustomMessage,
-                signerLeft: null,
-                signerRight: null,
+                ...getCertificateSigners(),
                 signatureLeftUrl: application.certificateSignatureLeftUrl,
                 signatureRightUrl: application.certificateSignatureRightUrl
             };
@@ -545,8 +553,7 @@ export default function HackathonApplicationDashboard() {
                                             logoUrl: application.certificateLogoUrl,
                                             platformLogoUrl: application.certificatePlatformLogoUrl,
                                             customMessage: application.certificateCustomMessage,
-                                            signerLeft: null,
-                                            signerRight: null,
+                                            ...getCertificateSigners(),
                                             signatureLeftUrl: application.certificateSignatureLeftUrl,
                                             signatureRightUrl: application.certificateSignatureRightUrl,
                                             date: new Date().toLocaleDateString('en-US', {
@@ -618,8 +625,7 @@ export default function HackathonApplicationDashboard() {
                                         logoUrl: application.certificateLogoUrl,
                                         platformLogoUrl: application.certificatePlatformLogoUrl,
                                         customMessage: application.certificateCustomMessage,
-                                        signerLeft: null,
-                                        signerRight: null,
+                                        ...getCertificateSigners(),
                                         signatureLeftUrl: application.certificateSignatureLeftUrl,
                                         signatureRightUrl: application.certificateSignatureRightUrl
                                     });

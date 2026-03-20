@@ -55,6 +55,10 @@ public class HackathonApplication {
     private String certificateCustomMessage;
     private String certificateSignatureLeftUrl;
     private String certificateSignatureRightUrl;
+    private String certificateSignerLeftName;
+    private String certificateSignerLeftTitle;
+    private String certificateSignerRightName;
+    private String certificateSignerRightTitle;
 
     private ShowcaseContent showcaseContent; // For top 3 winners
 
@@ -233,6 +237,38 @@ public class HackathonApplication {
 
     public void setCertificateSignatureRightUrl(String certificateSignatureRightUrl) {
         this.certificateSignatureRightUrl = certificateSignatureRightUrl;
+    }
+
+    public String getCertificateSignerLeftName() {
+        return certificateSignerLeftName;
+    }
+
+    public void setCertificateSignerLeftName(String certificateSignerLeftName) {
+        this.certificateSignerLeftName = certificateSignerLeftName;
+    }
+
+    public String getCertificateSignerLeftTitle() {
+        return certificateSignerLeftTitle;
+    }
+
+    public void setCertificateSignerLeftTitle(String certificateSignerLeftTitle) {
+        this.certificateSignerLeftTitle = certificateSignerLeftTitle;
+    }
+
+    public String getCertificateSignerRightName() {
+        return certificateSignerRightName;
+    }
+
+    public void setCertificateSignerRightName(String certificateSignerRightName) {
+        this.certificateSignerRightName = certificateSignerRightName;
+    }
+
+    public String getCertificateSignerRightTitle() {
+        return certificateSignerRightTitle;
+    }
+
+    public void setCertificateSignerRightTitle(String certificateSignerRightTitle) {
+        this.certificateSignerRightTitle = certificateSignerRightTitle;
     }
 
     public java.util.Map<String, PhaseSubmission> getPhaseSubmissions() {

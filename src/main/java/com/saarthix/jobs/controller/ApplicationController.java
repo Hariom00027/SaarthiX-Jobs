@@ -696,7 +696,25 @@ public class ApplicationController {
         if (email != null) {
             Optional<User> userOpt = userRepository.findByEmail(email);
             if (userOpt.isPresent()) {
-                return userOpt.get();
+                User existingUser = userOpt.get();
+                boolean shouldUpdate = false;
+
+                // Keep DB user role aligned with the incoming JWT role for cross-app SSO.
+                if (userType != null && !userType.isBlank() && !userType.equals(existingUser.getUserType())) {
+                    existingUser.setUserType(userType);
+                    shouldUpdate = true;
+                }
+
+                if (name != null && !name.isBlank() && !name.equals(existingUser.getName())) {
+                    existingUser.setName(name);
+                    shouldUpdate = true;
+                }
+
+                if (shouldUpdate) {
+                    existingUser = userRepository.save(existingUser);
+                }
+
+                return existingUser;
             }
 
             // User doesn't exist - create from JWT token claims

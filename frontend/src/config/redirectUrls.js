@@ -14,6 +14,15 @@ const getBaseUrl = () => {
  * Get the SomethingX (main platform) URL
  */
 export const getSomethingXUrl = () => {
+  // Local multi-app dev: Jobs runs on 3500, Home runs on 3000
+  if (
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') &&
+    (window.location.port === '3500' || window.location.port === '5173' || window.location.port === '' || window.location.port === '80')
+  ) {
+    return 'http://localhost:3000';
+  }
+
   const basename = getBaseUrl();
   // Remove /jobs from the base URL to get SomethingX URL
   if (basename.includes('/jobs')) {

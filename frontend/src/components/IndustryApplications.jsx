@@ -95,6 +95,9 @@ export default function IndustryApplications() {
     } catch (err) {
       console.error('Error loading jobs:', err);
       let errorMessage = 'Failed to load your posted jobs';
+      if (err?.message) {
+        errorMessage = err.message;
+      }
       
       if (err.response) {
         if (typeof err.response.data === 'string') {

@@ -53,11 +53,31 @@ export const checkAuth = async () => {
     };
   } catch (error) {
     console.error('Error checking auth:', error);
-    // Token might be expired or invalid
-    if (error.response?.status === 401) {
+    // Token is invalid/expired only when backend explicitly says so.
+    if (error.response?.status === 401 || error.response?.status === 403) {
       localStorage.removeItem('token');
+      return { authenticated: false };
     }
-    return { authenticated: false };
+
+    // For network/5xx issues, preserve current session to avoid false logout flicker.
+    const token = getAuthToken();
+    const cachedUserStr = localStorage.getItem('somethingx_auth_user');
+    if (token && cachedUserStr) {
+      try {
+        const cachedUser = JSON.parse(cachedUserStr);
+        return {
+          authenticated: true,
+          name: cachedUser.name || '',
+          email: cachedUser.email || '',
+          picture: cachedUser.picture || '',
+          userType: cachedUser.userType || 'APPLICANT',
+        };
+      } catch (_parseError) {
+        // Ignore parse issues and fall through to unauthenticated.
+      }
+    }
+
+    return { authenticated: !!token };
   }
 };
 

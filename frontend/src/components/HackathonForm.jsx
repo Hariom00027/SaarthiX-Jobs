@@ -17,6 +17,12 @@ const COMMON_SKILLS = [
 
 // Submission format options
 const SUBMISSION_FORMATS = ['PDF', 'PPT', 'DOC', 'Video', 'Repository Link', 'Website Link', 'ZIP File', 'Google Drive Link'];
+const MIN_PROBLEM_STATEMENT_WORDS = 50;
+
+const countWords = (value) => {
+  if (!value || typeof value !== 'string') return 0;
+  return value.trim().split(/\s+/).filter(Boolean).length;
+};
 
 // Hackathon form sections
 const HACKATHON_TABS = [
@@ -26,7 +32,6 @@ const HACKATHON_TABS = [
   { id: 'eligibility', label: 'Eligibility', icon: '👥', required: false },
   { id: 'dates', label: 'Dates & Mode', icon: '📅', required: true },
   { id: 'submission', label: 'Submission', icon: '📤', required: false },
-  { id: 'ai', label: 'AI Applications', icon: '🤖', required: false },
   { id: 'capacity', label: 'Capacity & Prizes', icon: '⚙️', required: false }
 ];
 
@@ -65,6 +70,8 @@ export default function HackathonForm() {
     mode: 'Online',
     venueLocation: '',
     venueTime: '',
+    venueDate: '',
+    venueReportingTime: '',
     // Submission & Requirements
     submissionProcedure: '',
     requirements: '',
@@ -131,6 +138,8 @@ export default function HackathonForm() {
           mode: hackathon.mode || 'Online',
           venueLocation: hackathon.venueLocation || '',
           venueTime: hackathon.venueTime || '',
+          venueDate: hackathon.venueDate || '',
+          venueReportingTime: hackathon.venueReportingTime || '',
           submissionProcedure: hackathon.submissionProcedure || '',
           requirements: hackathon.requirements || '',
           submissionUrl: hackathon.submissionUrl || '',
@@ -140,7 +149,6 @@ export default function HackathonForm() {
           enabled: hackathon.enabled !== undefined ? hackathon.enabled : true
         });
         setSkillsInput('');
-        setAiApplicationsInput('');
         setSavedHackathonId(hackathon.id);
       }
     } catch (err) {
@@ -156,21 +164,16 @@ export default function HackathonForm() {
     if (fieldName === 'skillsRequired') {
       return Array.isArray(value) && value.length > 0;
     }
-    if (fieldName === 'aiApplications') {
-      return Array.isArray(value) && value.length > 0;
-    }
     return value !== null && value !== undefined && value !== '';
   };
 
   const isTabComplete = (tabId) => {
+    const problemWordCount = countWords(formData.problemStatement);
     switch (tabId) {
       case 'basic':
         return isFieldFilled('title') && isFieldFilled('company') && isFieldFilled('description');
       case 'problem':
-        return isFieldFilled('problemStatement');
-      case 'ai':
-        // Complete only if at least one AI application is added
-        return isFieldFilled('aiApplications');
+        return isFieldFilled('problemStatement') && problemWordCount >= MIN_PROBLEM_STATEMENT_WORDS;
       case 'phases':
         // Complete if at least one phase has name and formats
         return formData.phases && formData.phases.length > 0 && formData.phases.some(phase => phase.name && phase.formats && phase.formats.length > 0);
@@ -216,6 +219,103 @@ export default function HackathonForm() {
     }));
   };
 
+  const problemWordCount = countWords(formData.problemStatement);
+  const isProblemStatementValid = problemWordCount >= MIN_PROBLEM_STATEMENT_WORDS;
+
+  const canLeaveCurrentTab = (nextTabId) => {
+    if (activeTab === 'problem' && nextTabId !== 'problem' && !isProblemStatementValid) {
+      toast.error(`Problem Statement must be at least ${MIN_PROBLEM_STATEMENT_WORDS} words before moving to another section.`, {
+        position: "top-right",
+        autoClose: 4000,
+      });
+      return false;
+    }
+    if (activeTab === 'phases' && nextTabId !== 'phases') {
+      const dateValidationError = validateDateRules();
+      if (dateValidationError) {
+        toast.error(dateValidationError, {
+          position: "top-right",
+          autoClose: 4000,
+        });
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const moveToTab = (nextTabId) => {
+    if (!nextTabId || nextTabId === activeTab) return;
+    if (!canLeaveCurrentTab(nextTabId)) return;
+    setActiveTab(nextTabId);
+  };
+
+  const validateDateRules = () => {
+    const today = new Date().toISOString().split('T')[0];
+    const { startDate, endDate, phases } = formData;
+
+    if (startDate && startDate < today) {
+      return 'Hackathon start date cannot be in the past.';
+    }
+
+    if (startDate && endDate && endDate < startDate) {
+      return 'Hackathon end date cannot be before start date.';
+    }
+
+    let previousPhaseDate = null;
+    for (let i = 0; i < (phases || []).length; i += 1) {
+      const phase = phases[i];
+      if (!phase?.deadline) continue;
+
+      if (startDate && phase.deadline < startDate) {
+        return `Phase ${i + 1} date cannot be before hackathon start date.`;
+      }
+      if (endDate && phase.deadline > endDate) {
+        return `Phase ${i + 1} date cannot be after hackathon end date.`;
+      }
+
+      if (previousPhaseDate && phase.deadline < previousPhaseDate) {
+        return `Phase ${i + 1} date cannot be before previous phase date.`;
+      }
+
+      previousPhaseDate = phase.deadline;
+    }
+
+    return null;
+  };
+
+  const getPhaseMinDate = (phaseIndex) => {
+    const startDate = formData.startDate || '';
+    if (phaseIndex <= 0) {
+      return startDate || undefined;
+    }
+    const prevPhaseDate = formData.phases[phaseIndex - 1]?.deadline || '';
+    if (startDate && prevPhaseDate) {
+      return prevPhaseDate > startDate ? prevPhaseDate : startDate;
+    }
+    return prevPhaseDate || startDate || undefined;
+  };
+
+  const getPhaseDateValidationMessage = (phaseId, deadline) => {
+    if (!deadline) return null;
+    const phaseIndex = formData.phases.findIndex(phase => phase.id === phaseId);
+    if (phaseIndex < 0) return null;
+
+    const startDate = formData.startDate || '';
+    const endDate = formData.endDate || '';
+    const previousDeadline = phaseIndex > 0 ? (formData.phases[phaseIndex - 1]?.deadline || '') : '';
+
+    if (startDate && deadline < startDate) {
+      return `Phase ${phaseIndex + 1} date cannot be before hackathon start date.`;
+    }
+    if (endDate && deadline > endDate) {
+      return `Phase ${phaseIndex + 1} date cannot be after hackathon end date.`;
+    }
+    if (previousDeadline && deadline < previousDeadline) {
+      return `Phase ${phaseIndex + 1} date cannot be before previous phase date.`;
+    }
+    return null;
+  };
+
   const handleSkillsInputChange = (e) => {
     setSkillsInput(e.target.value);
     setShowSkillsSuggestions(e.target.value.length > 0);
@@ -240,11 +340,21 @@ export default function HackathonForm() {
     }));
   };
 
-  const handleGenerateWithAI = async (fieldName, fieldType) => {
+  const handleEnhanceWithAI = async (fieldName, fieldType) => {
+    const currentValue = (formData[fieldName] || '').trim();
+    if (!currentValue) {
+      toast.info('Please write something first, then click Enhance with AI.', {
+        position: "top-right",
+        autoClose: 3000,
+      });
+      return;
+    }
+
     setGeneratingAI(prev => ({ ...prev, [fieldName]: true }));
     try {
-      // Build context from existing form data
+      // Build enhancement context from current form data plus existing field content
       const context = [
+        `Existing ${fieldType}: ${currentValue}`,
         formData.title ? `Title: ${formData.title}` : '',
         formData.company ? `Company: ${formData.company}` : '',
         formData.skillsRequired.length > 0 ? `Skills: ${formData.skillsRequired.join(', ')}` : '',
@@ -258,7 +368,7 @@ export default function HackathonForm() {
         [fieldName]: generatedContent
       }));
       
-      toast.success('Content generated successfully!', {
+      toast.success('Content enhanced successfully!', {
         position: "top-right",
         autoClose: 3000,
       });
@@ -267,7 +377,7 @@ export default function HackathonForm() {
       const errorMsg = err.response?.data || err.message || 'Failed to generate content';
       toast.error(errorMsg.includes('API key') || errorMsg.includes('not configured') 
         ? 'AI service is not configured. Please configure OpenAI API key in backend.'
-        : 'Failed to generate content. Please try again.',
+        : 'Failed to enhance content. Please try again.',
       {
         position: "top-right",
         autoClose: 5000,
@@ -293,6 +403,16 @@ export default function HackathonForm() {
   };
 
   const handlePhaseChange = (phaseId, field, value) => {
+    if (field === 'deadline') {
+      const message = getPhaseDateValidationMessage(phaseId, value);
+      if (message) {
+        toast.warning(message, {
+          position: "top-right",
+          autoClose: 3500,
+        });
+        return;
+      }
+    }
     setFormData(prev => ({
       ...prev,
       phases: prev.phases.map(phase =>
@@ -322,6 +442,16 @@ export default function HackathonForm() {
 
     if (saving) return;
 
+    const dateValidationError = validateDateRules();
+    if (dateValidationError) {
+      toast.error(dateValidationError, {
+        position: "top-right",
+        autoClose: 5000,
+      });
+      setActiveTab('dates');
+      return;
+    }
+
     setSaving(true);
     setError(null);
 
@@ -342,6 +472,8 @@ export default function HackathonForm() {
         mode: formData.mode,
         venueLocation: formData.venueLocation || '',
         venueTime: formData.venueTime || '',
+        venueDate: formData.venueDate || '',
+        venueReportingTime: formData.venueReportingTime || '',
         submissionProcedure: formData.submissionProcedure || '',
         requirements: formData.requirements || '',
         submissionUrl: formData.submissionUrl || '',
@@ -374,7 +506,7 @@ export default function HackathonForm() {
       // Move to next section
       const currentTabIndex = HACKATHON_TABS.findIndex(tab => tab.id === activeTab);
       if (currentTabIndex < HACKATHON_TABS.length - 1) {
-        setActiveTab(HACKATHON_TABS[currentTabIndex + 1].id);
+        moveToTab(HACKATHON_TABS[currentTabIndex + 1].id);
       }
     } catch (err) {
       console.error('Error saving hackathon:', err);
@@ -415,6 +547,25 @@ export default function HackathonForm() {
       return;
     }
 
+    if (!isProblemStatementValid) {
+      toast.error(`Problem Statement must contain at least ${MIN_PROBLEM_STATEMENT_WORDS} words.`, {
+        position: "top-right",
+        autoClose: 5000,
+      });
+      setActiveTab('problem');
+      return;
+    }
+
+    const dateValidationError = validateDateRules();
+    if (dateValidationError) {
+      toast.error(dateValidationError, {
+        position: "top-right",
+        autoClose: 5000,
+      });
+      setActiveTab('dates');
+      return;
+    }
+
     setSaving(true);
     setError(null);
 
@@ -435,6 +586,8 @@ export default function HackathonForm() {
         mode: formData.mode,
         venueLocation: formData.venueLocation || null,
         venueTime: formData.venueTime || null,
+        venueDate: formData.venueDate || null,
+        venueReportingTime: formData.venueReportingTime || null,
         submissionProcedure: formData.submissionProcedure,
         requirements: formData.requirements,
         submissionUrl: formData.submissionUrl,
@@ -512,12 +665,12 @@ export default function HackathonForm() {
       <div className="mx-auto max-w-5xl">
         {/* Header */}
         <div className="mb-8">
-          <button
+          {/* <button
             onClick={() => navigate('/manage-hackathons')}
             className="mb-6 text-gray-500 hover:text-gray-700 font-medium flex items-center gap-2 text-sm transition-colors"
           >
             ← Back to Dashboard
-          </button>
+          </button> */}
 
           <div className="mb-6">
             <h1 className="text-4xl md:text-5xl font-bold text-gray-900 tracking-tight mb-2">
@@ -560,7 +713,7 @@ export default function HackathonForm() {
               return (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => moveToTab(tab.id)}
                   className={`flex-1 min-w-max sm:min-w-0 py-4 px-4 sm:px-6 text-center border-b-2 transition-all relative group ${
                     isActive
                       ? 'text-purple-600 border-b-purple-600 bg-purple-50'
@@ -629,21 +782,21 @@ export default function HackathonForm() {
                 </label>
                   <button
                     type="button"
-                    onClick={() => handleGenerateWithAI('description', 'description')}
+                    onClick={() => handleEnhanceWithAI('description', 'description')}
                     disabled={generatingAI.description}
                     className="text-xs px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                   >
                     {generatingAI.description ? (
                       <>
                         <div className="h-3 w-3 animate-spin rounded-full border-2 border-purple-600 border-t-transparent"></div>
-                        Generating...
+                        Enhancing...
                       </>
                     ) : (
                       <>
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
-                        Generate with AI
+                        Enhance with AI
                       </>
                     )}
                   </button>
@@ -672,21 +825,21 @@ export default function HackathonForm() {
                 </label>
                   <button
                     type="button"
-                    onClick={() => handleGenerateWithAI('problemStatement', 'problemStatement')}
+                    onClick={() => handleEnhanceWithAI('problemStatement', 'problemStatement')}
                     disabled={generatingAI.problemStatement}
                     className="text-xs px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                   >
                     {generatingAI.problemStatement ? (
                       <>
                         <div className="h-3 w-3 animate-spin rounded-full border-2 border-purple-600 border-t-transparent"></div>
-                        Generating...
+                        Enhancing...
                       </>
                     ) : (
                       <>
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
-                        Generate with AI
+                        Enhance with AI
                       </>
                     )}
                   </button>
@@ -699,6 +852,9 @@ export default function HackathonForm() {
                   rows="5"
                   className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition"
                 />
+                <p className={`text-xs mt-2 ${isProblemStatementValid ? 'text-green-600' : 'text-red-600'}`}>
+                  {problemWordCount}/{MIN_PROBLEM_STATEMENT_WORDS} words required to unlock other sections.
+                </p>
               </div>
 
               <div>
@@ -751,58 +907,6 @@ export default function HackathonForm() {
                   )}
                 </div>
                 <p className="text-xs text-gray-500 mt-2">Added: {formData.skillsRequired.length} skills</p>
-              </div>
-            </div>
-          )}
-
-          {/* SECTION: AI APPLICATIONS / USE-CASES */}
-          {activeTab === 'ai' && (
-            <div className="space-y-6 animate-fadeIn">
-              <h2 className="text-2xl font-bold text-gray-900">AI Applications (Use-cases)</h2>
-              <p className="text-sm text-gray-600">
-                Add AI application areas relevant to this hackathon (e.g., Healthcare, Finance, Education, Retail, Cybersecurity).
-              </p>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  AI Applications
-                </label>
-
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {formData.aiApplications.map(item => (
-                    <div key={item} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full flex items-center gap-2 text-sm font-medium">
-                      {item}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveAiApplication(item)}
-                        className="hover:text-blue-900"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <input
-                  type="text"
-                  value={aiApplicationsInput}
-                  onChange={handleAiApplicationsInputChange}
-                  placeholder="Type an AI application area and press Enter (e.g., Healthcare)"
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddAiApplication(aiApplicationsInput);
-                    }
-                  }}
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition"
-                />
-                <p className="text-xs text-gray-500 mt-2">Added: {formData.aiApplications.length} item(s)</p>
-              </div>
-
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-800">
-                  <span className="font-semibold">Tip:</span> These help participants understand where to apply AI/ML in their solution.
-                </p>
               </div>
             </div>
           )}
@@ -879,6 +983,7 @@ export default function HackathonForm() {
                           type="date"
                           value={phase.deadline}
                           onChange={(e) => handlePhaseChange(phase.id, 'deadline', e.target.value)}
+                          min={getPhaseMinDate(index)}
                           className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition"
                         />
                       </div>
@@ -989,21 +1094,21 @@ export default function HackathonForm() {
                 </label>
                   <button
                     type="button"
-                    onClick={() => handleGenerateWithAI('eligibilityCriteria', 'eligibilityCriteria')}
+                    onClick={() => handleEnhanceWithAI('eligibilityCriteria', 'eligibilityCriteria')}
                     disabled={generatingAI.eligibilityCriteria}
                     className="text-xs px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                   >
                     {generatingAI.eligibilityCriteria ? (
                       <>
                         <div className="h-3 w-3 animate-spin rounded-full border-2 border-purple-600 border-t-transparent"></div>
-                        Generating...
+                        Enhancing...
                       </>
                     ) : (
                       <>
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
-                        Generate with AI
+                        Enhance with AI
                       </>
                     )}
                   </button>
@@ -1035,6 +1140,7 @@ export default function HackathonForm() {
                     name="startDate"
                     value={formData.startDate}
                     onChange={handleInputChange}
+                    min={new Date().toISOString().split('T')[0]}
                     className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition"
                   />
                 </div>
@@ -1048,6 +1154,7 @@ export default function HackathonForm() {
                     name="endDate"
                     value={formData.endDate}
                     onChange={handleInputChange}
+                    min={formData.startDate || new Date().toISOString().split('T')[0]}
                     className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition"
                   />
                 </div>
@@ -1098,6 +1205,33 @@ export default function HackathonForm() {
                       className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition"
                     />
                   </div>
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Venue Reporting Date
+                      </label>
+                      <input
+                        type="date"
+                        name="venueDate"
+                        value={formData.venueDate}
+                        onChange={handleInputChange}
+                        min={formData.startDate || new Date().toISOString().split('T')[0]}
+                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Venue Reporting Time
+                      </label>
+                      <input
+                        type="time"
+                        name="venueReportingTime"
+                        value={formData.venueReportingTime}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition"
+                      />
+                    </div>
+                  </div>
                 </>
               )}
             </div>
@@ -1115,21 +1249,21 @@ export default function HackathonForm() {
                 </label>
                   <button
                     type="button"
-                    onClick={() => handleGenerateWithAI('submissionProcedure', 'submissionProcedure')}
+                    onClick={() => handleEnhanceWithAI('submissionProcedure', 'submissionProcedure')}
                     disabled={generatingAI.submissionProcedure}
                     className="text-xs px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                   >
                     {generatingAI.submissionProcedure ? (
                       <>
                         <div className="h-3 w-3 animate-spin rounded-full border-2 border-purple-600 border-t-transparent"></div>
-                        Generating...
+                        Enhancing...
                       </>
                     ) : (
                       <>
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
-                        Generate with AI
+                        Enhance with AI
                       </>
                     )}
                   </button>
@@ -1151,21 +1285,21 @@ export default function HackathonForm() {
                 </label>
                   <button
                     type="button"
-                    onClick={() => handleGenerateWithAI('requirements', 'requirements')}
+                    onClick={() => handleEnhanceWithAI('requirements', 'requirements')}
                     disabled={generatingAI.requirements}
                     className="text-xs px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                   >
                     {generatingAI.requirements ? (
                       <>
                         <div className="h-3 w-3 animate-spin rounded-full border-2 border-purple-600 border-t-transparent"></div>
-                        Generating...
+                        Enhancing...
                       </>
                     ) : (
                       <>
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
-                        Generate with AI
+                        Enhance with AI
                       </>
                     )}
                   </button>
@@ -1219,7 +1353,7 @@ export default function HackathonForm() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Max Team Size
+                    Max Team Size (members allowed per team)
                   </label>
                   <input
                     type="number"
@@ -1250,46 +1384,48 @@ export default function HackathonForm() {
           )}
 
           {/* Form Actions */}
-          <div className="flex gap-4 pt-8 border-t border-gray-200 mt-8">
-            <button
-              type="button"
-              onClick={() => navigate('/manage-hackathons')}
-              className="px-6 py-3 border border-gray-300 rounded-lg text-gray-900 font-semibold hover:bg-gray-50 transition"
-            >
-              Cancel
-            </button>
+          {activeTab === HACKATHON_TABS[HACKATHON_TABS.length - 1].id && (
+            <div className="flex gap-4 pt-8 border-t border-gray-200 mt-8">
+              <button
+                type="button"
+                onClick={() => navigate('/manage-hackathons')}
+                className="px-6 py-3 border border-gray-300 rounded-lg text-gray-900 font-semibold hover:bg-gray-50 transition"
+              >
+                Cancel
+              </button>
 
-            {/* Auto-save button */}
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className="px-6 py-3 bg-gray-100 hover:bg-gray-200 disabled:bg-gray-100 text-gray-900 font-semibold rounded-lg transition disabled:cursor-not-allowed"
-            >
-              {saving ? 'Saving...' : 'Save as Draft'}
-            </button>
+              {/* Auto-save button */}
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="px-6 py-3 bg-gray-100 hover:bg-gray-200 disabled:bg-gray-100 text-gray-900 font-semibold rounded-lg transition disabled:cursor-not-allowed"
+              >
+                {saving ? 'Saving...' : 'Save as Draft'}
+              </button>
 
-            {/* Publish button */}
-            <button
-              type="submit"
-              disabled={saving}
-              className="flex-1 px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-semibold rounded-lg transition disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {saving ? (
-                <>
-                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                  {editingHackathonId ? 'Updating...' : 'Publishing...'}
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  {editingHackathonId ? 'Update & Publish' : 'Publish Hackathon'}
-                </>
-              )}
-            </button>
-          </div>
+              {/* Publish button */}
+              <button
+                type="submit"
+                disabled={saving}
+                className="flex-1 px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white font-semibold rounded-lg transition disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {saving ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                    {editingHackathonId ? 'Updating...' : 'Publishing...'}
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    {editingHackathonId ? 'Update & Publish' : 'Publish Hackathon'}
+                  </>
+                )}
+              </button>
+            </div>
+          )}
 
           {/* Tab Navigation Buttons */}
           <div className="flex gap-4 pt-4 border-t border-gray-200 mt-4">
@@ -1298,7 +1434,7 @@ export default function HackathonForm() {
               onClick={() => {
                 const currentIndex = HACKATHON_TABS.findIndex(t => t.id === activeTab);
                 if (currentIndex > 0) {
-                  setActiveTab(HACKATHON_TABS[currentIndex - 1].id);
+                  moveToTab(HACKATHON_TABS[currentIndex - 1].id);
                 }
               }}
               disabled={activeTab === HACKATHON_TABS[0].id}
@@ -1312,7 +1448,7 @@ export default function HackathonForm() {
               onClick={() => {
                 const currentIndex = HACKATHON_TABS.findIndex(t => t.id === activeTab);
                 if (currentIndex < HACKATHON_TABS.length - 1) {
-                  setActiveTab(HACKATHON_TABS[currentIndex + 1].id);
+                  moveToTab(HACKATHON_TABS[currentIndex + 1].id);
                 }
               }}
               disabled={activeTab === HACKATHON_TABS[HACKATHON_TABS.length - 1].id}

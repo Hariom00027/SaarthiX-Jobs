@@ -21,6 +21,7 @@ import HackathonApplicationDashboard from './components/HackathonApplicationDash
 import ApplicantResults from './components/ApplicantResults';
 import IndustryHackathonDashboard from './components/IndustryHackathonDashboard';
 import IndustryHackathonResults from './components/IndustryHackathonResults';
+import IndustryCertificatePublishPage from './components/IndustryCertificatePublishPage';
 import StudentDatabase from './components/StudentDatabase';
 import DemoViewSwitcher from './components/DemoViewSwitcher';
 
@@ -57,6 +58,7 @@ function App() {
             <Route path="/hackathon-application/:applicationId/results" element={<ApplicantResults />} />
             <Route path="/industry/hackathon/:hackathonId/dashboard" element={<IndustryHackathonDashboard />} />
             <Route path="/industry/hackathon/:hackathonId/results" element={<IndustryHackathonResults />} />
+            <Route path="/industry/hackathon/:hackathonId/publish-certificates" element={<IndustryCertificatePublishPage />} />
             <Route path="/student-database" element={<StudentDatabase />} />
           </Routes>
           <ToastContainer

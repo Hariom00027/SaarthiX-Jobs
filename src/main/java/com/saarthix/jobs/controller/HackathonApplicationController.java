@@ -222,11 +222,34 @@ public class HackathonApplicationController {
                     System.err.println("Team size is invalid: " + req.getTeamSize());
                     return ResponseEntity.badRequest().body("Team size must be greater than 1");
                 }
+                if (hackathon.getTeamSize() > 0 && req.getTeamSize() > hackathon.getTeamSize()) {
+                    return ResponseEntity.badRequest().body("Team size exceeds allowed maximum of " + hackathon.getTeamSize() + " members.");
+                }
+                if (req.getTeamMembers() == null || req.getTeamMembers().isEmpty()) {
+                    return ResponseEntity.badRequest().body("Team member details are required for team applications.");
+                }
+                if (req.getTeamMembers().size() != req.getTeamSize()) {
+                    return ResponseEntity.badRequest().body("Team members count must exactly match the selected team size.");
+                }
+                for (HackathonApplication.TeamMember member : req.getTeamMembers()) {
+                    if (member == null ||
+                        member.getName() == null || member.getName().isBlank() ||
+                        member.getEmail() == null || member.getEmail().isBlank() ||
+                        member.getPhone() == null || member.getPhone().isBlank()) {
+                        return ResponseEntity.badRequest().body("Each team member must include name, email, and phone.");
+                    }
+                }
                 System.out.println("Team application validated - Name: " + req.getTeamName() + ", Size: " + req.getTeamSize());
             } else {
                 // Individual mode
                 req.setTeamName(null);
                 req.setTeamSize(1);
+                req.setTeamMembers(null);
+                if (req.getIndividualName() == null || req.getIndividualName().isBlank() ||
+                    req.getIndividualEmail() == null || req.getIndividualEmail().isBlank() ||
+                    req.getIndividualPhone() == null || req.getIndividualPhone().isBlank()) {
+                    return ResponseEntity.badRequest().body("For individual applications, name, email, and phone are required.");
+                }
                 System.out.println("Individual application set");
             }
 
@@ -617,6 +640,10 @@ public class HackathonApplicationController {
         String customMessage = null;
         String signatureLeftUrl = null;
         String signatureRightUrl = null;
+        String signerLeftName = null;
+        String signerLeftTitle = null;
+        String signerRightName = null;
+        String signerRightTitle = null;
 
         if (body != null) {
             if (body.get("certificateTemplateId") != null) {
@@ -636,6 +663,18 @@ public class HackathonApplicationController {
             }
             if (body.get("signatureRightUrl") != null) {
                 signatureRightUrl = String.valueOf(body.get("signatureRightUrl"));
+            }
+            if (body.get("signerLeftName") != null) {
+                signerLeftName = String.valueOf(body.get("signerLeftName"));
+            }
+            if (body.get("signerLeftTitle") != null) {
+                signerLeftTitle = String.valueOf(body.get("signerLeftTitle"));
+            }
+            if (body.get("signerRightName") != null) {
+                signerRightName = String.valueOf(body.get("signerRightName"));
+            }
+            if (body.get("signerRightTitle") != null) {
+                signerRightTitle = String.valueOf(body.get("signerRightTitle"));
             }
         }
 
@@ -679,6 +718,18 @@ public class HackathonApplicationController {
             }
             if (signatureRightUrl != null) {
                 app.setCertificateSignatureRightUrl(signatureRightUrl);
+            }
+            if (signerLeftName != null) {
+                app.setCertificateSignerLeftName(signerLeftName);
+            }
+            if (signerLeftTitle != null) {
+                app.setCertificateSignerLeftTitle(signerLeftTitle);
+            }
+            if (signerRightName != null) {
+                app.setCertificateSignerRightName(signerRightName);
+            }
+            if (signerRightTitle != null) {
+                app.setCertificateSignerRightTitle(signerRightTitle);
             }
             generateCertificateUrls(app);
         }

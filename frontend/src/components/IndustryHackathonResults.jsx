@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getHackathonResults, finalizeHackathonResults, publishShowcaseContent, deleteHackathonApplication, getHackathonById } from '../api/jobApi';
-import apiClient from '../api/apiClient';
+import { getHackathonResults, publishShowcaseContent, deleteHackathonApplication, getHackathonById } from '../api/jobApi';
 import { toast } from 'react-toastify';
-import { Trophy, Medal, Award, Users, Star, CheckCircle, Upload, X, FileText, Mail } from 'lucide-react';
+import { Trophy, Medal, Award, Users, Star, Upload, X, Lock, ShieldCheck } from 'lucide-react';
 
 export default function IndustryHackathonResults() {
     const { hackathonId } = useParams();
@@ -12,7 +11,6 @@ export default function IndustryHackathonResults() {
     const [results, setResults] = useState([]);
     const [hackathon, setHackathon] = useState(null);
     const [loadError, setLoadError] = useState('');
-    const [finalizing, setFinalizing] = useState(false);
     const [showcaseModal, setShowcaseModal] = useState(null);
     const [showcaseData, setShowcaseData] = useState({
         title: '',
@@ -24,6 +22,7 @@ export default function IndustryHackathonResults() {
         2: null,  // 2nd place application ID
         3: null   // 3rd place application ID
     });
+    const [resultsLocked, setResultsLocked] = useState(false);
 
     useEffect(() => {
         loadResults();
@@ -79,81 +78,29 @@ export default function IndustryHackathonResults() {
     };
 
     const handleRankSelection = (rank, applicationId) => {
+        if (!resultsLocked && !hasRankings) {
+            toast.warning('Please lock results first after reviewing all solutions.');
+            return;
+        }
         setSelectedRanks(prev => ({
             ...prev,
             [rank]: applicationId || null
         }));
     };
 
-    const handleFinalizeWithManualRanks = async () => {
-        // Check if at least one winner is selected
+    const handleOpenCertificatePage = async () => {
+        if (!resultsLocked && !hasRankings) {
+            toast.error('Please lock results first.');
+            return;
+        }
         const hasAnySelection = selectedRanks[1] || selectedRanks[2] || selectedRanks[3];
-
         if (!hasAnySelection) {
             toast.error('Please select at least one winner');
             return;
         }
-
-        const selectedCount = [selectedRanks[1], selectedRanks[2], selectedRanks[3]].filter(Boolean).length;
-        const confirmMessage = selectedCount === 3
-            ? 'Are you sure you want to finalize results with all 3 winners selected?'
-            : `Are you sure you want to finalize with only ${selectedCount} winner(s) selected?`;
-
-        if (!window.confirm(confirmMessage)) {
-            return;
-        }
-
-        try {
-            setFinalizing(true);
-
-            // Update each selected application with its rank
-            for (const [rank, appId] of Object.entries(selectedRanks)) {
-                if (!appId) continue; // Skip if no selection for this rank
-
-                const app = results.find(r => r.id === appId);
-                if (app) {
-                    const totalScore = getTotalScore(app);
-
-                    console.log(`Updating ${appId}: rank=${rank}, score=${totalScore}`);
-
-                    const response = await apiClient.patch(
-                        `/hackathon-applications/${appId}`,
-                        {
-                            finalRank: parseInt(rank),
-                            totalScore: totalScore
-                        }
-                    );
-
-                    console.log(`Updated successfully:`, response.data);
-                }
-            }
-
-            toast.success('Results finalized successfully!');
-            await loadResults();
-        } catch (error) {
-            console.error('Error finalizing results:', error);
-            toast.error(error.response?.data?.message || error.message || 'Failed to finalize results');
-        } finally {
-            setFinalizing(false);
-        }
-    };
-
-    const handleFinalizeResults = async () => {
-        if (!window.confirm('Are you sure you want to finalize results? This will calculate rankings based on total scores.')) {
-            return;
-        }
-
-        try {
-            setFinalizing(true);
-            await finalizeHackathonResults(hackathonId);
-            toast.success('Results finalized successfully!');
-            await loadResults();
-        } catch (error) {
-            console.error('Error finalizing results:', error);
-            toast.error('Failed to finalize results');
-        } finally {
-            setFinalizing(false);
-        }
+        navigate(`/industry/hackathon/${hackathonId}/publish-certificates`, {
+            state: { selectedRanks }
+        });
     };
 
     const handlePublishShowcase = async (applicationId) => {
@@ -245,6 +192,79 @@ export default function IndustryHackathonResults() {
     };
 
     const hasRankings = results.some(r => r.finalRank);
+    const phaseIds = (hackathon?.phases || []).map((phase) => phase.id);
+
+    const hasAnySubmittedSolution = (application) => {
+        const submissions = application?.phaseSubmissions || {};
+        return Object.values(submissions).some((submission) => (
+            !!submission && (
+                !!submission.submittedAt ||
+                !!submission.solutionStatement ||
+                !!submission.submissionLink ||
+                !!submission.fileName
+            )
+        ));
+    };
+
+    const isApplicationFullyReviewed = (application) => {
+        if (!application || application.status === 'REJECTED') {
+            return true;
+        }
+
+        if (!hasAnySubmittedSolution(application)) {
+            return false;
+        }
+
+        const submissions = application.phaseSubmissions || {};
+        if (phaseIds.length === 0) {
+            return Object.values(submissions).some((submission) =>
+                submission?.status === 'ACCEPTED' || submission?.status === 'REJECTED'
+            );
+        }
+
+        return phaseIds.every((phaseId) => {
+            const status = submissions?.[phaseId]?.status;
+            return status === 'ACCEPTED' || status === 'REJECTED';
+        });
+    };
+
+    const reviewCandidates = results.filter((application) => application?.status !== 'REJECTED');
+    const reviewedCount = reviewCandidates.filter(isApplicationFullyReviewed).length;
+    const canLockResults = reviewCandidates.length > 0 && reviewedCount === reviewCandidates.length;
+
+    const winnerEligibleResults = results.filter((application) =>
+        application?.status !== 'REJECTED' &&
+        hasAnySubmittedSolution(application) &&
+        isApplicationFullyReviewed(application)
+    );
+
+    const lockStorageKey = `hackathon-results-locked-${hackathonId}`;
+
+    useEffect(() => {
+        const persistedLock = localStorage.getItem(lockStorageKey) === 'true';
+        if (hasRankings) {
+            setResultsLocked(true);
+            return;
+        }
+        if (persistedLock && canLockResults) {
+            setResultsLocked(true);
+            return;
+        }
+        if (!canLockResults) {
+            setResultsLocked(false);
+            localStorage.removeItem(lockStorageKey);
+        }
+    }, [canLockResults, hasRankings, lockStorageKey]);
+
+    const handleLockResults = () => {
+        if (!canLockResults) {
+            toast.error('Please complete review of all submitted solutions before locking results.');
+            return;
+        }
+        setResultsLocked(true);
+        localStorage.setItem(lockStorageKey, 'true');
+        toast.success('Results locked. You can now select winners and publish certificates.');
+    };
 
     if (loading) {
         return (
@@ -297,11 +317,54 @@ export default function IndustryHackathonResults() {
                     </div>
                 </div>
 
+                {!hasRankings && (
+                    <div className="bg-white rounded-2xl shadow-sm p-6 mb-8">
+                        <h2 className="text-xl font-bold text-gray-900 mb-3">Result Lock</h2>
+                        <p className="text-sm text-gray-600 mb-4">
+                            Review status: <span className="font-semibold text-gray-900">{reviewedCount}/{reviewCandidates.length}</span> submissions fully checked.
+                            Winner selection is enabled only after locking results.
+                        </p>
+                        <div className={`rounded-xl border p-4 mb-4 ${canLockResults ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+                            <div className="flex items-center gap-2">
+                                {canLockResults ? (
+                                    <ShieldCheck className="w-5 h-5 text-green-600" />
+                                ) : (
+                                    <Lock className="w-5 h-5 text-amber-600" />
+                                )}
+                                <span className={`text-sm font-semibold ${canLockResults ? 'text-green-900' : 'text-amber-900'}`}>
+                                    {canLockResults
+                                        ? 'All solutions are reviewed. You can lock results now.'
+                                        : 'Lock will appear once all participant solutions are reviewed.'}
+                                </span>
+                            </div>
+                        </div>
+
+                        {!resultsLocked && canLockResults && (
+                            <button
+                                onClick={handleLockResults}
+                                className="w-full bg-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+                            >
+                                <Lock className="w-4 h-4" />
+                                Lock Result Now
+                            </button>
+                        )}
+
+                        {resultsLocked && (
+                            <div className="w-full bg-green-100 text-green-800 px-6 py-3 rounded-lg font-semibold flex items-center justify-center gap-2">
+                                <ShieldCheck className="w-4 h-4" />
+                                Results Locked - Winner Selection Enabled
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Manual Rank Selection (if not finalized) */}
                 {!hasRankings && results.length > 0 && (
                     <div className="bg-white rounded-2xl shadow-sm p-6 mb-8">
                         <h2 className="text-xl font-bold text-gray-900 mb-4">Select Winners</h2>
-                        <p className="text-gray-600 mb-6">Choose the top 3 performers from the participants below</p>
+                        <p className="text-gray-600 mb-6">
+                            Choose the top 3 performers from reviewed submissions only.
+                        </p>
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                             {/* 1st Place */}
@@ -314,9 +377,10 @@ export default function IndustryHackathonResults() {
                                     value={selectedRanks[1] || ''}
                                     onChange={(e) => handleRankSelection(1, e.target.value)}
                                     className="w-full px-3 py-2 border border-yellow-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent bg-white"
+                                    disabled={!resultsLocked}
                                 >
                                     <option value="">Select Winner</option>
-                                    {results.map(app => (
+                                    {winnerEligibleResults.map(app => (
                                         <option
                                             key={app.id}
                                             value={app.id}
@@ -338,9 +402,10 @@ export default function IndustryHackathonResults() {
                                     value={selectedRanks[2] || ''}
                                     onChange={(e) => handleRankSelection(2, e.target.value)}
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-500 focus:border-transparent bg-white"
+                                    disabled={!resultsLocked}
                                 >
                                     <option value="">Select Runner Up</option>
-                                    {results.map(app => (
+                                    {winnerEligibleResults.map(app => (
                                         <option
                                             key={app.id}
                                             value={app.id}
@@ -362,9 +427,10 @@ export default function IndustryHackathonResults() {
                                     value={selectedRanks[3] || ''}
                                     onChange={(e) => handleRankSelection(3, e.target.value)}
                                     className="w-full px-3 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white"
+                                    disabled={!resultsLocked}
                                 >
                                     <option value="">Select 3rd Place</option>
-                                    {results.map(app => (
+                                    {winnerEligibleResults.map(app => (
                                         <option
                                             key={app.id}
                                             value={app.id}
@@ -378,12 +444,11 @@ export default function IndustryHackathonResults() {
                         </div>
 
                         <button
-                            onClick={handleFinalizeWithManualRanks}
-                            disabled={!selectedRanks[1] && !selectedRanks[2] && !selectedRanks[3] || finalizing}
+                            onClick={handleOpenCertificatePage}
+                            disabled={!resultsLocked || (!selectedRanks[1] && !selectedRanks[2] && !selectedRanks[3])}
                             className="w-full bg-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
-                            {finalizing ? 'Finalizing...' : 'Finalize Results with Selected Winners'}
-                            <CheckCircle className="w-5 h-5" />
+                            Open Certificate Generation Page
                         </button>
                     </div>
                 )}
@@ -696,6 +761,7 @@ export default function IndustryHackathonResults() {
                     </div>
                 </div>
             )}
+
         </div>
     );
 }
