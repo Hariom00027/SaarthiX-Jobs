@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { getUserProfile, saveUserProfile } from '../api/jobApi';
+import { getUserProfile, getSomethingXUserProfile, saveUserProfile } from '../api/jobApi';
 import { useAuth } from '../context/AuthContext';
 
 const STORAGE_KEY = 'jobApplicationFormData';
@@ -36,59 +36,17 @@ const COMMON_HOBBIES = [
 // Section definitions for the journey
 const PROFILE_SECTIONS = [
   {
-    id: 'personal',
-    title: 'Personal Information',
-    icon: '👤',
-    description: 'Tell us about yourself',
-    fields: ['profilePicture', 'fullName', 'phoneNumber', 'email']
-  },
-  {
-    id: 'professional',
-    title: 'Professional Background',
-    icon: '💼',
-    description: 'Your work experience and skills',
-    fields: ['professionalExperiences', 'skills', 'summary']
-  },
-  {
-    id: 'education',
-    title: 'Education & Certifications',
-    icon: '🎓',
-    description: 'Academic achievements and credentials',
-    fields: ['educationEntries', 'certificationFiles']
-  },
-  {
     id: 'location',
     title: 'Location Preferences',
     icon: '📍',
-    description: 'Where do you want to work?',
+    description: 'Jobs-specific location preferences',
     fields: ['currentLocation', 'preferredLocations', 'workPreference', 'willingToRelocate']
   },
   {
-    id: 'hobbies',
-    title: 'Hobbies & Interests',
-    icon: '🎨',
-    description: 'Share your hobbies and interests',
-    fields: ['hobbies']
-  },
-  {
-    id: 'projects',
-    title: 'Projects',
-    icon: '🚀',
-    description: 'Showcase your projects and work',
-    fields: ['projects']
-  },
-  {
-    id: 'links',
-    title: 'Online Presence',
-    icon: '🔗',
-    description: 'Connect your profiles and portfolios',
-    fields: ['linkedInUrl', 'portfolioUrl', 'githubUrl', 'websiteUrl']
-  },
-  {
     id: 'additional',
-    title: 'Additional Details',
+    title: 'Application Preferences',
     icon: '📝',
-    description: 'Availability and expectations',
+    description: 'Availability and salary expectations',
     fields: ['availability', 'expectedSalary', 'coverLetterTemplate']
   },
   {
@@ -162,6 +120,60 @@ export default function ProfileBuilder() {
   const [showHobbiesSuggestions, setShowHobbiesSuggestions] = useState(false);
   const certificationFileInputRef = useRef(null);
 
+  const parseArrayField = (value) => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return [];
+      try {
+        const parsed = JSON.parse(trimmed);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_) {
+        return trimmed.split(',').map(item => item.trim()).filter(Boolean);
+      }
+    }
+    return [];
+  };
+
+  const mapSomethingXProfileToJobsProfile = (homeProfile) => {
+    if (!homeProfile) return {};
+    return {
+      fullName: homeProfile.name || '',
+      phoneNumber: homeProfile.phone || '',
+      email: homeProfile.email || '',
+      profilePictureBase64: homeProfile.picture || '',
+      profilePictureFileType: homeProfile.picture ? 'image/jpeg' : '',
+      profilePictureFileName: homeProfile.picture ? 'profile-picture.jpg' : '',
+      profilePictureFileSize: 0,
+      experience: homeProfile.experience || '',
+      skills: parseArrayField(homeProfile.skills),
+      summary: homeProfile.bio || '',
+      currentLocation: homeProfile.location || '',
+      linkedInUrl: homeProfile.linkedinUrl || homeProfile.linkedin || '',
+      portfolioUrl: homeProfile.portfolioUrl || homeProfile.portfolio || '',
+      githubUrl: homeProfile.githubUrl || homeProfile.github || '',
+      websiteUrl: homeProfile.websiteUrl || homeProfile.website || '',
+      educationEntries: parseArrayField(homeProfile.academicBackground),
+      projects: parseArrayField(homeProfile.projects),
+    };
+  };
+
+  const isBlankValue = (value) => {
+    if (Array.isArray(value)) return value.length === 0;
+    return value === null || value === undefined || value === '';
+  };
+
+  const mergeProfileData = (baseProfile, incomingProfile) => {
+    const merged = { ...baseProfile };
+    Object.keys(incomingProfile || {}).forEach((key) => {
+      if (isBlankValue(merged[key]) && !isBlankValue(incomingProfile[key])) {
+        merged[key] = incomingProfile[key];
+      }
+    });
+    return merged;
+  };
+
   useEffect(() => {
     if (!authLoading) {
       if (!isAuthenticated) {
@@ -176,54 +188,68 @@ export default function ProfileBuilder() {
     try {
       setLoading(true);
       setError(null);
-      const profile = await getUserProfile();
-      if (profile) {
-        console.log('Loading profile data from database:', profile);
+      const [profileResult, homeProfileResult] = await Promise.allSettled([
+        getUserProfile(),
+        getSomethingXUserProfile(),
+      ]);
+      const profile = profileResult.status === 'fulfilled' ? profileResult.value : null;
+      const homeProfileRaw = homeProfileResult.status === 'fulfilled' ? homeProfileResult.value : null;
+      const mappedHomeProfile = mapSomethingXProfileToJobsProfile(homeProfileRaw);
+      const effectiveProfile = profile
+        ? mergeProfileData(profile, mappedHomeProfile)
+        : mappedHomeProfile;
+
+      if (profileResult.status === 'rejected') {
+        console.warn('Jobs profile fetch failed. Continuing with SaarthiX Home profile:', profileResult.reason);
+      }
+
+      if (effectiveProfile && Object.keys(effectiveProfile).length > 0) {
+        console.log('Loading merged profile data:', effectiveProfile);
 
         setFormData({
-          fullName: profile.fullName || user?.name || '',
-          phoneNumber: profile.phoneNumber || '',
-          email: profile.email || user?.email || '',
-          profilePictureBase64: profile.profilePictureBase64 || '',
-          profilePictureFileType: profile.profilePictureFileType || '',
-          profilePictureFileName: profile.profilePictureFileName || '',
-          profilePictureFileSize: profile.profilePictureFileSize || 0,
-          currentPosition: profile.currentPosition || '',
-          currentCompany: profile.currentCompany || '',
-          experience: profile.experience || '',
-          skills: profile.skills || [],
-          summary: profile.summary || '',
-          currentLocation: profile.currentLocation || '',
-          preferredLocations: profile.preferredLocations || (profile.preferredLocation ? [profile.preferredLocation] : []),
-          workPreference: profile.workPreference || 'Remote',
-          willingToRelocate: profile.willingToRelocate || false,
-          linkedInUrl: profile.linkedInUrl || '',
-          portfolioUrl: profile.portfolioUrl || '',
-          githubUrl: profile.githubUrl || '',
-          websiteUrl: profile.websiteUrl || '',
-          availability: profile.availability || 'Immediately',
-          expectedSalary: profile.expectedSalary || '',
-          coverLetterTemplate: profile.coverLetterTemplate || '',
-          education: profile.education || '',
-          educationEntries: profile.educationEntries || [],
-          certifications: profile.certifications || '',
-          certificationFiles: profile.certificationFiles || [],
-          professionalExperiences: profile.professionalExperiences || [],
-          hobbies: profile.hobbies || [],
-          projects: profile.projects || [],
+          fullName: effectiveProfile.fullName || user?.name || '',
+          phoneNumber: effectiveProfile.phoneNumber || '',
+          email: effectiveProfile.email || user?.email || '',
+          profilePictureBase64: effectiveProfile.profilePictureBase64 || '',
+          profilePictureFileType: effectiveProfile.profilePictureFileType || '',
+          profilePictureFileName: effectiveProfile.profilePictureFileName || '',
+          profilePictureFileSize: effectiveProfile.profilePictureFileSize || 0,
+          currentPosition: effectiveProfile.currentPosition || '',
+          currentCompany: effectiveProfile.currentCompany || '',
+          experience: effectiveProfile.experience || '',
+          skills: effectiveProfile.skills || [],
+          summary: effectiveProfile.summary || '',
+          currentLocation: effectiveProfile.currentLocation || '',
+          preferredLocations: effectiveProfile.preferredLocations || (effectiveProfile.preferredLocation ? [effectiveProfile.preferredLocation] : []),
+          workPreference: effectiveProfile.workPreference || 'Remote',
+          willingToRelocate: effectiveProfile.willingToRelocate || false,
+          linkedInUrl: effectiveProfile.linkedInUrl || '',
+          portfolioUrl: effectiveProfile.portfolioUrl || '',
+          githubUrl: effectiveProfile.githubUrl || '',
+          websiteUrl: effectiveProfile.websiteUrl || '',
+          availability: effectiveProfile.availability || 'Immediately',
+          expectedSalary: effectiveProfile.expectedSalary || '',
+          coverLetterTemplate: effectiveProfile.coverLetterTemplate || '',
+          education: effectiveProfile.education || '',
+          educationEntries: effectiveProfile.educationEntries || [],
+          certifications: effectiveProfile.certifications || '',
+          certificationFiles: effectiveProfile.certificationFiles || [],
+          professionalExperiences: effectiveProfile.professionalExperiences || [],
+          hobbies: effectiveProfile.hobbies || [],
+          projects: effectiveProfile.projects || [],
         });
 
         setSkillsInput('');
         setLocationInput('');
         setHobbiesInput('');
 
-        if (profile.resumeBase64 && profile.resumeFileName) {
+        if (effectiveProfile.resumeBase64 && effectiveProfile.resumeFileName) {
           const resumeFile = {
-            name: profile.resumeFileName,
-            type: profile.resumeFileType || 'application/pdf',
-            size: profile.resumeFileSize || 0,
+            name: effectiveProfile.resumeFileName,
+            type: effectiveProfile.resumeFileType || 'application/pdf',
+            size: effectiveProfile.resumeFileSize || 0,
             isFromProfile: true,
-            base64: profile.resumeBase64,
+            base64: effectiveProfile.resumeBase64,
           };
           setResume(resumeFile);
         }
@@ -235,12 +261,12 @@ export default function ProfileBuilder() {
         PROFILE_SECTIONS.forEach(section => {
           const isComplete = section.fields.every(field => {
             if (field === 'resume') {
-              return profile.resumeBase64 && profile.resumeFileName;
+              return effectiveProfile.resumeBase64 && effectiveProfile.resumeFileName;
             }
             if (field === 'profilePicture') {
-              return profile.profilePictureBase64 && profile.profilePictureBase64.length > 0;
+              return effectiveProfile.profilePictureBase64 && effectiveProfile.profilePictureBase64.length > 0;
             }
-            const value = profile[field];
+            const value = effectiveProfile[field];
             if (field === 'skills' || field === 'preferredLocations' || field === 'hobbies' ||
               field === 'professionalExperiences' || field === 'educationEntries' ||
               field === 'certificationFiles' || field === 'projects') {
@@ -266,6 +292,11 @@ export default function ProfileBuilder() {
       }
     } catch (err) {
       console.error('Error loading profile:', err);
+      setFormData(prev => ({
+        ...prev,
+        fullName: user?.name || '',
+        email: user?.email || '',
+      }));
       if (err.response?.status !== 404) {
         setError('Failed to load profile from database');
       }
@@ -790,7 +821,12 @@ export default function ProfileBuilder() {
 
       setSuccess(true);
 
-      if (profileLoaded) {
+      if (savedProfile?._savedLocallyOnly) {
+        toast.success('Profile saved for Jobs apply flow. 🎉', {
+          position: "top-right",
+          autoClose: 3000,
+        });
+      } else if (profileLoaded) {
         toast.success('Profile updated successfully! 🎉', {
           position: "top-right",
           autoClose: 3000,

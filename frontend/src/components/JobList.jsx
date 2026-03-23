@@ -2,10 +2,10 @@ import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { toast } from "react-toastify";
 import { fetchJobs, fetchJobDetails, getRecommendedJobs, getUserProfile } from "../api/jobApi";
-import { loginWithGoogle } from "../api/authApi";
 import { useAuth } from "../context/AuthContext";
 import apiClient from "../api/apiClient";
 import JobApplicationForm from "./JobApplicationForm";
+import { redirectToSomethingXLogin } from "../config/redirectUrls";
 
 // Component to format and display job description in an organized way
 function FormattedJobDescription({ description }) {
@@ -645,9 +645,9 @@ export default function JobList() {
     // For local jobs, show application form (requires authentication)
     if (!isAuthenticated) {
       if (
-        window.confirm("Please sign in with Google to apply. Continue to login?")
+        window.confirm("Please sign in from SaarthiX Home to apply. Continue to login?")
       ) {
-        loginWithGoogle();
+        redirectToSomethingXLogin("student");
       }
       return;
     }

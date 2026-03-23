@@ -1,6 +1,29 @@
 import axios from 'axios';
 import apiClient from './apiClient';
 import { API_BASE_URL } from '../config/apiConfig';
+import { getSomethingXUrl } from '../config/redirectUrls';
+
+const JOBS_PROFILE_LOCAL_KEY = 'jobs_profile_local_cache_v1';
+let jobsProfileApiDisabled = false;
+const shouldUseLocalOnlyProfile = () => Boolean(localStorage.getItem('somethingx_auth_token'));
+
+const readLocalJobsProfile = () => {
+  try {
+    const raw = localStorage.getItem(JOBS_PROFILE_LOCAL_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    console.warn('Failed to parse local jobs profile cache:', error);
+    return null;
+  }
+};
+
+const writeLocalJobsProfile = (profileData) => {
+  try {
+    localStorage.setItem(JOBS_PROFILE_LOCAL_KEY, JSON.stringify(profileData || {}));
+  } catch (error) {
+    console.warn('Failed to write local jobs profile cache:', error);
+  }
+};
 
 // Use environment variable for API key, fallback for development
 const API_KEY = import.meta.env.VITE_RAPIDAPI_KEY || 'f0235cd2b0mshac603cc0e4cabafp1ffb39jsnd44cae2de884';
@@ -135,19 +158,82 @@ export const recordJobApplication = async (applicationData) => {
 
 // Profile API functions
 export const getUserProfile = async () => {
+  if (jobsProfileApiDisabled || shouldUseLocalOnlyProfile()) {
+    return readLocalJobsProfile();
+  }
+
   try {
     const response = await apiClient.get('/profile');
-    return response.data;
+    const profile = response.data || null;
+    if (profile) {
+      writeLocalJobsProfile(profile);
+    }
+    return profile;
   } catch (error) {
     if (error.response?.status === 404) {
       return null; // Profile doesn't exist yet
     }
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      jobsProfileApiDisabled = true;
+      return readLocalJobsProfile();
+    }
     console.error('Error fetching user profile:', error);
-    throw error;
+    return readLocalJobsProfile();
   }
 };
 
+// Fetch profile from SaarthiX Home app (/api/auth/profile)
+export const getSomethingXUserProfile = async () => {
+  const token = localStorage.getItem('somethingx_auth_token') || localStorage.getItem('token');
+  if (!token) {
+    return null;
+  }
+
+  const headers = { Authorization: `Bearer ${token}` };
+  const baseCandidates = [];
+  const pushUnique = (url) => {
+    if (url && !baseCandidates.includes(url)) {
+      baseCandidates.push(url);
+    }
+  };
+
+  try {
+    const somethingXUrl = getSomethingXUrl();
+    if (somethingXUrl && somethingXUrl !== '/') {
+      pushUnique(`${somethingXUrl.replace(/\/$/, '')}/api`);
+    }
+  } catch (_) {
+    // Ignore URL derivation issues and use fallback URLs
+  }
+
+  pushUnique('/api');
+  pushUnique('http://localhost:8080/api');
+  pushUnique('http://127.0.0.1:8080/api');
+
+  let lastError = null;
+  for (const baseURL of baseCandidates) {
+    try {
+      const response = await axios.get(`${baseURL}/auth/profile`, { headers, timeout: 12000 });
+      return response.data || null;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError?.response?.status === 401 || lastError?.response?.status === 403) {
+    return null;
+  }
+
+  console.warn('Unable to fetch SaarthiX Home profile:', lastError?.message || lastError);
+  return null;
+};
+
 export const saveUserProfile = async (profileData) => {
+  if (jobsProfileApiDisabled || shouldUseLocalOnlyProfile()) {
+    writeLocalJobsProfile(profileData);
+    return { ...profileData, _savedLocallyOnly: true };
+  }
+
   try {
     console.log('Sending profile data to backend:', {
       url: `${API_BASE_URL}/profile`,
@@ -165,6 +251,7 @@ export const saveUserProfile = async (profileData) => {
       data: response.data
     });
 
+    writeLocalJobsProfile(response.data || profileData);
     return response.data;
   } catch (error) {
     console.error('Error saving user profile:', error);
@@ -172,21 +259,39 @@ export const saveUserProfile = async (profileData) => {
     if (error.response) {
       console.error('Error status:', error.response.status);
       console.error('Error data:', error.response.data);
+      if (error.response.status === 401 || error.response.status === 403) {
+        jobsProfileApiDisabled = true;
+        writeLocalJobsProfile(profileData);
+        return { ...profileData, _savedLocallyOnly: true };
+      }
     }
-    throw error;
+    writeLocalJobsProfile(profileData);
+    return { ...profileData, _savedLocallyOnly: true };
   }
 };
 
 export const updateUserProfile = async (profileData) => {
+  if (jobsProfileApiDisabled || shouldUseLocalOnlyProfile()) {
+    writeLocalJobsProfile(profileData);
+    return { ...profileData, _savedLocallyOnly: true };
+  }
+
   try {
     const response = await apiClient.put(
       '/profile',
       profileData
     );
+    writeLocalJobsProfile(response.data || profileData);
     return response.data;
   } catch (error) {
     console.error('Error updating user profile:', error);
-    throw error;
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      jobsProfileApiDisabled = true;
+      writeLocalJobsProfile(profileData);
+      return { ...profileData, _savedLocallyOnly: true };
+    }
+    writeLocalJobsProfile(profileData);
+    return { ...profileData, _savedLocallyOnly: true };
   }
 };
 

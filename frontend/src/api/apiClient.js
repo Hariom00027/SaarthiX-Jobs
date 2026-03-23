@@ -39,11 +39,19 @@ const getApiBaseCandidates = () => {
         pushUnique(`${window.location.origin}/jobs-api`);
     }
 
-    // Common local fallbacks for cases where window origin or port is wrong.
-    pushUnique('http://localhost:3500/jobs-api');
-    pushUnique('http://127.0.0.1:3500/jobs-api');
-    pushUnique('http://localhost:2000/jobs-api');
-    pushUnique('http://127.0.0.1:2000/jobs-api');
+    // Keep retries same-host first to avoid localhost <-> 127.0.0.1 cross-site mismatches.
+    const currentHost = (typeof window !== 'undefined' && window.location?.hostname) || 'localhost';
+    if (currentHost === '127.0.0.1') {
+        pushUnique('http://127.0.0.1:3500/jobs-api');
+        pushUnique('http://127.0.0.1:2000/jobs-api');
+        pushUnique('http://localhost:3500/jobs-api');
+        pushUnique('http://localhost:2000/jobs-api');
+    } else {
+        pushUnique('http://localhost:3500/jobs-api');
+        pushUnique('http://localhost:2000/jobs-api');
+        pushUnique('http://127.0.0.1:3500/jobs-api');
+        pushUnique('http://127.0.0.1:2000/jobs-api');
+    }
     pushUnique(API_BASE_URL);
 
     return candidates;

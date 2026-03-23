@@ -549,16 +549,25 @@ export const generateCertificatePDF = async (certificateData) => {
 
     ensureCertificateFonts();
 
+    // Use position:fixed at (0,0) so the element is always at viewport (0,0),
+    // regardless of page scroll. html2canvas uses getBoundingClientRect() and the
+    // actual scroll position to calculate document coordinates. With position:fixed
+    // at (0,0), getBoundingClientRect() always returns top=0,left=0, so
+    // html2canvas always captures from document origin correctly.
     const container = document.createElement('div');
     container.style.position = 'fixed';
     container.style.left = '0';
     container.style.top = '0';
     container.style.width = '1122px';
     container.style.height = '794px';
-    container.style.zIndex = '-9999'; // Hide behind everything but keep in viewport
-    container.style.visibility = 'hidden'; // Hide from user but keep in DOM for rendering
+    container.style.zIndex = '-9999';
     container.style.pointerEvents = 'none';
-    document.body.appendChild(container);
+    container.style.overflow = 'hidden';
+    container.style.opacity = '1';
+    container.style.visibility = 'visible';
+    // Give the container a unique attribute so onclone can target it precisely
+    container.setAttribute('data-pdf-render', 'true');
+    document.body.prepend(container);
 
     const root = document.createElement('div');
     root.style.width = '1122px';
@@ -594,7 +603,9 @@ export const generateCertificatePDF = async (certificateData) => {
         setTimeout(resolve, 1500); // Increased wait time for rendering
     });
 
-    const certificateElement = document.getElementById('certificate-content');
+    // Important: query only inside the hidden PDF render root.
+    // The page can contain other previews with the same id, which causes cropped/wrong capture.
+    const certificateElement = root.querySelector('#certificate-content');
     
     if (!certificateElement) {
         console.error('Certificate element not found!');
@@ -627,50 +638,44 @@ export const generateCertificatePDF = async (certificateData) => {
 
     console.log('Certificate element found, all resources loaded, generating canvas...');
 
+    // position:fixed at (0,0) means getBoundingClientRect() always returns {top:0, left:0}.
+    // html2canvas computes capture origin as: bounds.top + window.scrollY = 0 + scrollY.
+    // Do NOT override scrollX/scrollY — let html2canvas use the real values so the math
+    // resolves to document (0,0), capturing the full certificate from top-left.
     const canvas = await html2canvas(certificateElement, {
-        scale: 2, // Reduced from 4 to prevent memory issues while maintaining quality
+        scale: 2,
         useCORS: true,
-        logging: true, // Enable logging to debug issues
+        logging: false,
         backgroundColor: '#ffffff',
         width: 1122,
         height: 794,
         allowTaint: true,
-        foreignObjectRendering: false, // Disable to fix rendering issues
+        foreignObjectRendering: false,
         imageTimeout: 15000,
-        letterRendering: true, // Better text rendering
-        windowWidth: 1122,
-        windowHeight: 794,
+        letterRendering: true,
         onclone: (clonedDoc) => {
-            const clonedElement = clonedDoc.getElementById('certificate-content');
+            // Find the container we placed (has data-pdf-render attribute) then get
+            // the #certificate-content inside it — avoids accidentally targeting
+            // preview certificate elements elsewhere in the cloned page.
+            const clonedContainer = clonedDoc.querySelector('[data-pdf-render="true"]');
+            const clonedElement = clonedContainer
+                ? clonedContainer.querySelector('#certificate-content')
+                : clonedDoc.querySelector('#certificate-content');
             if (clonedElement) {
-                // Force visibility and positioning
                 clonedElement.style.display = 'block';
                 clonedElement.style.visibility = 'visible';
                 clonedElement.style.opacity = '1';
-                clonedElement.style.transform = 'none';
-                clonedElement.style.position = 'relative';
                 clonedElement.style.width = '1122px';
                 clonedElement.style.height = '794px';
                 clonedElement.style.margin = '0';
-                clonedElement.style.padding = '30px';
+                clonedElement.style.overflow = 'hidden';
                 clonedElement.style.boxSizing = 'border-box';
-                
-                // Ensure fonts are loaded
-                clonedElement.style.fontFamily = "'Poppins', 'Arial', sans-serif";
-                
-                // Force all child elements to be visible
                 const allElements = clonedElement.getElementsByTagName('*');
-                for (let el of allElements) {
+                for (const el of allElements) {
                     el.style.visibility = 'visible';
                     el.style.opacity = '1';
                 }
-                
-                // Force layout recalculation
                 void clonedElement.offsetHeight;
-                
-                console.log('Cloned element dimensions:', clonedElement.offsetWidth, 'x', clonedElement.offsetHeight);
-            } else {
-                console.error('Cloned certificate element not found!');
             }
         }
     });

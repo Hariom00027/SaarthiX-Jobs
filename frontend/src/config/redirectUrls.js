@@ -109,6 +109,16 @@ export const redirectToSomethingX = (route = '', token, user) => {
 };
 
 /**
+ * Redirect to SaarthiX Home login page.
+ * Jobs should not own the login flow.
+ * @param {'student'|'industry'} role
+ */
+export const redirectToSomethingXLogin = (role = 'student') => {
+  const normalizedRole = role === 'industry' ? 'industry' : 'student';
+  redirectToSomethingX(`/login/${normalizedRole}`);
+};
+
+/**
  * Redirect to Profiling service with authentication
  * @param {string} token - Authentication token
  * @param {object} user - User object

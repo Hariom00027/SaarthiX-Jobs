@@ -18,6 +18,7 @@ const COMMON_SKILLS = [
 // Submission format options
 const SUBMISSION_FORMATS = ['PDF', 'PPT', 'DOC', 'Video', 'Repository Link', 'Website Link', 'ZIP File', 'Google Drive Link'];
 const MIN_PROBLEM_STATEMENT_WORDS = 50;
+const TODAY_ISO = new Date().toISOString().split('T')[0];
 
 const countWords = (value) => {
   if (!value || typeof value !== 'string') return 0;
@@ -28,9 +29,9 @@ const countWords = (value) => {
 const HACKATHON_TABS = [
   { id: 'basic', label: 'Basic Info', icon: '📋', required: true },
   { id: 'problem', label: 'Problem & Skills', icon: '🎯', required: true },
+  { id: 'dates', label: 'Dates & Mode', icon: '📅', required: true },
   { id: 'phases', label: 'Phases', icon: '🔄', required: true },
   { id: 'eligibility', label: 'Eligibility', icon: '👥', required: false },
-  { id: 'dates', label: 'Dates & Mode', icon: '📅', required: true },
   { id: 'submission', label: 'Submission', icon: '📤', required: false },
   { id: 'capacity', label: 'Capacity & Prizes', icon: '⚙️', required: false }
 ];
@@ -213,6 +214,18 @@ export default function HackathonForm() {
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
+
+    if (name === 'startDate' || name === 'endDate') {
+      const hasAnyPhaseDeadline = (formData.phases || []).some(phase => !!phase?.deadline);
+      if (hasAnyPhaseDeadline) {
+        toast.warning('You cannot change hackathon start/end dates after setting phase deadlines. Clear phase deadlines first.', {
+          position: "top-right",
+          autoClose: 3500,
+        });
+        return;
+      }
+    }
+
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
@@ -223,23 +236,90 @@ export default function HackathonForm() {
   const isProblemStatementValid = problemWordCount >= MIN_PROBLEM_STATEMENT_WORDS;
 
   const canLeaveCurrentTab = (nextTabId) => {
-    if (activeTab === 'problem' && nextTabId !== 'problem' && !isProblemStatementValid) {
-      toast.error(`Problem Statement must be at least ${MIN_PROBLEM_STATEMENT_WORDS} words before moving to another section.`, {
+    if (nextTabId === activeTab) return true;
+
+    const showValidationError = (message) => {
+      toast.error(message, {
         position: "top-right",
         autoClose: 4000,
       });
-      return false;
-    }
-    if (activeTab === 'phases' && nextTabId !== 'phases') {
-      const dateValidationError = validateDateRules();
-      if (dateValidationError) {
-        toast.error(dateValidationError, {
-          position: "top-right",
-          autoClose: 4000,
-        });
+    };
+
+    if (activeTab === 'basic') {
+      if (!formData.title?.trim()) {
+        showValidationError('Hackathon Title is required before proceeding.');
+        return false;
+      }
+      if (!formData.company?.trim()) {
+        showValidationError('Company/Organization Name is required before proceeding.');
+        return false;
+      }
+      if (!formData.description?.trim()) {
+        showValidationError('Hackathon Description is required before proceeding.');
         return false;
       }
     }
+
+    if (activeTab === 'problem') {
+      if (!formData.problemStatement?.trim()) {
+        showValidationError('Problem Statement is required before proceeding.');
+        return false;
+      }
+      if (!isProblemStatementValid) {
+        showValidationError(`Problem Statement must be at least ${MIN_PROBLEM_STATEMENT_WORDS} words before moving to another section.`);
+        return false;
+      }
+    }
+
+    if (activeTab === 'phases') {
+      if (!formData.startDate || !formData.endDate) {
+        showValidationError('Please select hackathon start and end dates first.');
+        return false;
+      }
+      const invalidPhase = (formData.phases || []).find((phase, idx) => {
+        if (!phase?.name?.trim()) {
+          showValidationError(`Phase ${idx + 1} name is required.`);
+          return true;
+        }
+        if (!phase?.deadline) {
+          showValidationError(`Phase ${idx + 1} deadline is required.`);
+          return true;
+        }
+        if (!phase?.formats || phase.formats.length === 0) {
+          showValidationError(`Select at least one submission format for Phase ${idx + 1}.`);
+          return true;
+        }
+        return false;
+      });
+      if (invalidPhase) return false;
+
+      const dateValidationError = validateDateRules();
+      if (dateValidationError) {
+        showValidationError(dateValidationError);
+        return false;
+      }
+    }
+
+    if (activeTab === 'dates') {
+      if (!formData.startDate) {
+        showValidationError('Start Date is required before proceeding.');
+        return false;
+      }
+      if (!formData.endDate) {
+        showValidationError('End Date is required before proceeding.');
+        return false;
+      }
+      if (!formData.mode) {
+        showValidationError('Hackathon mode is required before proceeding.');
+        return false;
+      }
+      const dateValidationError = validateDateRules();
+      if (dateValidationError) {
+        showValidationError(dateValidationError);
+        return false;
+      }
+    }
+
     return true;
   };
 
@@ -250,10 +330,9 @@ export default function HackathonForm() {
   };
 
   const validateDateRules = () => {
-    const today = new Date().toISOString().split('T')[0];
     const { startDate, endDate, phases } = formData;
 
-    if (startDate && startDate < today) {
+    if (startDate && startDate < TODAY_ISO) {
       return 'Hackathon start date cannot be in the past.';
     }
 
@@ -266,6 +345,9 @@ export default function HackathonForm() {
       const phase = phases[i];
       if (!phase?.deadline) continue;
 
+      if (phase.deadline < TODAY_ISO) {
+        return `Phase ${i + 1} date cannot be in the past.`;
+      }
       if (startDate && phase.deadline < startDate) {
         return `Phase ${i + 1} date cannot be before hackathon start date.`;
       }
@@ -284,15 +366,17 @@ export default function HackathonForm() {
   };
 
   const getPhaseMinDate = (phaseIndex) => {
-    const startDate = formData.startDate || '';
+    const startDate = formData.startDate || TODAY_ISO;
     if (phaseIndex <= 0) {
       return startDate || undefined;
     }
     const prevPhaseDate = formData.phases[phaseIndex - 1]?.deadline || '';
     if (startDate && prevPhaseDate) {
-      return prevPhaseDate > startDate ? prevPhaseDate : startDate;
+      const candidate = prevPhaseDate > startDate ? prevPhaseDate : startDate;
+      return candidate > TODAY_ISO ? candidate : TODAY_ISO;
     }
-    return prevPhaseDate || startDate || undefined;
+    const candidate = prevPhaseDate || startDate || TODAY_ISO;
+    return candidate > TODAY_ISO ? candidate : TODAY_ISO;
   };
 
   const getPhaseDateValidationMessage = (phaseId, deadline) => {
@@ -304,6 +388,12 @@ export default function HackathonForm() {
     const endDate = formData.endDate || '';
     const previousDeadline = phaseIndex > 0 ? (formData.phases[phaseIndex - 1]?.deadline || '') : '';
 
+    if (!startDate || !endDate) {
+      return 'Please select hackathon start and end dates before setting phase deadlines.';
+    }
+    if (deadline < TODAY_ISO) {
+      return `Phase ${phaseIndex + 1} date cannot be in the past.`;
+    }
     if (startDate && deadline < startDate) {
       return `Phase ${phaseIndex + 1} date cannot be before hackathon start date.`;
     }
@@ -404,6 +494,13 @@ export default function HackathonForm() {
 
   const handlePhaseChange = (phaseId, field, value) => {
     if (field === 'deadline') {
+      if (!formData.startDate || !formData.endDate) {
+        toast.warning('Please select hackathon start and end dates first.', {
+          position: "top-right",
+          autoClose: 3000,
+        });
+        return;
+      }
       const message = getPhaseDateValidationMessage(phaseId, value);
       if (message) {
         toast.warning(message, {
@@ -932,6 +1029,39 @@ export default function HackathonForm() {
                 Define the different phases of your hackathon and specify what format submissions should be in for each phase.
               </p>
 
+              {(!formData.startDate || !formData.endDate) && (
+                <div className="rounded-lg border border-purple-200 bg-purple-50 p-4">
+                  <h3 className="text-sm font-semibold text-purple-900 mb-3">Select Hackathon Date Range First</h3>
+                  <div className="grid md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-purple-900 mb-1">Start Date *</label>
+                      <input
+                        type="date"
+                        name="startDate"
+                        value={formData.startDate}
+                        onChange={handleInputChange}
+                        min={TODAY_ISO}
+                        className="w-full px-3 py-2 rounded-lg border border-purple-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-purple-900 mb-1">End Date *</label>
+                      <input
+                        type="date"
+                        name="endDate"
+                        value={formData.endDate}
+                        onChange={handleInputChange}
+                        min={formData.startDate || TODAY_ISO}
+                        className="w-full px-3 py-2 rounded-lg border border-purple-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition bg-white"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-purple-700 mt-2">
+                    Phase deadlines are enabled only after both start and end dates are selected.
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-6">
                 {formData.phases.map((phase, index) => (
                   <div key={phase.id} className="border border-gray-300 rounded-lg p-6 bg-gray-50">
@@ -984,8 +1114,12 @@ export default function HackathonForm() {
                           value={phase.deadline}
                           onChange={(e) => handlePhaseChange(phase.id, 'deadline', e.target.value)}
                           min={getPhaseMinDate(index)}
+                          disabled={!formData.startDate || !formData.endDate}
                           className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition"
                         />
+                        {!formData.startDate || !formData.endDate ? (
+                          <p className="text-xs text-amber-700 mt-2">Select start and end dates first to set this deadline.</p>
+                        ) : null}
                       </div>
 
                       <div>
@@ -1140,7 +1274,7 @@ export default function HackathonForm() {
                     name="startDate"
                     value={formData.startDate}
                     onChange={handleInputChange}
-                    min={new Date().toISOString().split('T')[0]}
+                    min={TODAY_ISO}
                     className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition"
                   />
                 </div>
@@ -1154,7 +1288,7 @@ export default function HackathonForm() {
                     name="endDate"
                     value={formData.endDate}
                     onChange={handleInputChange}
-                    min={formData.startDate || new Date().toISOString().split('T')[0]}
+                    min={formData.startDate || TODAY_ISO}
                     className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition"
                   />
                 </div>
@@ -1215,7 +1349,7 @@ export default function HackathonForm() {
                         name="venueDate"
                         value={formData.venueDate}
                         onChange={handleInputChange}
-                        min={formData.startDate || new Date().toISOString().split('T')[0]}
+                        min={formData.startDate || TODAY_ISO}
                         className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition"
                       />
                     </div>

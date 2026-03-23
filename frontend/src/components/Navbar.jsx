@@ -488,6 +488,29 @@ const Navbar = () => {
 
                 <NotificationCenter />
 
+                {(displayUser?.userType === "APPLICANT" || displayUser?.userType === "STUDENT") && (
+                  <Link
+                    to="/view-profile"
+                    style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      padding: "10px 20px",
+                      background: "#FFFFFF",
+                      border: "1px solid #115FD5",
+                      borderRadius: "24px",
+                      fontWeight: 500,
+                      fontSize: isMobile ? "14px" : "16px",
+                      color: "#115FD5",
+                      fontFamily: "'Inter', sans-serif",
+                      whiteSpace: "nowrap",
+                      textDecoration: "none",
+                    }}
+                  >
+                    Profile
+                  </Link>
+                )}
+
                 <div ref={userMenuRef} style={{ position: "relative", overflow: "visible" }}>
                   <button
                     type="button"
@@ -520,7 +543,7 @@ const Navbar = () => {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {user?.name?.split(" ")[0] || "User"}
+                    {displayUser?.name?.split(" ")[0] || "User"}
                   </button>
                   {showUserMenu && createPortal(
                     <div
@@ -540,7 +563,7 @@ const Navbar = () => {
                         overflow: "hidden",
                       }}
                     >
-                      {user?.userType === 'APPLICANT' && (
+                      {(displayUser?.userType === 'APPLICANT' || displayUser?.userType === 'STUDENT') && (
                         <>
                           <Link
                             to="/view-profile"
@@ -986,7 +1009,7 @@ const Navbar = () => {
               >
                 {isAuthenticated ? (
                   <>
-                    {user?.userType === 'APPLICANT' && (
+                    {(displayUser?.userType === 'APPLICANT' || displayUser?.userType === 'STUDENT') && (
                       <Link
                         to="/view-profile"
                         onClick={() => setIsMobileMenuOpen(false)}

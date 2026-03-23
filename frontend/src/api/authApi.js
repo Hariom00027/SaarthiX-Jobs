@@ -1,5 +1,6 @@
 import apiClient from './apiClient';
 import { API_BASE_URL } from '../config/apiConfig';
+import { getSomethingXUrl } from '../config/redirectUrls';
 
 // Helper to get JWT token from localStorage
 const getAuthToken = () => {
@@ -83,25 +84,49 @@ export const checkAuth = async () => {
 
 // Logout
 export const logout = async (clearAuthCallback) => {
+  const token = localStorage.getItem('token');
+  const refreshToken = localStorage.getItem('refreshToken');
+
+  try {
+    // Revoke backend session/token best effort
+    if (token || refreshToken) {
+      await apiClient.post('/auth/logout', {
+        refreshToken: refreshToken || null
+      }, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {}
+      });
+    }
+  } catch (_error) {
+    // Local logout still continues even if backend logout fails.
+  }
+
   try {
     // Clear local storage
     localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('somethingx_auth_token');
+    localStorage.removeItem('somethingx_auth_user');
 
     // Clear auth state if callback provided
     if (clearAuthCallback) {
       clearAuthCallback();
     }
 
-    // Redirect to SomethingX or home
-    window.location.href = '/';
+    // Always return to main app and force logout there too
+    const baseUrl = getSomethingXUrl().replace(/\/$/, '');
+    window.location.href = `${baseUrl}/?logout=1`;
   } catch (error) {
     console.error('Error logging out:', error);
     // Still clear local state even if something fails
     localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('somethingx_auth_token');
+    localStorage.removeItem('somethingx_auth_user');
     if (clearAuthCallback) {
       clearAuthCallback();
     }
-    window.location.href = '/';
+    const baseUrl = getSomethingXUrl().replace(/\/$/, '');
+    window.location.href = `${baseUrl}/?logout=1`;
   }
 };
 
