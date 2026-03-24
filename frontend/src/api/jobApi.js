@@ -7,6 +7,21 @@ const JOBS_PROFILE_LOCAL_KEY = 'jobs_profile_local_cache_v1';
 let jobsProfileApiDisabled = false;
 const shouldUseLocalOnlyProfile = () => Boolean(localStorage.getItem('somethingx_auth_token'));
 
+const isBlankValue = (value) => {
+  if (Array.isArray(value)) return value.length === 0;
+  return value === null || value === undefined || value === '';
+};
+
+const mergeProfileData = (baseProfile, incomingProfile) => {
+  const merged = { ...(baseProfile || {}) };
+  Object.keys(incomingProfile || {}).forEach((key) => {
+    if (isBlankValue(merged[key]) && !isBlankValue(incomingProfile[key])) {
+      merged[key] = incomingProfile[key];
+    }
+  });
+  return merged;
+};
+
 const readLocalJobsProfile = () => {
   try {
     const raw = localStorage.getItem(JOBS_PROFILE_LOCAL_KEY);
@@ -163,12 +178,47 @@ export const getUserProfile = async () => {
   }
 
   try {
-    const response = await apiClient.get('/profile');
-    const profile = response.data || null;
-    if (profile) {
-      writeLocalJobsProfile(profile);
+    const [jobsResult, homeUnifiedResult, homeAuthResult] = await Promise.allSettled([
+      apiClient.get('/profile'),
+      getSomethingXUnifiedProfile(),
+      getSomethingXUserProfile(),
+    ]);
+
+    const jobsProfile = jobsResult.status === 'fulfilled' ? (jobsResult.value?.data || null) : null;
+    const homeUnifiedProfile = homeUnifiedResult.status === 'fulfilled' ? homeUnifiedResult.value : null;
+    const homeAuthProfile = homeAuthResult.status === 'fulfilled' ? homeAuthResult.value : null;
+
+    const mappedHomeAuthProfile = homeAuthProfile ? {
+      fullName: homeAuthProfile.name || '',
+      phoneNumber: homeAuthProfile.phone || '',
+      email: homeAuthProfile.email || '',
+      profilePictureBase64: homeAuthProfile.picture || '',
+      profilePictureFileType: homeAuthProfile.picture ? 'image/jpeg' : '',
+      profilePictureFileName: homeAuthProfile.picture ? 'profile-picture.jpg' : '',
+      profilePictureFileSize: 0,
+      experience: homeAuthProfile.experience || '',
+      skills: Array.isArray(homeAuthProfile.skills) ? homeAuthProfile.skills : [],
+      summary: homeAuthProfile.bio || '',
+      currentLocation: homeAuthProfile.location || '',
+      linkedInUrl: homeAuthProfile.linkedinUrl || homeAuthProfile.linkedin || '',
+      portfolioUrl: homeAuthProfile.portfolioUrl || homeAuthProfile.portfolio || '',
+      githubUrl: homeAuthProfile.githubUrl || homeAuthProfile.github || '',
+      websiteUrl: homeAuthProfile.websiteUrl || homeAuthProfile.website || '',
+      educationEntries: Array.isArray(homeAuthProfile.academicBackground) ? homeAuthProfile.academicBackground : [],
+      projects: Array.isArray(homeAuthProfile.projects) ? homeAuthProfile.projects : [],
+    } : null;
+
+    const mergedProfile = mergeProfileData(
+      mergeProfileData(jobsProfile, homeUnifiedProfile),
+      mappedHomeAuthProfile
+    );
+
+    if (mergedProfile && Object.keys(mergedProfile).length > 0) {
+      writeLocalJobsProfile(mergedProfile);
+      return mergedProfile;
     }
-    return profile;
+
+    return null;
   } catch (error) {
     if (error.response?.status === 404) {
       return null; // Profile doesn't exist yet
@@ -228,6 +278,99 @@ export const getSomethingXUserProfile = async () => {
   return null;
 };
 
+const getSomethingXUnifiedProfile = async () => {
+  const token = localStorage.getItem('somethingx_auth_token') || localStorage.getItem('token');
+  if (!token) {
+    return null;
+  }
+
+  const headers = { Authorization: `Bearer ${token}` };
+  const baseCandidates = [];
+  const pushUnique = (url) => {
+    if (url && !baseCandidates.includes(url)) {
+      baseCandidates.push(url);
+    }
+  };
+
+  try {
+    const somethingXUrl = getSomethingXUrl();
+    if (somethingXUrl && somethingXUrl !== '/') {
+      pushUnique(`${somethingXUrl.replace(/\/$/, '')}/api`);
+    }
+  } catch (_) {
+    // Ignore URL derivation issues and use fallback URLs
+  }
+
+  pushUnique('/api');
+  pushUnique('http://localhost:3000/api');
+  pushUnique('http://127.0.0.1:3000/api');
+  pushUnique('http://localhost:8080/api');
+  pushUnique('http://127.0.0.1:8080/api');
+
+  let lastError = null;
+  for (const baseURL of baseCandidates) {
+    try {
+      const response = await axios.get(`${baseURL}/profile`, { headers, timeout: 12000 });
+      return response.data || null;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError?.response?.status === 401 || lastError?.response?.status === 403 || lastError?.response?.status === 404) {
+    return null;
+  }
+
+  console.warn('Unable to fetch unified SaarthiX Home profile:', lastError?.message || lastError);
+  return null;
+};
+
+const saveSomethingXUnifiedProfile = async (profileData) => {
+  const token = localStorage.getItem('somethingx_auth_token') || localStorage.getItem('token');
+  if (!token) {
+    return null;
+  }
+
+  const headers = { Authorization: `Bearer ${token}` };
+  const baseCandidates = [];
+  const pushUnique = (url) => {
+    if (url && !baseCandidates.includes(url)) {
+      baseCandidates.push(url);
+    }
+  };
+
+  try {
+    const somethingXUrl = getSomethingXUrl();
+    if (somethingXUrl && somethingXUrl !== '/') {
+      pushUnique(`${somethingXUrl.replace(/\/$/, '')}/api`);
+    }
+  } catch (_) {
+    // Ignore URL derivation issues and use fallback URLs
+  }
+
+  pushUnique('/api');
+  pushUnique('http://localhost:3000/api');
+  pushUnique('http://127.0.0.1:3000/api');
+  pushUnique('http://localhost:8080/api');
+  pushUnique('http://127.0.0.1:8080/api');
+
+  let lastError = null;
+  for (const baseURL of baseCandidates) {
+    try {
+      const response = await axios.post(`${baseURL}/profile`, profileData, { headers, timeout: 12000 });
+      return response.data || null;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError?.response?.status === 401 || lastError?.response?.status === 403) {
+    return null;
+  }
+
+  throw lastError || new Error('Unable to save unified SaarthiX Home profile');
+};
+
 export const saveUserProfile = async (profileData) => {
   if (jobsProfileApiDisabled || shouldUseLocalOnlyProfile()) {
     writeLocalJobsProfile(profileData);
@@ -241,18 +384,23 @@ export const saveUserProfile = async (profileData) => {
       hasResume: !!profileData.resumeBase64
     });
 
-    const response = await apiClient.post(
-      '/profile',
-      profileData
-    );
+    const [jobsSaveResult, homeSaveResult] = await Promise.allSettled([
+      apiClient.post('/profile', profileData),
+      saveSomethingXUnifiedProfile(profileData),
+    ]);
+
+    const response = jobsSaveResult.status === 'fulfilled' ? jobsSaveResult.value : null;
+    const homeSavedProfile = homeSaveResult.status === 'fulfilled' ? homeSaveResult.value : null;
+    const savedProfile = mergeProfileData(response?.data || profileData, homeSavedProfile);
 
     console.log('Profile save response:', {
-      status: response.status,
-      data: response.data
+      jobsStatus: response?.status,
+      jobsData: response?.data,
+      homeData: homeSavedProfile
     });
 
-    writeLocalJobsProfile(response.data || profileData);
-    return response.data;
+    writeLocalJobsProfile(savedProfile);
+    return savedProfile;
   } catch (error) {
     console.error('Error saving user profile:', error);
     console.error('Error response:', error.response);
@@ -277,12 +425,16 @@ export const updateUserProfile = async (profileData) => {
   }
 
   try {
-    const response = await apiClient.put(
-      '/profile',
-      profileData
-    );
-    writeLocalJobsProfile(response.data || profileData);
-    return response.data;
+    const [jobsUpdateResult, homeSaveResult] = await Promise.allSettled([
+      apiClient.put('/profile', profileData),
+      saveSomethingXUnifiedProfile(profileData),
+    ]);
+    const response = jobsUpdateResult.status === 'fulfilled' ? jobsUpdateResult.value : null;
+    const homeSavedProfile = homeSaveResult.status === 'fulfilled' ? homeSaveResult.value : null;
+    const savedProfile = mergeProfileData(response?.data || profileData, homeSavedProfile);
+
+    writeLocalJobsProfile(savedProfile);
+    return savedProfile;
   } catch (error) {
     console.error('Error updating user profile:', error);
     if (error.response?.status === 401 || error.response?.status === 403) {
