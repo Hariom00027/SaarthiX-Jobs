@@ -33,21 +33,82 @@ const COMMON_HOBBIES = [
   'Trekking', 'Camping', 'Fishing', 'Bird Watching'
 ];
 
+const ROLE_PREFERENCE_OPTIONS = [
+  'Frontend Developer',
+  'Backend Developer',
+  'Full Stack Developer',
+  'Data Analyst',
+  'Data Scientist',
+  'DevOps Engineer',
+  'UI/UX Designer',
+  'QA Engineer',
+  'Product Manager'
+];
+
+const OPPORTUNITY_TYPE_OPTIONS = [
+  { value: 'INTERNSHIP', label: 'Internship' },
+  { value: 'FREELANCE', label: 'Freelance' },
+  { value: 'FULL_TIME', label: 'Full-time' },
+  { value: 'PART_TIME', label: 'Part-time' }
+];
+
 // Section definitions for the journey
 const PROFILE_SECTIONS = [
+  {
+    id: 'personal',
+    title: 'Personal Details',
+    icon: '👤',
+    description: 'Basic contact and profile information',
+    fields: ['profilePicture', 'fullName', 'phoneNumber', 'email']
+  },
+  {
+    id: 'professional',
+    title: 'Professional Info',
+    icon: '💼',
+    description: 'Experience, skills, and summary',
+    fields: ['professionalExperiences', 'skills', 'summary']
+  },
+  {
+    id: 'education',
+    title: 'Education',
+    icon: '🎓',
+    description: 'Academic background and certifications',
+    fields: ['educationEntries', 'certificationFiles']
+  },
   {
     id: 'location',
     title: 'Location Preferences',
     icon: '📍',
-    description: 'Jobs-specific location preferences',
+    description: 'Current and preferred job locations',
     fields: ['currentLocation', 'preferredLocations', 'workPreference', 'willingToRelocate']
+  },
+  {
+    id: 'hobbies',
+    title: 'Hobbies',
+    icon: '🎯',
+    description: 'Interests and extracurricular activities',
+    fields: ['hobbies']
+  },
+  {
+    id: 'projects',
+    title: 'Projects',
+    icon: '🚀',
+    description: 'Highlight your key projects',
+    fields: ['projects']
+  },
+  {
+    id: 'links',
+    title: 'Social Links',
+    icon: '🔗',
+    description: 'Portfolio and professional links',
+    fields: ['linkedInUrl', 'portfolioUrl', 'githubUrl', 'websiteUrl']
   },
   {
     id: 'additional',
     title: 'Application Preferences',
     icon: '📝',
-    description: 'Availability and salary expectations',
-    fields: ['availability', 'expectedSalary', 'coverLetterTemplate']
+    description: 'Job role and opportunity preferences',
+    fields: ['rolePreferences', 'opportunityPreferences', 'availability', 'expectedSalary', 'coverLetterTemplate']
   },
   {
     id: 'resume',
@@ -67,6 +128,8 @@ export default function ProfileBuilder() {
   // Check if user came from application form
   const cameFromApplication = location.state?.returnToApplication || false;
   const jobId = location.state?.jobId || null;
+  const mandatoryProfile = location.state?.mandatoryProfile || false;
+  const missingMandatoryFields = Array.isArray(location.state?.missingFields) ? location.state.missingFields : [];
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -93,6 +156,8 @@ export default function ProfileBuilder() {
     currentLocation: '',
     preferredLocations: [],
     workPreference: 'Remote',
+    rolePreferences: [],
+    opportunityPreferences: [],
     willingToRelocate: false,
     linkedInUrl: '',
     portfolioUrl: '',
@@ -111,6 +176,7 @@ export default function ProfileBuilder() {
 
   const [resume, setResume] = useState(null);
   const [skillsInput, setSkillsInput] = useState('');
+  const [rolePreferenceInput, setRolePreferenceInput] = useState('');
   const [locationInput, setLocationInput] = useState('');
   const [hobbiesInput, setHobbiesInput] = useState('');
   const [isDragging, setIsDragging] = useState(false);
@@ -154,6 +220,8 @@ export default function ProfileBuilder() {
       portfolioUrl: homeProfile.portfolioUrl || homeProfile.portfolio || '',
       githubUrl: homeProfile.githubUrl || homeProfile.github || '',
       websiteUrl: homeProfile.websiteUrl || homeProfile.website || '',
+      rolePreferences: parseArrayField(homeProfile.rolePreferences),
+      opportunityPreferences: parseArrayField(homeProfile.opportunityPreferences),
       educationEntries: parseArrayField(homeProfile.academicBackground),
       projects: parseArrayField(homeProfile.projects),
     };
@@ -222,6 +290,8 @@ export default function ProfileBuilder() {
           currentLocation: effectiveProfile.currentLocation || '',
           preferredLocations: effectiveProfile.preferredLocations || (effectiveProfile.preferredLocation ? [effectiveProfile.preferredLocation] : []),
           workPreference: effectiveProfile.workPreference || 'Remote',
+          rolePreferences: effectiveProfile.rolePreferences || [],
+          opportunityPreferences: effectiveProfile.opportunityPreferences || [],
           willingToRelocate: effectiveProfile.willingToRelocate || false,
           linkedInUrl: effectiveProfile.linkedInUrl || '',
           portfolioUrl: effectiveProfile.portfolioUrl || '',
@@ -317,6 +387,13 @@ export default function ProfileBuilder() {
       fieldName === 'professionalExperiences' || fieldName === 'educationEntries' || fieldName === 'certificationFiles' ||
       fieldName === 'projects') {
       return Array.isArray(value) && value.length > 0;
+    }
+    if (fieldName === 'rolePreferences') {
+      return Array.isArray(value) && value.length > 0;
+    }
+    if (fieldName === 'opportunityPreferences') {
+      if (!Array.isArray(value)) return false;
+      return value.includes('INTERNSHIP') || value.includes('FREELANCE');
     }
     if (fieldName === 'willingToRelocate') {
       return true; // Checkbox is always considered filled
@@ -438,6 +515,39 @@ export default function ProfileBuilder() {
       // Force update of completed sections
       setTimeout(() => updateCompletedSections(), 100);
     }
+  };
+
+  const handleAddRolePreference = (role) => {
+    const trimmedRole = role.trim();
+    if (trimmedRole && !formData.rolePreferences.includes(trimmedRole)) {
+      setFormData(prev => ({
+        ...prev,
+        rolePreferences: [...prev.rolePreferences, trimmedRole]
+      }));
+      setRolePreferenceInput('');
+      setTimeout(() => updateCompletedSections(), 100);
+    }
+  };
+
+  const handleRemoveRolePreference = (roleToRemove) => {
+    setFormData(prev => ({
+      ...prev,
+      rolePreferences: prev.rolePreferences.filter(role => role !== roleToRemove)
+    }));
+    setTimeout(() => updateCompletedSections(), 100);
+  };
+
+  const handleToggleOpportunityPreference = (optionValue) => {
+    setFormData(prev => {
+      const alreadySelected = prev.opportunityPreferences.includes(optionValue);
+      return {
+        ...prev,
+        opportunityPreferences: alreadySelected
+          ? prev.opportunityPreferences.filter(value => value !== optionValue)
+          : [...prev.opportunityPreferences, optionValue]
+      };
+    });
+    setTimeout(() => updateCompletedSections(), 100);
   };
 
   const handleRemoveLocation = (locationToRemove) => {
@@ -915,12 +1025,7 @@ export default function ProfileBuilder() {
                 ← Back to Application Form
               </button>
             ) : (
-              <button
-                onClick={() => navigate('/')}
-                className="text-gray-500 hover:text-gray-700 font-medium flex items-center gap-2 text-sm transition-colors"
-              >
-                ← Back to Dashboard
-              </button>
+              <div />
             )}
             {cameFromApplication && (
               <div className="text-xs text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200">
@@ -928,6 +1033,19 @@ export default function ProfileBuilder() {
               </div>
             )}
           </div>
+
+          {mandatoryProfile && (
+            <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4">
+              <p className="text-sm font-semibold text-amber-900 mb-2">
+                Job application profile is mandatory before applying.
+              </p>
+              {missingMandatoryFields.length > 0 && (
+                <p className="text-xs text-amber-800">
+                  Missing fields: {missingMandatoryFields.join(', ')}
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center gap-4 mb-6">
             <div className="w-16 h-16 bg-indigo-50 rounded-xl flex items-center justify-center border border-indigo-200">
@@ -972,7 +1090,7 @@ export default function ProfileBuilder() {
             </div>
 
             {/* Section Indicators */}
-            <div className="mt-6 grid grid-cols-7 gap-2">
+            <div className="mt-6 grid grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-2">
               {PROFILE_SECTIONS.map((section, index) => (
                 <button
                   key={section.id}
@@ -1990,6 +2108,96 @@ export default function ProfileBuilder() {
 
             {currentSection.id === 'additional' && (
               <div className="space-y-6">
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      Role Preferences <span className="text-pink-400">*</span>
+                      {isFieldFilled('rolePreferences') && <span className="text-blue-600 text-xs">✓</span>}
+                    </label>
+
+                    {formData.rolePreferences.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {formData.rolePreferences.map((role, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium border border-blue-200"
+                          >
+                            {role}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveRolePreference(role)}
+                              className="text-blue-600 hover:text-blue-700 focus:outline-none"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 mb-2">
+                      <input
+                        type="text"
+                        value={rolePreferenceInput}
+                        onChange={(e) => setRolePreferenceInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && rolePreferenceInput.trim()) {
+                            e.preventDefault();
+                            handleAddRolePreference(rolePreferenceInput);
+                          }
+                        }}
+                        placeholder="Add preferred role and press Enter"
+                        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-700 placeholder-gray-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleAddRolePreference(rolePreferenceInput)}
+                        className="px-4 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium"
+                      >
+                        Add
+                      </button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {ROLE_PREFERENCE_OPTIONS.filter(role => !formData.rolePreferences.includes(role)).map((role) => (
+                        <button
+                          key={role}
+                          type="button"
+                          onClick={() => handleAddRolePreference(role)}
+                          className="px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-700 hover:bg-gray-50"
+                        >
+                          {role}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      Opportunity Type <span className="text-pink-400">*</span>
+                      {isFieldFilled('opportunityPreferences') && <span className="text-blue-600 text-xs">✓</span>}
+                    </label>
+                    <p className="text-xs text-gray-500 mb-2">
+                      Select at least Internship or Freelance.
+                    </p>
+                    <div className="space-y-2">
+                      {OPPORTUNITY_TYPE_OPTIONS.map((option) => (
+                        <label key={option.value} className="flex items-center gap-3 text-sm text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={formData.opportunityPreferences.includes(option.value)}
+                            onChange={() => handleToggleOpportunityPreference(option.value)}
+                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-200"
+                          />
+                          {option.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">

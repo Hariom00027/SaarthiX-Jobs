@@ -196,13 +196,6 @@ export default function PostJobs() {
     return (
       <div className="min-h-screen bg-gray-50 py-10 px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-3xl">
-          <button
-            onClick={() => navigate("/")}
-            className="mb-4 text-gray-600 hover:text-gray-900 font-medium flex items-center gap-2 text-sm"
-          >
-            ← Back to Dashboard
-          </button>
-          
           <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
             <h1 className="text-3xl font-bold text-gray-900 mb-3">
               Authentication Required
@@ -235,13 +228,6 @@ export default function PostJobs() {
     return (
       <div className="min-h-screen bg-gray-50 py-10 px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-3xl">
-          <button
-            onClick={() => navigate("/")}
-            className="mb-4 text-gray-600 hover:text-gray-900 font-medium flex items-center gap-2 text-sm"
-          >
-            ← Back to Dashboard
-          </button>
-          
           <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
             <h1 className="text-3xl font-bold text-gray-900 mb-3">
               Access Denied
@@ -252,12 +238,6 @@ export default function PostJobs() {
             <p className="text-gray-600 mb-8 text-sm">
               To post jobs, please create a new account with an INDUSTRY role.
             </p>
-            <button
-              onClick={() => navigate("/")}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors duration-200 font-semibold"
-            >
-              Back to Dashboard
-            </button>
           </div>
         </div>
       </div>
@@ -270,12 +250,6 @@ export default function PostJobs() {
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
-            <button
-              onClick={() => navigate("/")}
-              className="text-gray-600 hover:text-gray-900 font-medium flex items-center gap-2 text-sm"
-            >
-              ← Back to Dashboard
-            </button>
             <div className="flex gap-3">
               <button
                 onClick={() => navigate("/manage-hackathons")}

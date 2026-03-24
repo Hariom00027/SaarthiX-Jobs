@@ -10,7 +10,6 @@ import JobBuilder from './components/JobBuilder';
 import JobTracker from './components/JobTracker';
 import EditProfile from './components/EditProfile';
 import ProfileBuilder from './components/ProfileBuilder';
-import ViewProfile from './components/ViewProfile';
 import IndustryApplications from './components/IndustryApplications';
 import IndustryHackathons from './components/IndustryHackathons';
 import HackathonForm from './components/HackathonForm';
@@ -22,6 +21,7 @@ import IndustryHackathonResults from './components/IndustryHackathonResults';
 import IndustryCertificatePublishPage from './components/IndustryCertificatePublishPage';
 import StudentDatabase from './components/StudentDatabase';
 import DemoViewSwitcher from './components/DemoViewSwitcher';
+import SharedProfileRedirect from './components/SharedProfileRedirect';
 
 function App() {
   // Get basename calculated in main.jsx
@@ -43,7 +43,7 @@ function App() {
             <Route path="/job-tracker" element={<JobTracker />} />
             <Route path="/edit-profile" element={<EditProfile />} />
             <Route path="/build-profile" element={<ProfileBuilder />} />
-            <Route path="/view-profile" element={<ViewProfile />} />
+            <Route path="/view-profile" element={<SharedProfileRedirect />} />
             <Route path="/manage-applications" element={<IndustryApplications />} />
             <Route path="/manage-hackathons" element={<IndustryHackathons />} />
             <Route path="/create-hackathon" element={<HackathonForm />} />

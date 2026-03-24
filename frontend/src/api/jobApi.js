@@ -1,11 +1,10 @@
 import axios from 'axios';
 import apiClient from './apiClient';
-import { API_BASE_URL } from '../config/apiConfig';
 import { getSomethingXUrl } from '../config/redirectUrls';
 
 const JOBS_PROFILE_LOCAL_KEY = 'jobs_profile_local_cache_v1';
-let jobsProfileApiDisabled = false;
-const shouldUseLocalOnlyProfile = () => Boolean(localStorage.getItem('somethingx_auth_token'));
+const getProfileAuthToken = () => localStorage.getItem('somethingx_auth_token') || localStorage.getItem('token');
+const shouldUseLocalOnlyProfile = () => !getProfileAuthToken();
 
 const isBlankValue = (value) => {
   if (Array.isArray(value)) return value.length === 0;
@@ -173,18 +172,16 @@ export const recordJobApplication = async (applicationData) => {
 
 // Profile API functions
 export const getUserProfile = async () => {
-  if (jobsProfileApiDisabled || shouldUseLocalOnlyProfile()) {
+  if (shouldUseLocalOnlyProfile()) {
     return readLocalJobsProfile();
   }
 
   try {
-    const [jobsResult, homeUnifiedResult, homeAuthResult] = await Promise.allSettled([
-      apiClient.get('/profile'),
+    const [homeUnifiedResult, homeAuthResult] = await Promise.allSettled([
       getSomethingXUnifiedProfile(),
       getSomethingXUserProfile(),
     ]);
 
-    const jobsProfile = jobsResult.status === 'fulfilled' ? (jobsResult.value?.data || null) : null;
     const homeUnifiedProfile = homeUnifiedResult.status === 'fulfilled' ? homeUnifiedResult.value : null;
     const homeAuthProfile = homeAuthResult.status === 'fulfilled' ? homeAuthResult.value : null;
 
@@ -208,25 +205,15 @@ export const getUserProfile = async () => {
       projects: Array.isArray(homeAuthProfile.projects) ? homeAuthProfile.projects : [],
     } : null;
 
-    const mergedProfile = mergeProfileData(
-      mergeProfileData(jobsProfile, homeUnifiedProfile),
-      mappedHomeAuthProfile
-    );
+    const mergedProfile = mergeProfileData(homeUnifiedProfile, mappedHomeAuthProfile);
 
     if (mergedProfile && Object.keys(mergedProfile).length > 0) {
       writeLocalJobsProfile(mergedProfile);
       return mergedProfile;
     }
 
-    return null;
+    return readLocalJobsProfile();
   } catch (error) {
-    if (error.response?.status === 404) {
-      return null; // Profile doesn't exist yet
-    }
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      jobsProfileApiDisabled = true;
-      return readLocalJobsProfile();
-    }
     console.error('Error fetching user profile:', error);
     return readLocalJobsProfile();
   }
@@ -372,76 +359,40 @@ const saveSomethingXUnifiedProfile = async (profileData) => {
 };
 
 export const saveUserProfile = async (profileData) => {
-  if (jobsProfileApiDisabled || shouldUseLocalOnlyProfile()) {
+  if (shouldUseLocalOnlyProfile()) {
     writeLocalJobsProfile(profileData);
     return { ...profileData, _savedLocallyOnly: true };
   }
 
   try {
-    console.log('Sending profile data to backend:', {
-      url: `${API_BASE_URL}/profile`,
-      dataKeys: Object.keys(profileData),
-      hasResume: !!profileData.resumeBase64
-    });
-
-    const [jobsSaveResult, homeSaveResult] = await Promise.allSettled([
-      apiClient.post('/profile', profileData),
-      saveSomethingXUnifiedProfile(profileData),
-    ]);
-
-    const response = jobsSaveResult.status === 'fulfilled' ? jobsSaveResult.value : null;
-    const homeSavedProfile = homeSaveResult.status === 'fulfilled' ? homeSaveResult.value : null;
-    const savedProfile = mergeProfileData(response?.data || profileData, homeSavedProfile);
-
-    console.log('Profile save response:', {
-      jobsStatus: response?.status,
-      jobsData: response?.data,
-      homeData: homeSavedProfile
-    });
-
+    const homeSavedProfile = await saveSomethingXUnifiedProfile(profileData);
+    const savedProfile = homeSavedProfile && Object.keys(homeSavedProfile).length > 0
+      ? mergeProfileData(homeSavedProfile, profileData)
+      : profileData;
     writeLocalJobsProfile(savedProfile);
     return savedProfile;
   } catch (error) {
     console.error('Error saving user profile:', error);
-    console.error('Error response:', error.response);
-    if (error.response) {
-      console.error('Error status:', error.response.status);
-      console.error('Error data:', error.response.data);
-      if (error.response.status === 401 || error.response.status === 403) {
-        jobsProfileApiDisabled = true;
-        writeLocalJobsProfile(profileData);
-        return { ...profileData, _savedLocallyOnly: true };
-      }
-    }
     writeLocalJobsProfile(profileData);
     return { ...profileData, _savedLocallyOnly: true };
   }
 };
 
 export const updateUserProfile = async (profileData) => {
-  if (jobsProfileApiDisabled || shouldUseLocalOnlyProfile()) {
+  if (shouldUseLocalOnlyProfile()) {
     writeLocalJobsProfile(profileData);
     return { ...profileData, _savedLocallyOnly: true };
   }
 
   try {
-    const [jobsUpdateResult, homeSaveResult] = await Promise.allSettled([
-      apiClient.put('/profile', profileData),
-      saveSomethingXUnifiedProfile(profileData),
-    ]);
-    const response = jobsUpdateResult.status === 'fulfilled' ? jobsUpdateResult.value : null;
-    const homeSavedProfile = homeSaveResult.status === 'fulfilled' ? homeSaveResult.value : null;
-    const savedProfile = mergeProfileData(response?.data || profileData, homeSavedProfile);
-
+    const homeSavedProfile = await saveSomethingXUnifiedProfile(profileData);
+    const savedProfile = homeSavedProfile && Object.keys(homeSavedProfile).length > 0
+      ? mergeProfileData(homeSavedProfile, profileData)
+      : profileData;
     writeLocalJobsProfile(savedProfile);
     return savedProfile;
   } catch (error) {
     console.error('Error updating user profile:', error);
-    if (error.response?.status === 401 || error.response?.status === 403) {
-      jobsProfileApiDisabled = true;
-      writeLocalJobsProfile(profileData);
-      return { ...profileData, _savedLocallyOnly: true };
-    }
     writeLocalJobsProfile(profileData);
     return { ...profileData, _savedLocallyOnly: true };
   }

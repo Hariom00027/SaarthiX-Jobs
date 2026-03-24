@@ -505,35 +505,6 @@ export default function ApplicantHackathons() {
             >
               Hackathons
             </button>
-            <button
-              onClick={() => {
-                navigate('/job-tracker');
-              }}
-              style={{
-                padding: '0.625rem 1.25rem',
-                backgroundColor: '#ffffff',
-                color: '#115FD5',
-                fontWeight: '600',
-                borderRadius: '0.5rem',
-                transition: 'all 0.2s',
-                fontSize: '0.875rem',
-                border: '1px solid #115FD5',
-                cursor: 'pointer',
-                outline: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                height: 'fit-content'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.backgroundColor = '#f0f7ff';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.backgroundColor = '#ffffff';
-              }}
-            >
-              My Applications
-            </button>
           </div>
         </div>
 

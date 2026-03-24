@@ -227,9 +227,59 @@ export default function JobList() {
   const [showApplicationForm, setShowApplicationForm] = useState(false);
   const [jobToApply, setJobToApply] = useState(null);
   const [jobMatchPercentages, setJobMatchPercentages] = useState({});
+  const [jobMatchReasons, setJobMatchReasons] = useState({});
   const [userProfile, setUserProfile] = useState(null);
+  const [missingMandatoryFields, setMissingMandatoryFields] = useState([]);
 
-  const { isAuthenticated, isIndustry, isApplicant } = useAuth();
+  const { isAuthenticated, isIndustry, isApplicant, user } = useAuth();
+
+  const normalizeLower = (value) => (value || "").toString().trim().toLowerCase();
+
+  const getMissingMandatoryProfileFields = (profile) => {
+    if (!profile) {
+      return [
+        "Resume",
+        "Role preference",
+        "Skills",
+        "Projects",
+        "LinkedIn",
+        "GitHub",
+        "Portfolio",
+        "Location preferences",
+        "Work preference",
+        "Freelance/Internship preference"
+      ];
+    }
+
+    const missing = [];
+    const hasResume = Boolean(profile.resumeBase64 || profile.resumeFileName);
+    const hasRolePreferences = Array.isArray(profile.rolePreferences) && profile.rolePreferences.length > 0;
+    const hasSkills = Array.isArray(profile.skills) && profile.skills.length > 0;
+    const hasProjects = Array.isArray(profile.projects) && profile.projects.length > 0;
+    const hasLinkedIn = Boolean(profile.linkedInUrl);
+    const hasGithub = Boolean(profile.githubUrl);
+    const hasPortfolio = Boolean(profile.portfolioUrl);
+    const hasLocationPreferences = Array.isArray(profile.preferredLocations) && profile.preferredLocations.length > 0;
+    const hasWorkPreference = Boolean(profile.workPreference);
+    const opportunityPreferences = Array.isArray(profile.opportunityPreferences) ? profile.opportunityPreferences : [];
+    const hasFreelanceOrInternshipPreference = opportunityPreferences.some((value) => {
+      const normalized = normalizeLower(value);
+      return normalized === "freelance" || normalized === "internship";
+    });
+
+    if (!hasResume) missing.push("Resume");
+    if (!hasRolePreferences) missing.push("Role preference");
+    if (!hasSkills) missing.push("Skills");
+    if (!hasProjects) missing.push("Projects");
+    if (!hasLinkedIn) missing.push("LinkedIn");
+    if (!hasGithub) missing.push("GitHub");
+    if (!hasPortfolio) missing.push("Portfolio");
+    if (!hasLocationPreferences) missing.push("Location preferences");
+    if (!hasWorkPreference) missing.push("Work preference (WFH/WFO/Remote)");
+    if (!hasFreelanceOrInternshipPreference) missing.push("Freelance/Internship preference");
+
+    return missing;
+  };
 
   // Load user profile for skill highlighting
   const loadUserProfile = async () => {
@@ -247,7 +297,7 @@ export default function JobList() {
   // Calculate match percentage for a job based on user profile
   const calculateJobMatch = (job, userProfile) => {
     if (!userProfile || !userProfile.skills) {
-      return 0;
+      return { percentage: 0, reasons: ["Complete your profile to see match insights"] };
     }
 
     const userSkills = userProfile.skills.map(s => s.toLowerCase());
@@ -257,11 +307,17 @@ export default function JobList() {
       userProfile.currentLocation || []
     ].map(l => l.toLowerCase()).filter(Boolean);
     const jobLocation = (job.location || '').toLowerCase();
+    const workPreference = normalizeLower(userProfile.workPreference);
+    const employmentType = normalizeLower(job.raw?.employmentType || job.raw?.job_employment_type || "");
+    const userRolePreferences = (userProfile.rolePreferences || []).map((role) => normalizeLower(role));
+    const jobTitle = normalizeLower(job.title);
+    const opportunityPreferences = (userProfile.opportunityPreferences || []).map((type) => normalizeLower(type));
 
     // Skills match (60% weight)
     let skillsMatch = 50; // Base score if no skills listed
+    let matchedSkills = [];
     if (jobSkills.length > 0) {
-      const matchedSkills = jobSkills.filter(jobSkill =>
+      matchedSkills = jobSkills.filter(jobSkill =>
         userSkills.some(userSkill => 
           jobSkill.includes(userSkill) || userSkill.includes(jobSkill)
         )
@@ -278,8 +334,57 @@ export default function JobList() {
       locationMatch = isLocationMatch ? 100 : (jobLocation.includes('remote') ? 75 : 0);
     }
 
-    const totalMatch = (skillsMatch * 0.6) + (locationMatch * 0.4);
-    return Math.round(Math.min(totalMatch, 100));
+    let roleMatch = 50;
+    if (userRolePreferences.length > 0) {
+      roleMatch = userRolePreferences.some((role) => jobTitle.includes(role) || role.includes(jobTitle)) ? 100 : 20;
+    }
+
+    let workModeMatch = 50;
+    if (workPreference) {
+      if (jobLocation.includes("remote")) {
+        workModeMatch = workPreference.includes("remote") ? 100 : 50;
+      } else if (jobLocation.includes("hybrid")) {
+        workModeMatch = (workPreference.includes("hybrid") || workPreference.includes("wfo")) ? 100 : 40;
+      } else {
+        workModeMatch = (workPreference.includes("office") || workPreference.includes("wfo") || workPreference.includes("on-site")) ? 100 : 40;
+      }
+    }
+
+    let opportunityMatch = 50;
+    if (opportunityPreferences.length > 0 && employmentType) {
+      const expectsInternship = opportunityPreferences.includes("internship");
+      const expectsFreelance = opportunityPreferences.includes("freelance");
+      if ((expectsInternship && employmentType.includes("intern")) || (expectsFreelance && employmentType.includes("freelance"))) {
+        opportunityMatch = 100;
+      } else {
+        opportunityMatch = 25;
+      }
+    }
+
+    const totalMatch = (skillsMatch * 0.45) + (locationMatch * 0.25) + (roleMatch * 0.15) + (workModeMatch * 0.1) + (opportunityMatch * 0.05);
+    const roundedPercentage = Math.round(Math.min(totalMatch, 100));
+
+    const reasons = [];
+    if (matchedSkills.length > 0) {
+      reasons.push(`Skills matched: ${matchedSkills.slice(0, 3).join(", ")}`);
+    }
+    if (locationMatch >= 75) {
+      reasons.push("Location preference matched");
+    }
+    if (roleMatch >= 90) {
+      reasons.push("Role preference aligned");
+    }
+    if (workModeMatch >= 90) {
+      reasons.push(`Work mode matched (${userProfile.workPreference})`);
+    }
+    if (opportunityMatch >= 90) {
+      reasons.push("Opportunity type matched");
+    }
+    if (reasons.length === 0) {
+      reasons.push("Low alignment with your profile preferences");
+    }
+
+    return { percentage: roundedPercentage, reasons };
   };
 
   // Load recommended jobs match percentages
@@ -289,9 +394,11 @@ export default function JobList() {
         // Try to get recommended jobs from backend first
         const recommendedJobs = await getRecommendedJobs();
         const matchMap = {};
+        const reasonsMap = {};
         if (Array.isArray(recommendedJobs)) {
           recommendedJobs.forEach(item => {
             matchMap[item.job.id] = item.matchPercentage;
+            reasonsMap[item.job.id] = [`Recommended by profile engine (${Math.round(item.matchPercentage)}% match)`];
           });
         }
         
@@ -300,22 +407,29 @@ export default function JobList() {
           jobs.forEach(job => {
             if (matchMap[job.id] === undefined) {
               // Only calculate if not already in recommended list
-              matchMap[job.id] = calculateJobMatch(job, userProfile);
+              const result = calculateJobMatch(job, userProfile);
+              matchMap[job.id] = result.percentage;
+              reasonsMap[job.id] = result.reasons;
             }
           });
         }
         
         setJobMatchPercentages(matchMap);
+        setJobMatchReasons(reasonsMap);
       }
     } catch (err) {
       console.error("Error loading recommended jobs:", err);
       // Fallback: calculate matches for all jobs using user profile
       if (userProfile && isApplicant && jobs && jobs.length > 0) {
         const matchMap = {};
+        const reasonsMap = {};
         jobs.forEach(job => {
-          matchMap[job.id] = calculateJobMatch(job, userProfile);
+          const result = calculateJobMatch(job, userProfile);
+          matchMap[job.id] = result.percentage;
+          reasonsMap[job.id] = result.reasons;
         });
         setJobMatchPercentages(matchMap);
+        setJobMatchReasons(reasonsMap);
       }
     }
   };
@@ -514,6 +628,33 @@ export default function JobList() {
     }
   }, [jobs, userProfile]);
 
+  useEffect(() => {
+    if (!isAuthenticated || !isApplicant) {
+      setMissingMandatoryFields([]);
+      return;
+    }
+    setMissingMandatoryFields(getMissingMandatoryProfileFields(userProfile));
+  }, [isAuthenticated, isApplicant, userProfile]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !isApplicant) return;
+    if (missingMandatoryFields.length === 0) return;
+    if (location.state?.returnFromProfile) return;
+
+    const identity = user?.email || user?.id || "anonymous";
+    const storageKey = `jobs_mandatory_profile_prompt_seen_${identity}`;
+    const alreadyPrompted = localStorage.getItem(storageKey) === "true";
+    if (alreadyPrompted) return;
+
+    localStorage.setItem(storageKey, "true");
+    navigate('/build-profile', {
+      state: {
+        mandatoryProfile: true,
+        missingFields: missingMandatoryFields
+      }
+    });
+  }, [isAuthenticated, isApplicant, missingMandatoryFields, navigate, location.state, user]);
+
   // Check if user returned from build-profile and should open application form
   useEffect(() => {
     const savedJobData = localStorage.getItem('jobApplicationJobData');
@@ -622,7 +763,7 @@ export default function JobList() {
     }
   };
 
-  const handleApply = (job, details) => {
+  const handleApply = async (job, details) => {
     // For external jobs, redirect to the company's website
     if (job.source === "External") {
       const applyLink = details?.job_apply_link || job.raw?.job_apply_link || job.raw?.apply_link;
@@ -649,6 +790,27 @@ export default function JobList() {
       ) {
         redirectToSomethingXLogin("student");
       }
+      return;
+    }
+
+    const latestProfile = await getUserProfile().catch(() => userProfile);
+    if (latestProfile) {
+      setUserProfile(latestProfile);
+    }
+    const mandatoryMissing = getMissingMandatoryProfileFields(latestProfile || userProfile);
+    if (mandatoryMissing.length > 0) {
+      toast.warning("Please complete your mandatory job profile fields first.", {
+        position: "top-right",
+        autoClose: 3500
+      });
+      navigate('/build-profile', {
+        state: {
+          mandatoryProfile: true,
+          missingFields: mandatoryMissing,
+          returnToApplication: true,
+          jobId: job.id
+        }
+      });
       return;
     }
 
@@ -726,6 +888,27 @@ export default function JobList() {
             Explore positions from <span style={{ fontFamily: "'Times New Roman', serif", fontWeight: 'bold', fontStyle: 'italic' }}>Saarthix</span> and partner organizations.
           </p>
         </div>
+
+        {isApplicant && isAuthenticated && missingMandatoryFields.length > 0 && (
+          <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-amber-900">
+                  Complete mandatory profile fields before applying to jobs
+                </p>
+                <p className="text-xs text-amber-800 mt-1">
+                  Missing: {missingMandatoryFields.join(', ')}
+                </p>
+              </div>
+              <button
+                onClick={() => navigate('/build-profile', { state: { mandatoryProfile: true, missingFields: missingMandatoryFields } })}
+                className="rounded-lg bg-amber-600 hover:bg-amber-700 px-4 py-2 text-white text-sm font-semibold"
+              >
+                Complete Profile
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Main Filter Section - Prominent at Top */}
         <div className="mb-6 sm:mb-10 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-xl sm:rounded-2xl border-2 border-blue-200 shadow-lg p-4 sm:p-6 lg:p-8 animate-fadeIn">
@@ -1011,6 +1194,15 @@ export default function JobList() {
                     <p className="line-clamp-3 text-xs sm:text-sm text-gray-600 leading-relaxed mb-2 sm:mb-0">
                       {job.description}
                     </p>
+                  )}
+                  {jobMatchReasons[job.id]?.length > 0 && (
+                    <div className="mt-3 space-y-1">
+                      {jobMatchReasons[job.id].slice(0, 2).map((reason, reasonIndex) => (
+                        <p key={reasonIndex} className="text-[11px] sm:text-xs text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-md px-2 py-1">
+                          {reason}
+                        </p>
+                      ))}
+                    </div>
                   )}
                 </div>
                 <button

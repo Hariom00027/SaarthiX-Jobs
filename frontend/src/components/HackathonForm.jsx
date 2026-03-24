@@ -762,13 +762,6 @@ export default function HackathonForm() {
       <div className="mx-auto max-w-5xl">
         {/* Header */}
         <div className="mb-8">
-          {/* <button
-            onClick={() => navigate('/manage-hackathons')}
-            className="mb-6 text-gray-500 hover:text-gray-700 font-medium flex items-center gap-2 text-sm transition-colors"
-          >
-            ← Back to Dashboard
-          </button> */}
-
           <div className="mb-6">
             <h1 className="text-4xl md:text-5xl font-bold text-gray-900 tracking-tight mb-2">
               {editingHackathonId ? 'Edit Hackathon' : 'Create Hackathon'}

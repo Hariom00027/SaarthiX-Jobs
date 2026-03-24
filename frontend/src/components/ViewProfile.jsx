@@ -170,13 +170,6 @@ export default function ViewProfile() {
       <div className="mx-auto max-w-5xl">
         {/* Header */}
         <div className="mb-8">
-          <button
-            onClick={() => navigate('/')}
-            className="mb-6 text-gray-500 hover:text-gray-700 font-medium flex items-center gap-2 text-sm transition-colors"
-          >
-            ← Back to Dashboard
-          </button>
-
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-4">
               {profile.profilePictureBase64 ? (
@@ -736,7 +729,7 @@ export default function ViewProfile() {
           )}
 
           {/* Additional Information */}
-          {(hasValue(profile.availability) || hasValue(profile.expectedSalary) || hasValue(profile.coverLetterTemplate)) && (
+          {(hasValue(profile.rolePreferences) || hasValue(profile.opportunityPreferences) || hasValue(profile.availability) || hasValue(profile.expectedSalary) || hasValue(profile.coverLetterTemplate)) && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
               <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-200">
                 <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
@@ -747,6 +740,40 @@ export default function ViewProfile() {
                 <h2 className="text-xl font-semibold text-gray-800">Additional Information</h2>
               </div>
               <div className="space-y-4">
+                {(hasValue(profile.rolePreferences) || hasValue(profile.opportunityPreferences)) && (
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {hasValue(profile.rolePreferences) && (
+                      <div>
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Role Preferences</p>
+                        <div className="flex flex-wrap gap-2">
+                          {(profile.rolePreferences || []).map((role, index) => (
+                            <span
+                              key={index}
+                              className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium border border-blue-200"
+                            >
+                              {role}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {hasValue(profile.opportunityPreferences) && (
+                      <div>
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Opportunity Types</p>
+                        <div className="flex flex-wrap gap-2">
+                          {(profile.opportunityPreferences || []).map((type, index) => (
+                            <span
+                              key={index}
+                              className="inline-flex items-center px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg text-sm font-medium border border-purple-200"
+                            >
+                              {type}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="grid md:grid-cols-2 gap-4">
                   {hasValue(profile.availability) && (
                     <div>

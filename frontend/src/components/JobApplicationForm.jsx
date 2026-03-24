@@ -27,8 +27,47 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
+  const [missingMandatoryFields, setMissingMandatoryFields] = useState([]);
   const [useProfileData, setUseProfileData] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(true);
+
+  const normalizeLower = (value) => (value || '').toString().trim().toLowerCase();
+
+  const getMissingMandatoryProfileFields = (profile) => {
+    if (!profile) {
+      return [
+        'Resume',
+        'Role preference',
+        'Skills',
+        'Projects',
+        'LinkedIn',
+        'GitHub',
+        'Portfolio',
+        'Location preferences',
+        'Work preference',
+        'Freelance/Internship preference'
+      ];
+    }
+
+    const opportunityPreferences = Array.isArray(profile.opportunityPreferences) ? profile.opportunityPreferences : [];
+    const hasFreelanceOrInternshipPreference = opportunityPreferences.some((value) => {
+      const normalized = normalizeLower(value);
+      return normalized === 'freelance' || normalized === 'internship';
+    });
+
+    const missing = [];
+    if (!(profile.resumeBase64 || profile.resumeFileName)) missing.push('Resume');
+    if (!(Array.isArray(profile.rolePreferences) && profile.rolePreferences.length > 0)) missing.push('Role preference');
+    if (!(Array.isArray(profile.skills) && profile.skills.length > 0)) missing.push('Skills');
+    if (!(Array.isArray(profile.projects) && profile.projects.length > 0)) missing.push('Projects');
+    if (!profile.linkedInUrl) missing.push('LinkedIn');
+    if (!profile.githubUrl) missing.push('GitHub');
+    if (!profile.portfolioUrl) missing.push('Portfolio');
+    if (!(Array.isArray(profile.preferredLocations) && profile.preferredLocations.length > 0)) missing.push('Location preferences');
+    if (!profile.workPreference) missing.push('Work preference (WFH/WFO/Remote)');
+    if (!hasFreelanceOrInternshipPreference) missing.push('Freelance/Internship preference');
+    return missing;
+  };
 
   // Restore saved form data on mount
   useEffect(() => {
@@ -141,6 +180,7 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
         const profile = await getUserProfile();
         if (profile) {
           setUserProfile(profile);
+          setMissingMandatoryFields(getMissingMandatoryProfileFields(profile));
         }
       } catch (err) {
         console.error('Error loading profile:', err);
@@ -251,6 +291,11 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+
+    if (missingMandatoryFields.length > 0) {
+      setError(`Please complete your mandatory job profile fields first: ${missingMandatoryFields.join(', ')}`);
+      return;
+    }
 
     // Validation
     if (!formData.fullName.trim()) {
@@ -400,7 +445,7 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
     localStorage.setItem(STORAGE_JOB_KEY, JSON.stringify(jobDataToSave));
     
     // Navigate to build-profile with return path
-    navigate('/build-profile', { state: { returnToApplication: true, jobId: job.id } });
+    navigate('/build-profile', { state: { returnToApplication: true, jobId: job.id, mandatoryProfile: true, missingFields: missingMandatoryFields } });
   };
 
   const formatFileSize = (bytes) => {
@@ -478,6 +523,24 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
                   Create a profile
                 </button> to auto-fill application forms in the future!
               </p>
+            </div>
+          )}
+
+          {userProfile && !loadingProfile && missingMandatoryFields.length > 0 && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm text-amber-900 font-medium">
+                Mandatory job profile fields are missing.
+              </p>
+              <p className="text-xs text-amber-800 mt-1 mb-2">
+                Missing: {missingMandatoryFields.join(', ')}
+              </p>
+              <button
+                type="button"
+                onClick={handleNavigateToProfile}
+                className="text-xs font-semibold text-amber-900 underline hover:text-amber-950"
+              >
+                Complete profile now
+              </button>
             </div>
           )}
 
