@@ -1,6 +1,54 @@
 import axios from 'axios';
 import apiClient from './apiClient';
-import { API_BASE_URL } from '../config/apiConfig';
+import { getSomethingXUrl } from '../config/redirectUrls';
+
+const JOBS_PROFILE_LOCAL_KEY = 'jobs_profile_local_cache_v1';
+const getProfileAuthToken = () => localStorage.getItem('somethingx_auth_token') || localStorage.getItem('token');
+const shouldUseLocalOnlyProfile = () => !getProfileAuthToken();
+const shouldAvoidRelativeApiBase = () => {
+  if (typeof window === 'undefined' || !window.location) return false;
+  const host = window.location.hostname;
+  const port = window.location.port;
+  return (host === 'localhost' || host === '127.0.0.1') && port === '3500';
+};
+
+const isBlankValue = (value) => {
+  if (Array.isArray(value)) return value.length === 0;
+  return value === null || value === undefined || value === '';
+};
+
+const mergeProfileData = (baseProfile, incomingProfile) => {
+  const merged = { ...(baseProfile || {}) };
+  Object.keys(incomingProfile || {}).forEach((key) => {
+    if (isBlankValue(merged[key]) && !isBlankValue(incomingProfile[key])) {
+      merged[key] = incomingProfile[key];
+    }
+  });
+  return merged;
+};
+
+const mergePreferIncoming = (baseProfile, incomingProfile) => ({
+  ...(baseProfile || {}),
+  ...(incomingProfile || {}),
+});
+
+const readLocalJobsProfile = () => {
+  try {
+    const raw = localStorage.getItem(JOBS_PROFILE_LOCAL_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    console.warn('Failed to parse local jobs profile cache:', error);
+    return null;
+  }
+};
+
+const writeLocalJobsProfile = (profileData) => {
+  try {
+    localStorage.setItem(JOBS_PROFILE_LOCAL_KEY, JSON.stringify(profileData || {}));
+  } catch (error) {
+    console.warn('Failed to write local jobs profile cache:', error);
+  }
+};
 
 // Use environment variable for API key, fallback for development
 const API_KEY = import.meta.env.VITE_RAPIDAPI_KEY || 'f0235cd2b0mshac603cc0e4cabafp1ffb39jsnd44cae2de884';
@@ -134,60 +182,261 @@ export const recordJobApplication = async (applicationData) => {
 };
 
 // Profile API functions
+const getJobsBackendProfile = async () => {
+  const response = await apiClient.get('/profile');
+  return response.data || null;
+};
+
+const saveJobsBackendProfile = async (profileData) => {
+  const response = await apiClient.post('/profile', profileData);
+  return response.data || null;
+};
+
 export const getUserProfile = async () => {
+  if (shouldUseLocalOnlyProfile()) {
+    return readLocalJobsProfile();
+  }
+
   try {
-    const response = await apiClient.get('/profile');
-    return response.data;
-  } catch (error) {
-    if (error.response?.status === 404) {
-      return null; // Profile doesn't exist yet
+    const [jobsProfileResult, homeUnifiedResult, homeAuthResult] = await Promise.allSettled([
+      getJobsBackendProfile(),
+      getSomethingXUnifiedProfile(),
+      getSomethingXUserProfile(),
+    ]);
+
+    const jobsProfile = jobsProfileResult.status === 'fulfilled' ? jobsProfileResult.value : null;
+    const homeUnifiedProfile = homeUnifiedResult.status === 'fulfilled' ? homeUnifiedResult.value : null;
+    const homeAuthProfile = homeAuthResult.status === 'fulfilled' ? homeAuthResult.value : null;
+
+    const mappedHomeAuthProfile = homeAuthProfile ? {
+      fullName: homeAuthProfile.name || '',
+      phoneNumber: homeAuthProfile.phone || '',
+      email: homeAuthProfile.email || '',
+      profilePictureBase64: homeAuthProfile.picture || '',
+      profilePictureFileType: homeAuthProfile.picture ? 'image/jpeg' : '',
+      profilePictureFileName: homeAuthProfile.picture ? 'profile-picture.jpg' : '',
+      profilePictureFileSize: 0,
+      experience: homeAuthProfile.experience || '',
+      skills: Array.isArray(homeAuthProfile.skills) ? homeAuthProfile.skills : [],
+      summary: homeAuthProfile.bio || '',
+      currentLocation: homeAuthProfile.location || '',
+      linkedInUrl: homeAuthProfile.linkedinUrl || homeAuthProfile.linkedin || '',
+      portfolioUrl: homeAuthProfile.portfolioUrl || homeAuthProfile.portfolio || '',
+      githubUrl: homeAuthProfile.githubUrl || homeAuthProfile.github || '',
+      websiteUrl: homeAuthProfile.websiteUrl || homeAuthProfile.website || '',
+      educationEntries: Array.isArray(homeAuthProfile.academicBackground) ? homeAuthProfile.academicBackground : [],
+      projects: Array.isArray(homeAuthProfile.projects) ? homeAuthProfile.projects : [],
+    } : null;
+
+    // Home unified profile is the canonical shared profile for cross-microservice access.
+    const mergedFromHome = mergeProfileData(homeUnifiedProfile, mappedHomeAuthProfile);
+    const mergedProfile = mergedFromHome
+      ? mergeProfileData(mergedFromHome, jobsProfile)
+      : jobsProfile;
+
+    if (mergedProfile && Object.keys(mergedProfile).length > 0) {
+      writeLocalJobsProfile(mergedProfile);
+      return mergedProfile;
     }
+
+    return readLocalJobsProfile();
+  } catch (error) {
     console.error('Error fetching user profile:', error);
-    throw error;
+    return readLocalJobsProfile();
   }
 };
 
-export const saveUserProfile = async (profileData) => {
-  try {
-    console.log('Sending profile data to backend:', {
-      url: `${API_BASE_URL}/profile`,
-      dataKeys: Object.keys(profileData),
-      hasResume: !!profileData.resumeBase64
-    });
+// Fetch profile from SaarthiX Home app (/api/auth/profile)
+export const getSomethingXUserProfile = async () => {
+  const token = localStorage.getItem('somethingx_auth_token') || localStorage.getItem('token');
+  if (!token) {
+    return null;
+  }
 
-    const response = await apiClient.post(
-      '/profile',
-      profileData
-    );
-
-    console.log('Profile save response:', {
-      status: response.status,
-      data: response.data
-    });
-
-    return response.data;
-  } catch (error) {
-    console.error('Error saving user profile:', error);
-    console.error('Error response:', error.response);
-    if (error.response) {
-      console.error('Error status:', error.response.status);
-      console.error('Error data:', error.response.data);
+  const headers = { Authorization: `Bearer ${token}` };
+  const baseCandidates = [];
+  const pushUnique = (url) => {
+    if (url && !baseCandidates.includes(url)) {
+      baseCandidates.push(url);
     }
-    throw error;
+  };
+
+  try {
+    const somethingXUrl = getSomethingXUrl();
+    if (somethingXUrl && somethingXUrl !== '/') {
+      pushUnique(`${somethingXUrl.replace(/\/$/, '')}/api`);
+    }
+  } catch (_) {
+    // Ignore URL derivation issues and use fallback URLs
+  }
+
+  if (!shouldAvoidRelativeApiBase()) {
+    pushUnique('/api');
+  }
+  pushUnique('http://localhost:8080/api');
+  pushUnique('http://127.0.0.1:8080/api');
+
+  let lastError = null;
+  for (const baseURL of baseCandidates) {
+    try {
+      const response = await axios.get(`${baseURL}/auth/profile`, { headers, timeout: 12000 });
+      return response.data || null;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError?.response?.status === 401 || lastError?.response?.status === 403) {
+    return null;
+  }
+
+  console.warn('Unable to fetch SaarthiX Home profile:', lastError?.message || lastError);
+  return null;
+};
+
+const getSomethingXUnifiedProfile = async () => {
+  const token = localStorage.getItem('somethingx_auth_token') || localStorage.getItem('token');
+  if (!token) {
+    return null;
+  }
+
+  const headers = { Authorization: `Bearer ${token}` };
+  const baseCandidates = [];
+  const pushUnique = (url) => {
+    if (url && !baseCandidates.includes(url)) {
+      baseCandidates.push(url);
+    }
+  };
+
+  try {
+    const somethingXUrl = getSomethingXUrl();
+    if (somethingXUrl && somethingXUrl !== '/') {
+      pushUnique(`${somethingXUrl.replace(/\/$/, '')}/api`);
+    }
+  } catch (_) {
+    // Ignore URL derivation issues and use fallback URLs
+  }
+
+  if (!shouldAvoidRelativeApiBase()) {
+    pushUnique('/api');
+  }
+  pushUnique('http://localhost:3000/api');
+  pushUnique('http://127.0.0.1:3000/api');
+  pushUnique('http://localhost:8080/api');
+  pushUnique('http://127.0.0.1:8080/api');
+
+  let lastError = null;
+  for (const baseURL of baseCandidates) {
+    try {
+      const response = await axios.get(`${baseURL}/profile`, { headers, timeout: 12000 });
+      return response.data || null;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError?.response?.status === 401 || lastError?.response?.status === 403 || lastError?.response?.status === 404) {
+    return null;
+  }
+
+  console.warn('Unable to fetch unified SaarthiX Home profile:', lastError?.message || lastError);
+  return null;
+};
+
+const saveSomethingXUnifiedProfile = async (profileData) => {
+  const token = localStorage.getItem('somethingx_auth_token') || localStorage.getItem('token');
+  if (!token) {
+    return null;
+  }
+
+  const headers = { Authorization: `Bearer ${token}` };
+  const baseCandidates = [];
+  const pushUnique = (url) => {
+    if (url && !baseCandidates.includes(url)) {
+      baseCandidates.push(url);
+    }
+  };
+
+  try {
+    const somethingXUrl = getSomethingXUrl();
+    if (somethingXUrl && somethingXUrl !== '/') {
+      pushUnique(`${somethingXUrl.replace(/\/$/, '')}/api`);
+    }
+  } catch (_) {
+    // Ignore URL derivation issues and use fallback URLs
+  }
+
+  if (!shouldAvoidRelativeApiBase()) {
+    pushUnique('/api');
+  }
+  pushUnique('http://localhost:3000/api');
+  pushUnique('http://127.0.0.1:3000/api');
+  pushUnique('http://localhost:8080/api');
+  pushUnique('http://127.0.0.1:8080/api');
+
+  let lastError = null;
+  for (const baseURL of baseCandidates) {
+    try {
+      const response = await axios.post(`${baseURL}/profile`, profileData, { headers, timeout: 12000 });
+      return response.data || null;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError?.response?.status === 401 || lastError?.response?.status === 403) {
+    return null;
+  }
+
+  throw lastError || new Error('Unable to save unified SaarthiX Home profile');
+};
+
+export const saveUserProfile = async (profileData) => {
+  if (shouldUseLocalOnlyProfile()) {
+    writeLocalJobsProfile(profileData);
+    return { ...profileData, _savedLocallyOnly: true };
+  }
+
+  try {
+    // Primary persistence target: shared Home profile API for all microservices.
+    const homeSavedProfile = await saveSomethingXUnifiedProfile(profileData);
+    if (!homeSavedProfile || Object.keys(homeSavedProfile).length === 0) {
+      throw new Error('Shared profile save was not accepted by Home backend');
+    }
+    const savedProfile = homeSavedProfile && Object.keys(homeSavedProfile).length > 0
+      ? mergePreferIncoming(homeSavedProfile, profileData)
+      : profileData;
+    writeLocalJobsProfile(savedProfile);
+
+    // Best-effort mirror into Jobs backend profile collection.
+    try {
+      await saveJobsBackendProfile(savedProfile);
+    } catch (syncError) {
+      console.warn('Shared profile saved, but Jobs mirror sync failed:', syncError?.message || syncError);
+    }
+
+    return savedProfile;
+  } catch (error) {
+    console.error('Error saving user profile to shared Home backend:', error);
+
+    // Fallback: save directly into Jobs backend before local-only fallback.
+    try {
+      const jobsSavedProfile = await saveJobsBackendProfile(profileData);
+      const savedProfile = jobsSavedProfile && Object.keys(jobsSavedProfile).length > 0
+        ? jobsSavedProfile
+        : profileData;
+      writeLocalJobsProfile(savedProfile);
+      return savedProfile;
+    } catch (jobsError) {
+      console.error('Error saving user profile to Jobs backend:', jobsError);
+      writeLocalJobsProfile(profileData);
+      return { ...profileData, _savedLocallyOnly: true };
+    }
   }
 };
 
 export const updateUserProfile = async (profileData) => {
-  try {
-    const response = await apiClient.put(
-      '/profile',
-      profileData
-    );
-    return response.data;
-  } catch (error) {
-    console.error('Error updating user profile:', error);
-    throw error;
-  }
+  return saveUserProfile(profileData);
 };
 
 // Industry API functions

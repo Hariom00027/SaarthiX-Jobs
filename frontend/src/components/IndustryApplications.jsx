@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
@@ -21,7 +21,8 @@ export default function IndustryApplications() {
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [applicationsWithProfiles, setApplicationsWithProfiles] = useState([]);
-  
+  const lastHandledNavJobIdRef = useRef(null);
+
   // Search and filter states
   const [jobSearchQuery, setJobSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('All');
@@ -62,23 +63,22 @@ export default function IndustryApplications() {
     }
   }, [isAuthenticated, isIndustry, authLoading, navigate]);
 
-  // Handle location state to auto-select job when navigating from notification
-  useEffect(() => {
-    if (location.state?.selectedJobId && jobs.length > 0) {
-      const jobToSelect = jobs.find(job => job.id === location.state.selectedJobId);
-      if (jobToSelect && (!selectedJob || selectedJob.id !== jobToSelect.id)) {
-        handleJobSelect(jobToSelect);
-        window.history.replaceState({}, document.title);
-      }
-    }
-  }, [location.state, jobs]);
+  const navSelectedJobId = location.state?.selectedJobId;
 
-  // Load application counts for all jobs
+  // Auto-select job once when navigating from notification (primitive state key avoids unstable object deps)
   useEffect(() => {
-    if (jobs.length > 0 && !selectedJob) {
-      loadAllApplicationCounts();
+    if (!navSelectedJobId) {
+      lastHandledNavJobIdRef.current = null;
+      return;
     }
-  }, [jobs]);
+    if (jobs.length === 0) return;
+    if (lastHandledNavJobIdRef.current === navSelectedJobId) return;
+    const jobToSelect = jobs.find((job) => job.id === navSelectedJobId);
+    if (!jobToSelect) return;
+    lastHandledNavJobIdRef.current = navSelectedJobId;
+    handleJobSelect(jobToSelect);
+    window.history.replaceState({}, document.title);
+  }, [navSelectedJobId, jobs]);
 
   const loadJobs = async () => {
     try {
@@ -91,10 +91,29 @@ export default function IndustryApplications() {
         return;
       }
 
-      setJobs(allJobs);
+      // Fetch per-job application counts here (single state update) — never tie this to a [jobs] effect
+      // or any job list change will re-fetch every application list in a loop.
+      const countPromises = allJobs.map(async (job) => {
+        try {
+          const apps = await getApplicationsByJobId(job.id);
+          return { jobId: job.id, count: apps.length };
+        } catch {
+          return { jobId: job.id, count: 0 };
+        }
+      });
+      const counts = await Promise.all(countPromises);
+      const jobsWithCounts = allJobs.map((job) => {
+        const countData = counts.find((c) => c.jobId === job.id);
+        return { ...job, applicationCount: countData?.count || 0 };
+      });
+
+      setJobs(jobsWithCounts);
     } catch (err) {
       console.error('Error loading jobs:', err);
       let errorMessage = 'Failed to load your posted jobs';
+      if (err?.message) {
+        errorMessage = err.message;
+      }
       
       if (err.response) {
         if (typeof err.response.data === 'string') {
@@ -112,26 +131,6 @@ export default function IndustryApplications() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const loadAllApplicationCounts = async () => {
-    // Load application counts for all jobs in parallel
-    const countPromises = jobs.map(async (job) => {
-      try {
-        const apps = await getApplicationsByJobId(job.id);
-        return { jobId: job.id, count: apps.length };
-      } catch {
-        return { jobId: job.id, count: 0 };
-      }
-    });
-    
-    const counts = await Promise.all(countPromises);
-    setJobs(prevJobs => 
-      prevJobs.map(job => {
-        const countData = counts.find(c => c.jobId === job.id);
-        return { ...job, applicationCount: countData?.count || 0 };
-      })
-    );
   };
 
   const loadApplications = async (jobId) => {
@@ -419,13 +418,6 @@ export default function IndustryApplications() {
       <div className="mx-auto max-w-7xl">
         {/* Header */}
         <div className="mb-8">
-          <button
-            onClick={() => navigate('/')}
-            className="mb-6 text-gray-500 hover:text-gray-700 font-medium flex items-center gap-2 text-sm transition-colors"
-          >
-            ← Back to Dashboard
-          </button>
-          
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 bg-indigo-50 rounded-xl flex items-center justify-center border border-indigo-200">

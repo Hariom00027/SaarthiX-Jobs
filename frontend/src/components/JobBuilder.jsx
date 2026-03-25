@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
@@ -56,9 +56,30 @@ export default function JobBuilder() {
   const [showSkillsSuggestions, setShowSkillsSuggestions] = useState(false);
   const [salaryError, setSalaryError] = useState('');
   const [savedJobId, setSavedJobId] = useState(null); // Track saved draft job ID
+  const [jobCreatedAt, setJobCreatedAt] = useState(null); // ISO string from API — 24h edit window
 
   // Check if editing existing job
   const editingJobId = location.state?.jobId || null;
+
+  const editWindowExpired = useMemo(() => {
+    if (!jobCreatedAt) return false;
+    let created;
+    if (Array.isArray(jobCreatedAt)) {
+      const [y, m, d, hh = 0, mm = 0, ss = 0, nano = 0] = jobCreatedAt;
+      created = new Date(y, (m || 1) - 1, d || 1, hh, mm, ss, Math.floor((nano || 0) / 1e6)).getTime();
+    } else {
+      created = new Date(jobCreatedAt).getTime();
+    }
+    if (Number.isNaN(created)) return false;
+    return Date.now() - created > 24 * 60 * 60 * 1000;
+  }, [jobCreatedAt]);
+
+  const parseApiErrorMessage = (err) => {
+    const d = err?.response?.data;
+    if (d && typeof d === 'object' && d.message) return d.message;
+    if (typeof d === 'string') return d;
+    return err?.message || 'Request failed';
+  };
 
   useEffect(() => {
     if (!authLoading) {
@@ -107,6 +128,7 @@ export default function JobBuilder() {
         setSkillsInput('');
         // Set savedJobId when loading an existing job
         setSavedJobId(job.id);
+        setJobCreatedAt(job.createdAt || null);
       }
     } catch (err) {
       console.error('Error loading job:', err);
@@ -223,6 +245,10 @@ export default function JobBuilder() {
 
     // Prevent multiple simultaneous saves
     if (saving) return;
+    if (editWindowExpired && (savedJobId || editingJobId)) {
+      toast.error('This job can no longer be edited (24 hours after posting have passed).');
+      return;
+    }
 
     // For saving as draft, silently save without validation or toasts
     setSaving(true);
@@ -276,7 +302,9 @@ export default function JobBuilder() {
       }
     } catch (err) {
       console.error('Error saving job:', err);
-      // No toast for draft save errors
+      if (err?.response?.status === 403) {
+        toast.error(parseApiErrorMessage(err));
+      }
     } finally {
       setSaving(false);
     }
@@ -288,6 +316,10 @@ export default function JobBuilder() {
 
     // Prevent multiple simultaneous submissions
     if (saving) return;
+    if (editWindowExpired && (savedJobId || editingJobId)) {
+      toast.error('This job can no longer be edited (24 hours after posting have passed).');
+      return;
+    }
 
     // Check for missing required fields
     const missingFields = [];
@@ -382,13 +414,9 @@ export default function JobBuilder() {
       }, 2000);
     } catch (err) {
       console.error('Error posting job:', err);
-      const errorMessage = err.response?.data?.message ||
-        err.response?.data ||
-        err.message ||
-        'Failed to post job. Please check your connection and try again.';
+      const errorMessage = parseApiErrorMessage(err);
       setError(errorMessage);
-      // Show error toast for missing details
-      toast.error('Please fill in all required details about the job', {
+      toast.error(err?.response?.status === 403 ? errorMessage : 'Please fill in all required details about the job', {
         position: "top-right",
         autoClose: 5000,
       });
@@ -419,13 +447,6 @@ export default function JobBuilder() {
       <div className="mx-auto max-w-5xl">
         {/* Header */}
         <div className="mb-8">
-          <button
-            onClick={() => navigate('/')}
-            className="mb-6 text-gray-500 hover:text-gray-700 font-medium flex items-center gap-2 text-sm transition-colors"
-          >
-            ← Back to Dashboard
-          </button>
-
           <div className="mb-6">
             <h1 className="text-4xl md:text-5xl font-bold text-gray-900 tracking-tight mb-2">
               {editingJobId ? 'Edit Job Posting' : 'Create Job Posting'}
@@ -436,6 +457,12 @@ export default function JobBuilder() {
           </div>
 
         </div>
+
+        {editWindowExpired && (editingJobId || savedJobId) && (
+          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900 text-sm font-medium">
+            The 24-hour edit window for this job has ended. You can still view the details below, but changes can no longer be saved.
+          </div>
+        )}
 
         {error && (
           <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-5 text-red-700 text-sm font-medium">

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getUserProfile } from '../api/jobApi';
+import { getSomethingXUserProfile, getUserProfile } from '../api/jobApi';
 import { useAuth } from '../context/AuthContext';
 
 export default function ViewProfile() {
@@ -9,6 +9,59 @@ export default function ViewProfile() {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
   const [error, setError] = useState(null);
+
+  const parseArrayField = (value) => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return [];
+      try {
+        const parsed = JSON.parse(trimmed);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_) {
+        return trimmed.split(',').map(item => item.trim()).filter(Boolean);
+      }
+    }
+    return [];
+  };
+
+  const mapHomeProfileToJobsShape = (homeProfile) => {
+    if (!homeProfile) return {};
+    return {
+      fullName: homeProfile.name || '',
+      phoneNumber: homeProfile.phone || '',
+      email: homeProfile.email || '',
+      profilePictureBase64: homeProfile.picture || '',
+      profilePictureFileType: homeProfile.picture ? 'image/jpeg' : '',
+      profilePictureFileName: homeProfile.picture ? 'profile-picture.jpg' : '',
+      summary: homeProfile.bio || '',
+      currentLocation: homeProfile.location || '',
+      skills: parseArrayField(homeProfile.skills),
+      educationEntries: parseArrayField(homeProfile.academicBackground),
+      projects: parseArrayField(homeProfile.projects),
+      linkedInUrl: homeProfile.linkedinUrl || homeProfile.linkedin || '',
+      portfolioUrl: homeProfile.portfolioUrl || homeProfile.portfolio || '',
+      githubUrl: homeProfile.githubUrl || homeProfile.github || '',
+      websiteUrl: homeProfile.websiteUrl || homeProfile.website || '',
+      experience: homeProfile.experience || '',
+    };
+  };
+
+  const isBlankValue = (value) => {
+    if (Array.isArray(value)) return value.length === 0;
+    return value === null || value === undefined || value === '';
+  };
+
+  const mergeProfileData = (baseProfile, incomingProfile) => {
+    const merged = { ...(baseProfile || {}) };
+    Object.keys(incomingProfile || {}).forEach((key) => {
+      if (isBlankValue(merged[key]) && !isBlankValue(incomingProfile[key])) {
+        merged[key] = incomingProfile[key];
+      }
+    });
+    return merged;
+  };
 
   useEffect(() => {
     if (!authLoading) {
@@ -24,9 +77,17 @@ export default function ViewProfile() {
     try {
       setLoading(true);
       setError(null);
-      const profileData = await getUserProfile();
-      if (profileData) {
-        setProfile(profileData);
+      const [jobsProfileResult, homeProfileResult] = await Promise.allSettled([
+        getUserProfile(),
+        getSomethingXUserProfile(),
+      ]);
+      const jobsProfile = jobsProfileResult.status === 'fulfilled' ? jobsProfileResult.value : null;
+      const homeProfileRaw = homeProfileResult.status === 'fulfilled' ? homeProfileResult.value : null;
+      const homeMapped = mapHomeProfileToJobsShape(homeProfileRaw);
+      const mergedProfile = jobsProfile ? mergeProfileData(jobsProfile, homeMapped) : homeMapped;
+
+      if (mergedProfile && Object.keys(mergedProfile).length > 0) {
+        setProfile(mergedProfile);
       } else {
         setError('No profile found. Please build your profile first.');
       }
@@ -55,6 +116,14 @@ export default function ViewProfile() {
       return value.length > 0;
     }
     return value !== null && value !== undefined && value !== '';
+  };
+
+  const getProfileImageSrc = () => {
+    if (!profile?.profilePictureBase64) return '';
+    if (profile.profilePictureBase64.startsWith('data:')) {
+      return profile.profilePictureBase64;
+    }
+    return `data:${profile.profilePictureFileType || 'image/jpeg'};base64,${profile.profilePictureBase64}`;
   };
 
   if (authLoading || loading) {
@@ -101,19 +170,12 @@ export default function ViewProfile() {
       <div className="mx-auto max-w-5xl">
         {/* Header */}
         <div className="mb-8">
-          <button
-            onClick={() => navigate('/')}
-            className="mb-6 text-gray-500 hover:text-gray-700 font-medium flex items-center gap-2 text-sm transition-colors"
-          >
-            ← Back to Dashboard
-          </button>
-
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-4">
               {profile.profilePictureBase64 ? (
                 <div className="w-20 h-20 bg-indigo-50 rounded-xl flex items-center justify-center border-2 border-indigo-300 overflow-hidden">
                   <img
-                    src={`data:${profile.profilePictureFileType};base64,${profile.profilePictureBase64}`}
+                    src={getProfileImageSrc()}
                     alt={profile.fullName || 'Profile'}
                     className="w-full h-full object-cover"
                   />
@@ -667,7 +729,7 @@ export default function ViewProfile() {
           )}
 
           {/* Additional Information */}
-          {(hasValue(profile.availability) || hasValue(profile.expectedSalary) || hasValue(profile.coverLetterTemplate)) && (
+          {(hasValue(profile.rolePreferences) || hasValue(profile.opportunityPreferences) || hasValue(profile.availability) || hasValue(profile.expectedSalary) || hasValue(profile.coverLetterTemplate)) && (
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
               <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-200">
                 <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center">
@@ -678,6 +740,40 @@ export default function ViewProfile() {
                 <h2 className="text-xl font-semibold text-gray-800">Additional Information</h2>
               </div>
               <div className="space-y-4">
+                {(hasValue(profile.rolePreferences) || hasValue(profile.opportunityPreferences)) && (
+                  <div className="grid md:grid-cols-2 gap-4">
+                    {hasValue(profile.rolePreferences) && (
+                      <div>
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Role Preferences</p>
+                        <div className="flex flex-wrap gap-2">
+                          {(profile.rolePreferences || []).map((role, index) => (
+                            <span
+                              key={index}
+                              className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium border border-blue-200"
+                            >
+                              {role}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {hasValue(profile.opportunityPreferences) && (
+                      <div>
+                        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Opportunity Types</p>
+                        <div className="flex flex-wrap gap-2">
+                          {(profile.opportunityPreferences || []).map((type, index) => (
+                            <span
+                              key={index}
+                              className="inline-flex items-center px-3 py-1.5 bg-purple-50 text-purple-700 rounded-lg text-sm font-medium border border-purple-200"
+                            >
+                              {type}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="grid md:grid-cols-2 gap-4">
                   {hasValue(profile.availability) && (
                     <div>

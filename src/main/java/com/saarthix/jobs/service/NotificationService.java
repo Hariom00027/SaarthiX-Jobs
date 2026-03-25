@@ -9,7 +9,10 @@ import com.saarthix.jobs.repository.NotificationRepository;
 import com.saarthix.jobs.repository.UserRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class NotificationService {
@@ -157,6 +160,118 @@ public class NotificationService {
 
         notificationRepository.save(notification);
         System.out.println("Created profile shortlist notification for applicant: " + applicantEmail);
+    }
+
+    /**
+     * Notify applicants who already applied when job details change (within allowed edit window).
+     */
+    public void createJobDetailsUpdatedNotifications(Job previous, Job updated, List<Application> applications) {
+        if (applications == null || applications.isEmpty() || previous == null || updated == null) {
+            return;
+        }
+        String summary = buildJobChangeSummary(previous, updated);
+        if (summary == null || summary.isBlank()) {
+            return;
+        }
+
+        for (Application app : applications) {
+            if (app.getApplicantId() == null || app.getApplicantId().isBlank()) {
+                continue;
+            }
+            Optional<User> applicantOpt = userRepository.findById(app.getApplicantId());
+            if (applicantOpt.isEmpty()) {
+                continue;
+            }
+            User applicant = applicantOpt.get();
+            String uType = applicant.getUserType();
+            if (uType == null || uType.isBlank()) {
+                uType = "APPLICANT";
+            }
+
+            Notification notification = new Notification();
+            notification.setUserId(applicant.getId());
+            notification.setUserType(uType);
+            notification.setType("job_details_updated");
+            notification.setTitle("Job posting updated — please review");
+            notification.setMessage(String.format(
+                    "The employer updated the role \"%s\" at %s. Review the changes below:\n\n%s\n\nOpen Apply to Jobs to see the full updated posting.",
+                    safe(updated.getTitle()),
+                    safe(updated.getCompany()),
+                    summary
+            ));
+            notification.setApplicationId(app.getId());
+            notification.setJobId(updated.getId());
+            notification.setJobTitle(updated.getTitle());
+            notification.setCompanyName(updated.getCompany());
+            notification.setRead(false);
+
+            notificationRepository.save(notification);
+            System.out.println("Created job-updated notification for applicant id: " + applicant.getId());
+        }
+    }
+
+    private static String safe(String s) {
+        return s != null ? s : "";
+    }
+
+    private static String trunc(String s, int max) {
+        if (s == null) return "";
+        String t = s.replaceAll("\\s+", " ").trim();
+        if (t.isEmpty()) return "";
+        return t.length() <= max ? t : t.substring(0, max) + "…";
+    }
+
+    private String buildJobChangeSummary(Job before, Job after) {
+        StringBuilder sb = new StringBuilder();
+        if (!Objects.equals(trimToNull(before.getTitle()), trimToNull(after.getTitle()))) {
+            sb.append("• Title: ").append(safe(before.getTitle())).append(" → ").append(safe(after.getTitle())).append("\n");
+        }
+        if (!Objects.equals(trimToNull(before.getCompany()), trimToNull(after.getCompany()))) {
+            sb.append("• Company: ").append(safe(before.getCompany())).append(" → ").append(safe(after.getCompany())).append("\n");
+        }
+        if (!Objects.equals(trimToNull(before.getLocation()), trimToNull(after.getLocation()))) {
+            sb.append("• Location: ").append(safe(before.getLocation())).append(" → ").append(safe(after.getLocation())).append("\n");
+        }
+        if (!Objects.equals(trimToNull(before.getEmploymentType()), trimToNull(after.getEmploymentType()))) {
+            sb.append("• Employment type: ").append(safe(before.getEmploymentType())).append(" → ").append(safe(after.getEmploymentType())).append("\n");
+        }
+        if (!Objects.equals(before.getYearsOfExperience(), after.getYearsOfExperience())) {
+            sb.append("• Years of experience required: ")
+                    .append(before.getYearsOfExperience() != null ? before.getYearsOfExperience() : "—")
+                    .append(" → ")
+                    .append(after.getYearsOfExperience() != null ? after.getYearsOfExperience() : "—")
+                    .append("\n");
+        }
+        if (!Objects.equals(before.getJobMinSalary(), after.getJobMinSalary())
+                || !Objects.equals(before.getJobMaxSalary(), after.getJobMaxSalary())
+                || !Objects.equals(trimToNull(before.getJobSalaryCurrency()), trimToNull(after.getJobSalaryCurrency()))) {
+            sb.append("• Compensation updated.\n");
+        }
+        if (!listEquals(before.getSkills(), after.getSkills())) {
+            sb.append("• Required skills were updated.\n");
+        }
+        if (!Objects.equals(trimToNull(before.getDescription()), trimToNull(after.getDescription()))) {
+            sb.append("• Description (previous excerpt):\n  ")
+                    .append(trunc(before.getDescription(), 400))
+                    .append("\n• Description (new excerpt):\n  ")
+                    .append(trunc(after.getDescription(), 400))
+                    .append("\n");
+        }
+        return sb.toString().trim();
+    }
+
+    private static String trimToNull(String s) {
+        if (s == null) return null;
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
+    }
+
+    private static boolean listEquals(List<String> a, List<String> b) {
+        if (a == null && b == null) return true;
+        if (a == null || b == null) return false;
+        List<String> na = a.stream().filter(Objects::nonNull).map(String::trim).filter(s -> !s.isEmpty()).sorted().collect(Collectors.toList());
+        List<String> nb = b.stream().filter(Objects::nonNull).map(String::trim).filter(s -> !s.isEmpty()).sorted().collect(Collectors.toList());
+        return na.equals(nb);
     }
 }
 

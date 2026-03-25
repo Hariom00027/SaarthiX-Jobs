@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getUserJobApplications } from "../api/jobApi";
 import { useAuth } from "../context/AuthContext";
-import { loginWithGoogle } from "../api/authApi";
+import { redirectToSomethingXLogin } from "../config/redirectUrls";
 
 export default function JobTracker() {
   const navigate = useNavigate();
@@ -102,20 +102,13 @@ export default function JobTracker() {
     return (
       <div className="min-h-screen bg-gray-50 py-10 px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-4xl">
-          <button
-            onClick={() => navigate("/")}
-            className="mb-4 text-gray-600 hover:text-gray-900 font-medium flex items-center gap-2 text-sm"
-          >
-            ← Back to Dashboard
-          </button>
-
           <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
             <h1 className="text-3xl font-bold text-gray-900 mb-3">Authentication Required</h1>
             <p className="text-gray-600 mb-8 text-sm">
-              Sign in with your Google account to track your job applications.
+              Sign in from SaarthiX Home to track your job applications.
             </p>
             <button
-              onClick={loginWithGoogle}
+              onClick={() => redirectToSomethingXLogin("student")}
               className="inline-flex items-center gap-2 px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors duration-200 font-semibold"
             >
               <svg width="20" height="20" viewBox="0 0 18 18" fill="none">
@@ -124,7 +117,7 @@ export default function JobTracker() {
                 <path d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.951H.957C.348 6.174 0 7.55 0 9s.348 2.826.957 4.049l3.007-2.342z" fill="#FBBC05"/>
                 <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.582C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.951L3.964 7.293C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
               </svg>
-              Sign in with Google
+              Continue to SaarthiX Login
             </button>
           </div>
         </div>
@@ -148,12 +141,6 @@ export default function JobTracker() {
       <div className="mx-auto max-w-6xl">
         {/* Header */}
         <div className="mb-10 animate-fadeIn">
-          <button
-            onClick={() => navigate("/")}
-            className="mb-5 text-gray-600 hover:text-gray-900 font-semibold flex items-center gap-2 text-sm transition-colors duration-200 group"
-          >
-            <span className="group-hover:-translate-x-1 transition-transform duration-200">←</span> Back to Dashboard
-          </button>
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-3 tracking-tight">Application Tracker</h1>
           <p className="mt-2 text-gray-600 text-base font-light">Monitor the status of your job applications</p>
         </div>

@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { toast } from "react-toastify";
-import { fetchJobs, fetchJobDetails, getRecommendedJobs, getUserProfile } from "../api/jobApi";
-import { loginWithGoogle } from "../api/authApi";
+import { fetchJobs, fetchJobDetails, getRecommendedJobs, getUserJobApplications, getUserProfile } from "../api/jobApi";
 import { useAuth } from "../context/AuthContext";
 import apiClient from "../api/apiClient";
 import JobApplicationForm from "./JobApplicationForm";
+import { redirectToSomethingXLogin } from "../config/redirectUrls";
+import { getMissingMandatoryProfileFields } from "../utils/jobsProfileUtils";
 
 // Component to format and display job description in an organized way
 function FormattedJobDescription({ description }) {
@@ -227,14 +228,19 @@ export default function JobList() {
   const [showApplicationForm, setShowApplicationForm] = useState(false);
   const [jobToApply, setJobToApply] = useState(null);
   const [jobMatchPercentages, setJobMatchPercentages] = useState({});
+  const [jobMatchReasons, setJobMatchReasons] = useState({});
   const [userProfile, setUserProfile] = useState(null);
+  const [missingMandatoryFields, setMissingMandatoryFields] = useState([]);
+  const [appliedLocalJobIds, setAppliedLocalJobIds] = useState(new Set());
+  const reviewJobOpenedRef = useRef(null);
 
-  const { isAuthenticated, isIndustry, isApplicant } = useAuth();
+  const { isAuthenticated, isIndustry, isApplicant, isApplicantOrStudent, user } = useAuth();
+  const normalizeLower = (value) => (value || "").toString().trim().toLowerCase();
 
   // Load user profile for skill highlighting
   const loadUserProfile = async () => {
     try {
-      if (isAuthenticated && isApplicant) {
+      if (isAuthenticated && isApplicantOrStudent) {
         const profile = await getUserProfile();
         setUserProfile(profile);
       }
@@ -244,78 +250,128 @@ export default function JobList() {
     }
   };
 
+  const loadAppliedJobs = async () => {
+    try {
+      if (!isAuthenticated || !isApplicantOrStudent) {
+        setAppliedLocalJobIds(new Set());
+        return;
+      }
+      const applications = await getUserJobApplications();
+      const appliedIds = new Set(
+        (Array.isArray(applications) ? applications : [])
+          .map((app) => (app?.jobId || "").toString().trim())
+          .filter(Boolean)
+      );
+      setAppliedLocalJobIds(appliedIds);
+    } catch (err) {
+      console.error("Error loading applied jobs:", err);
+    }
+  };
+
   // Calculate match percentage for a job based on user profile
   const calculateJobMatch = (job, userProfile) => {
-    if (!userProfile || !userProfile.skills) {
-      return 0;
+    if (!userProfile) {
+      return { percentage: 0, reasons: ["Complete your profile to see match insights"] };
     }
 
-    const userSkills = userProfile.skills.map(s => s.toLowerCase());
-    const jobSkills = (job.raw?.skills || []).map(s => s.toLowerCase());
-    const userLocations = [
+    const normalizeList = (values) =>
+      (Array.isArray(values) ? values : [])
+        .map((v) => normalizeLower(v))
+        .filter(Boolean);
+    const splitLocationTokens = (value) =>
+      normalizeLower(value)
+        .split(/[,\|/]/)
+        .map((v) => normalizeLower(v))
+        .filter(Boolean);
+
+    const userSkills = normalizeList(userProfile.skills);
+    const jobSkills = normalizeList(job.raw?.skills);
+    const userLocations = normalizeList([
       ...(userProfile.preferredLocations || []),
       userProfile.currentLocation || []
-    ].map(l => l.toLowerCase()).filter(Boolean);
-    const jobLocation = (job.location || '').toLowerCase();
+    ]);
+    const jobLocation = normalizeLower(job.location || "");
+    const jobLocationTokens = splitLocationTokens(job.location || "");
+    const userLocationTokens = userLocations.flatMap(splitLocationTokens);
+    const userRolePreferences = normalizeList(userProfile.rolePreferences);
+    const jobTitle = normalizeLower(job.title);
+    const matchedSkills = jobSkills.filter((jobSkill) => userSkills.includes(jobSkill));
+    const skillsMatch = jobSkills.length > 0 ? (matchedSkills.length / jobSkills.length) * 100 : 0;
+    const strictSkillsPass = jobSkills.length > 0 && matchedSkills.length > 0;
 
-    // Skills match (60% weight)
-    let skillsMatch = 50; // Base score if no skills listed
-    if (jobSkills.length > 0) {
-      const matchedSkills = jobSkills.filter(jobSkill =>
-        userSkills.some(userSkill => 
-          jobSkill.includes(userSkill) || userSkill.includes(jobSkill)
-        )
-      );
-      skillsMatch = (matchedSkills.length / jobSkills.length) * 100;
+    const strictLocationPass = jobLocation
+      ? userLocationTokens.some((token) => jobLocationTokens.includes(token))
+      : false;
+
+    const strictRolePass = userRolePreferences.length > 0
+      ? userRolePreferences.some((role) => role === jobTitle)
+      : false;
+
+    let roundedPercentage = Math.round(
+      (skillsMatch * 0.6) + (strictLocationPass ? 25 : 0) + (strictRolePass ? 15 : 0)
+    );
+    if (!(strictSkillsPass && strictLocationPass && strictRolePass)) {
+      roundedPercentage = Math.min(roundedPercentage, 35);
+    }
+    roundedPercentage = Math.max(0, Math.min(100, roundedPercentage));
+
+    const reasons = [];
+    if (matchedSkills.length > 0) {
+      reasons.push(`Strict skills matched: ${matchedSkills.slice(0, 3).join(", ")}`);
+    } else {
+      reasons.push("No strict skill match");
+    }
+    if (strictLocationPass) {
+      reasons.push("Strict location preference matched");
+    } else {
+      reasons.push("Location preference not matched strictly");
+    }
+    if (strictRolePass) {
+      reasons.push("Strict role preference matched");
+    } else {
+      reasons.push("Role preference not matched strictly");
     }
 
-    // Location match (40% weight)
-    let locationMatch = 50; // Base score if no location specified
-    if (jobLocation) {
-      const isLocationMatch = userLocations.some(loc =>
-        jobLocation.includes(loc) || loc.includes(jobLocation)
-      );
-      locationMatch = isLocationMatch ? 100 : (jobLocation.includes('remote') ? 75 : 0);
-    }
-
-    const totalMatch = (skillsMatch * 0.6) + (locationMatch * 0.4);
-    return Math.round(Math.min(totalMatch, 100));
+    return { percentage: roundedPercentage, reasons };
   };
 
   // Load recommended jobs match percentages
   const loadRecommendedJobs = async () => {
     try {
-      if (isAuthenticated && isApplicant) {
-        // Try to get recommended jobs from backend first
-        const recommendedJobs = await getRecommendedJobs();
-        const matchMap = {};
-        if (Array.isArray(recommendedJobs)) {
-          recommendedJobs.forEach(item => {
-            matchMap[item.job.id] = item.matchPercentage;
-          });
-        }
-        
-        // Also calculate matches for all loaded jobs using user profile
-        if (userProfile && jobs && jobs.length > 0) {
-          jobs.forEach(job => {
-            if (matchMap[job.id] === undefined) {
-              // Only calculate if not already in recommended list
-              matchMap[job.id] = calculateJobMatch(job, userProfile);
-            }
-          });
-        }
-        
-        setJobMatchPercentages(matchMap);
-      }
+      if (!isAuthenticated || !isApplicantOrStudent || !userProfile || !jobs?.length) return;
+
+      const recommendedJobs = await getRecommendedJobs().catch(() => []);
+      const recommendedIds = new Set(
+        (Array.isArray(recommendedJobs) ? recommendedJobs : [])
+          .map((item) => item?.job?.id)
+          .filter(Boolean)
+      );
+
+      const matchMap = {};
+      const reasonsMap = {};
+      jobs.forEach((job) => {
+        const result = calculateJobMatch(job, userProfile);
+        matchMap[job.id] = result.percentage;
+        reasonsMap[job.id] = recommendedIds.has(job.id)
+          ? [...result.reasons, "Also recommended by profile engine"]
+          : result.reasons;
+      });
+
+      setJobMatchPercentages(matchMap);
+      setJobMatchReasons(reasonsMap);
     } catch (err) {
       console.error("Error loading recommended jobs:", err);
       // Fallback: calculate matches for all jobs using user profile
-      if (userProfile && isApplicant && jobs && jobs.length > 0) {
+      if (userProfile && isApplicantOrStudent && jobs && jobs.length > 0) {
         const matchMap = {};
+        const reasonsMap = {};
         jobs.forEach(job => {
-          matchMap[job.id] = calculateJobMatch(job, userProfile);
+          const result = calculateJobMatch(job, userProfile);
+          matchMap[job.id] = result.percentage;
+          reasonsMap[job.id] = result.reasons;
         });
         setJobMatchPercentages(matchMap);
+        setJobMatchReasons(reasonsMap);
       }
     }
   };
@@ -497,14 +553,18 @@ export default function JobList() {
     const matchesSource = filterSource === "All" || job.source === filterSource;
     const matchesLocation = filterLocation === "All" || job.location === filterLocation;
     
+    const alreadyAppliedLocal =
+      job.source !== "External" && appliedLocalJobIds.has((job.id || "").toString());
+    
     return matchesSearch && matchesRole && matchesIndustry && matchesCompany && 
-           matchesSkill && matchesSource && matchesLocation;
+           matchesSkill && matchesSource && matchesLocation && !alreadyAppliedLocal;
   });
 
   useEffect(() => {
     loadJobs();
     loadRecommendedJobs();
     loadUserProfile();
+    loadAppliedJobs();
   }, []);
 
   // Recalculate match percentages when jobs or user profile changes
@@ -513,6 +573,18 @@ export default function JobList() {
       loadRecommendedJobs();
     }
   }, [jobs, userProfile]);
+
+  useEffect(() => {
+    loadAppliedJobs();
+  }, [isAuthenticated, isApplicantOrStudent, user?.email, user?.id]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !isApplicantOrStudent) {
+      setMissingMandatoryFields([]);
+      return;
+    }
+    setMissingMandatoryFields(getMissingMandatoryProfileFields(userProfile));
+  }, [isAuthenticated, isApplicantOrStudent, userProfile]);
 
   // Check if user returned from build-profile and should open application form
   useEffect(() => {
@@ -622,7 +694,24 @@ export default function JobList() {
     }
   };
 
-  const handleApply = (job, details) => {
+  // Open job details when user arrives from a "job updated" notification
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- handleViewDetails is stable enough; avoid re-running on every render
+  useEffect(() => {
+    const reviewJobId = location.state?.reviewJobId;
+    if (!reviewJobId) {
+      reviewJobOpenedRef.current = null;
+      return;
+    }
+    if (!jobs.length) return;
+    if (reviewJobOpenedRef.current === reviewJobId) return;
+    const job = jobs.find((j) => j.id === reviewJobId);
+    if (!job) return;
+    reviewJobOpenedRef.current = reviewJobId;
+    handleViewDetails(job);
+    navigate(".", { replace: true, state: {} });
+  }, [jobs, location.state?.reviewJobId, navigate]);
+
+  const handleApply = async (job, details) => {
     // For external jobs, redirect to the company's website
     if (job.source === "External") {
       const applyLink = details?.job_apply_link || job.raw?.job_apply_link || job.raw?.apply_link;
@@ -645,11 +734,24 @@ export default function JobList() {
     // For local jobs, show application form (requires authentication)
     if (!isAuthenticated) {
       if (
-        window.confirm("Please sign in with Google to apply. Continue to login?")
+        window.confirm("Please sign in from SaarthiX Home to apply. Continue to login?")
       ) {
-        loginWithGoogle();
+        redirectToSomethingXLogin("student");
       }
       return;
+    }
+
+    if (job.source !== "External" && appliedLocalJobIds.has((job.id || "").toString())) {
+      toast.info("You have already applied for this job.", {
+        position: "top-right",
+        autoClose: 2500,
+      });
+      return;
+    }
+
+    const latestProfile = await getUserProfile().catch(() => userProfile);
+    if (latestProfile) {
+      setUserProfile(latestProfile);
     }
 
     // Show application form for local jobs only
@@ -658,6 +760,9 @@ export default function JobList() {
   };
 
   const handleApplicationSuccess = () => {
+    if (jobToApply?.source !== "External" && jobToApply?.id) {
+      setAppliedLocalJobIds((prev) => new Set([...prev, (jobToApply.id || "").toString()]));
+    }
     setShowApplicationForm(false);
     setJobToApply(null);
     closeModal();
@@ -726,6 +831,27 @@ export default function JobList() {
             Explore positions from <span style={{ fontFamily: "'Times New Roman', serif", fontWeight: 'bold', fontStyle: 'italic' }}>Saarthix</span> and partner organizations.
           </p>
         </div>
+
+        {isApplicantOrStudent && isAuthenticated && missingMandatoryFields.length > 0 && (
+          <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-amber-900">
+                  Complete your profile
+                </p>
+                <p className="text-xs text-amber-800 mt-1">
+                  Add these fields for profile-based apply: {missingMandatoryFields.join(', ')}
+                </p>
+              </div>
+              <button
+                onClick={() => navigate('/build-profile', { state: { mandatoryProfile: true, missingFields: missingMandatoryFields } })}
+                className="rounded-lg bg-amber-600 hover:bg-amber-700 px-4 py-2 text-white text-sm font-semibold"
+              >
+                Complete Profile
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Main Filter Section - Prominent at Top */}
         <div className="mb-6 sm:mb-10 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-xl sm:rounded-2xl border-2 border-blue-200 shadow-lg p-4 sm:p-6 lg:p-8 animate-fadeIn">
@@ -1012,6 +1138,15 @@ export default function JobList() {
                       {job.description}
                     </p>
                   )}
+                  {jobMatchReasons[job.id]?.length > 0 && (
+                    <div className="mt-3 space-y-1">
+                      {jobMatchReasons[job.id].slice(0, 2).map((reason, reasonIndex) => (
+                        <p key={reasonIndex} className="text-[11px] sm:text-xs text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-md px-2 py-1">
+                          {reason}
+                        </p>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => handleViewDetails(job)}
@@ -1239,7 +1374,7 @@ export default function JobList() {
                   </div>
 
                   {/* Your Matching Profile Section */}
-                  {userProfile && isApplicant && (
+                  {userProfile && isApplicantOrStudent && (
                     <div className="p-3 sm:p-4 lg:p-5 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg sm:rounded-xl border-2 border-indigo-300">
                       <div className="flex items-center gap-1.5 sm:gap-2 mb-3 sm:mb-4">
                         <svg className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1348,7 +1483,7 @@ export default function JobList() {
                   )}
 
                   {/* Missing Skills & Location Mismatch Section */}
-                  {userProfile && isApplicant && (
+                  {userProfile && isApplicantOrStudent && (
                     <div className="p-3 sm:p-4 lg:p-5 bg-gradient-to-br from-red-50 to-orange-50 rounded-lg sm:rounded-xl border-2 border-red-200">
                       <div className="flex items-center gap-1.5 sm:gap-2 mb-3 sm:mb-4">
                         <svg className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

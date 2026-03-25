@@ -109,12 +109,6 @@ export default function EditProfile() {
     <div className="min-h-screen bg-gray-50 py-10 px-4 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-2xl">
         <div className="mb-8">
-          <button
-            onClick={() => navigate('/')}
-            className="mb-4 text-gray-600 hover:text-gray-900 font-medium flex items-center gap-2 text-sm"
-          >
-            ← Back to Dashboard
-          </button>
           <h1 className="text-3xl font-bold text-gray-900">Edit Profile</h1>
           <p className="mt-2 text-gray-600 text-sm">
             Update your user type to change your account permissions

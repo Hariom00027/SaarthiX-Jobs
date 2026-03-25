@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { fetchNotifications, getUnreadCount, markNotificationAsRead, markAllNotificationsAsRead, deleteNotification } from '../api/notificationApi';
 import { useAuth } from '../context/AuthContext';
@@ -12,12 +13,15 @@ export default function NotificationCenter() {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
+  const [panelPosition, setPanelPosition] = useState({ top: 0, left: 0 });
   const [loading, setLoading] = useState(false);
   const [toastNotifications, setToastNotifications] = useState([]);
   const previousNotificationIdsRef = useRef(new Set());
   const previousUserTypeRef = useRef(null); // Track previous userType to detect role selection
   const notificationsShownOnDashboardRef = useRef(new Set()); // Track which dashboard pages have shown notifications
   const dropdownRef = useRef(null);
+  const bellRef = useRef(null);
+  const panelRef = useRef(null);
 
   // Initialize audio on component mount for user interaction
   useEffect(() => {
@@ -156,9 +160,24 @@ export default function NotificationCenter() {
     }
   }, [isAuthenticated, user, authLoading, loadNotifications]); // Reload when auth state changes
 
-  // Handle bell click to toggle dropdown
+  const isNotificationRead = (n) => n?.read === true || n?.isRead === true;
+
+  // Handle bell click to toggle dropdown (fixed position via portal — avoids navbar overflow clipping)
   const handleBellClick = useCallback(() => {
-    setIsOpen(prev => !prev);
+    setIsOpen((prev) => {
+      const next = !prev;
+      if (next && bellRef.current && typeof window !== 'undefined') {
+        const rect = bellRef.current.getBoundingClientRect();
+        const panelWidth = 384;
+        const margin = 12;
+        const left = Math.min(
+          Math.max(margin, rect.right - panelWidth),
+          window.innerWidth - panelWidth - margin
+        );
+        setPanelPosition({ top: rect.bottom + 8, left });
+      }
+      return next;
+    });
   }, []);
 
   // Set up polling interval for notifications (only when authenticated)
@@ -200,9 +219,9 @@ export default function NotificationCenter() {
 
     try {
       // For applicants on job-tracker page: mark application_status_update notifications as read
-      if (user.userType === 'APPLICANT' && location.pathname === '/job-tracker') {
+      if ((user.userType === 'APPLICANT' || user.userType === 'STUDENT') && location.pathname === '/job-tracker') {
         const unreadStatusNotifications = notifications.filter(
-          n => !n.read && n.type === 'application_status_update'
+          (n) => !isNotificationRead(n) && n.type === 'application_status_update'
         );
         
         if (unreadStatusNotifications.length > 0) {
@@ -215,7 +234,7 @@ export default function NotificationCenter() {
           setNotifications(prev =>
             prev.map(n =>
               unreadStatusNotifications.some(un => un.id === n.id)
-                ? { ...n, read: true }
+                ? { ...n, read: true, isRead: true }
                 : n
             )
           );
@@ -227,7 +246,7 @@ export default function NotificationCenter() {
       // For industry users on manage-applications page: mark new_application notifications as read
       if (user.userType === 'INDUSTRY' && location.pathname === '/manage-applications') {
         const unreadApplicationNotifications = notifications.filter(
-          n => !n.read && n.type === 'new_application'
+          (n) => !isNotificationRead(n) && n.type === 'new_application'
         );
         
         if (unreadApplicationNotifications.length > 0) {
@@ -240,7 +259,7 @@ export default function NotificationCenter() {
           setNotifications(prev =>
             prev.map(n =>
               unreadApplicationNotifications.some(un => un.id === n.id)
-                ? { ...n, read: true }
+                ? { ...n, read: true, isRead: true }
                 : n
             )
           );
@@ -299,12 +318,12 @@ export default function NotificationCenter() {
     return () => clearTimeout(timer);
   }, [location.pathname, isAuthenticated, user, authLoading, notifications.length, autoMarkNotificationsAsRead]);
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside bell + panel
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
+      const t = event.target;
+      if (bellRef.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setIsOpen(false);
     };
 
     if (isOpen) {
@@ -329,13 +348,13 @@ export default function NotificationCenter() {
       return;
     }
 
-    // Mark as read if not already read
-    if (!notification.read) {
+    // Mark as read if not already read (disappears from unread-only list)
+    if (!isNotificationRead(notification)) {
       try {
         await markNotificationAsRead(notification.id);
         setNotifications(prev =>
           prev.map(n =>
-            n.id === notification.id ? { ...n, read: true } : n
+            n.id === notification.id ? { ...n, read: true, isRead: true } : n
           )
         );
         setUnreadCount(prev => Math.max(0, prev - 1));
@@ -344,15 +363,20 @@ export default function NotificationCenter() {
       }
     }
 
+    const isApplicantLike =
+      user?.userType === 'APPLICANT' || user?.userType === 'STUDENT';
+
     // Navigate based on user type and notification type
-    if (notification.type === 'application_status_update' && user?.userType === 'APPLICANT') {
-      // Navigate to job tracker for applicants
+    if (notification.type === 'application_status_update' && isApplicantLike) {
       navigate('/job-tracker');
+    } else if (notification.type === 'job_details_updated' && isApplicantLike) {
+      navigate('/apply-jobs', { state: { reviewJobId: notification.jobId } });
+    } else if (notification.type === 'profile_shortlisted' && isApplicantLike) {
+      navigate('/build-profile');
     } else if (notification.type === 'new_application' && user?.userType === 'INDUSTRY') {
-      // Navigate to manage applications and select the job
       if (notification.jobId) {
-        navigate('/manage-applications', { 
-          state: { selectedJobId: notification.jobId, selectedApplicationId: notification.applicationId } 
+        navigate('/manage-applications', {
+          state: { selectedJobId: notification.jobId, selectedApplicationId: notification.applicationId },
         });
       } else {
         navigate('/manage-applications');
@@ -382,13 +406,15 @@ export default function NotificationCenter() {
     try {
       await markAllNotificationsAsRead();
       setNotifications(prev =>
-        prev.map(n => ({ ...n, read: true }))
+        prev.map(n => ({ ...n, read: true, isRead: true }))
       );
       setUnreadCount(0);
     } catch (error) {
       console.error('Error marking all as read:', error);
     }
   };
+
+  const unreadNotifications = notifications.filter((n) => !isNotificationRead(n));
 
   const formatDate = (dateString) => {
     if (!dateString) return '';
@@ -420,6 +446,18 @@ export default function NotificationCenter() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
         );
+      case 'job_details_updated':
+        return (
+          <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        );
+      case 'profile_shortlisted':
+        return (
+          <svg className="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+          </svg>
+        );
       default:
         return (
           <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -447,9 +485,12 @@ export default function NotificationCenter() {
       <div className="relative" ref={dropdownRef}>
         {/* Bell Icon Button */}
       <button
+        ref={bellRef}
+        type="button"
         onClick={handleBellClick}
         className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-300"
         aria-label="Notifications"
+        aria-expanded={isOpen}
       >
         <svg
           className="w-6 h-6"
@@ -473,103 +514,98 @@ export default function NotificationCenter() {
         )}
       </button>
 
-      {/* Dropdown Panel */}
-      {isOpen && (
-        <div className="absolute right-0 mt-2 w-96 bg-white rounded-xl shadow-xl border border-gray-200 z-50 max-h-[500px] flex flex-col animate-fadeIn">
-          {/* Header */}
-          <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between bg-gray-50 rounded-t-xl">
-            <h3 className="text-lg font-bold text-gray-900">Notifications</h3>
-            {unreadCount > 0 && (
-              <button
-                onClick={handleMarkAllAsRead}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-              >
-                Mark all as read
-              </button>
-            )}
-          </div>
+      {/* Dropdown: portal to body so parent nav overflow/z-index cannot hide it */}
+      {isOpen &&
+        createPortal(
+          <div
+            ref={panelRef}
+            className="w-96 max-w-[calc(100vw-24px)] bg-white rounded-xl shadow-xl border border-gray-200 max-h-[min(500px,70vh)] flex flex-col animate-fadeIn"
+            style={{
+              position: 'fixed',
+              top: panelPosition.top,
+              left: panelPosition.left,
+              zIndex: 10050,
+            }}
+            role="dialog"
+            aria-label="Notifications panel"
+          >
+            <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between bg-gray-50 rounded-t-xl">
+              <h3 className="text-lg font-bold text-gray-900">Notifications</h3>
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleMarkAllAsRead}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  Mark all as read
+                </button>
+              )}
+            </div>
 
-          {/* Notifications List */}
-          <div className="overflow-y-auto flex-1">
-            {loading ? (
-              <div className="p-8 text-center text-gray-500">
-                <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
-                <p className="mt-2 text-sm">Loading notifications...</p>
-              </div>
-            ) : notifications.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                <svg className="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-                <p className="text-sm font-medium">No notifications</p>
-                <p className="text-xs mt-1">You're all caught up!</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-100">
-                {notifications.map((notification) => (
-                  <button
-                    key={notification.id}
-                    onClick={(e) => handleNotificationClick(notification, e)}
-                    className={`w-full text-left px-5 py-4 hover:bg-gray-50 transition-colors duration-150 cursor-pointer ${
-                      !notification.read ? 'bg-blue-50/50' : ''
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      {/* Icon */}
-                      <div className="flex-shrink-0 mt-0.5">
-                        {getNotificationIcon(notification.type)}
-                      </div>
-                      
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className={`text-sm font-semibold ${
-                            !notification.read ? 'text-gray-900' : 'text-gray-700'
-                          }`}>
-                            {notification.title}
-                          </p>
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            {!notification.read && (
-                              <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                            )}
-                            {/* Delete Button */}
-                            <button
-                              onClick={(e) => handleDeleteNotification(notification.id, e)}
-                              className="delete-button p-1 hover:bg-gray-200 rounded-full transition-colors duration-150"
-                              aria-label="Delete notification"
-                              title="Delete notification"
-                            >
-                              <svg
-                                className="w-4 h-4 text-gray-400 hover:text-gray-600"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M6 18L18 6M6 6l12 12"
-                                />
-                              </svg>
-                            </button>
-                          </div>
+            <div className="overflow-y-auto flex-1 min-h-0">
+              {loading ? (
+                <div className="p-8 text-center text-gray-500">
+                  <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+                  <p className="mt-2 text-sm">Loading notifications...</p>
+                </div>
+              ) : unreadNotifications.length === 0 ? (
+                <div className="p-8 text-center text-gray-500">
+                  <svg className="w-12 h-12 mx-auto text-gray-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                  <p className="text-sm font-medium">No new notifications</p>
+                  <p className="text-xs mt-1">Open an item to go to the right page; it will leave this list once read.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {unreadNotifications.map((notification) => (
+                    <button
+                      key={notification.id}
+                      type="button"
+                      onClick={(e) => handleNotificationClick(notification, e)}
+                      className="w-full text-left px-5 py-4 hover:bg-gray-50 transition-colors duration-150 cursor-pointer bg-blue-50/50"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex-shrink-0 mt-0.5">
+                          {getNotificationIcon(notification.type)}
                         </div>
-                        <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                          {notification.message}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-2">
-                          {formatDate(notification.createdAt)}
-                        </p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-semibold text-gray-900">{notification.title}</p>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <span className="w-2 h-2 bg-blue-500 rounded-full" aria-hidden />
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteNotification(notification.id, e)}
+                                className="delete-button p-1 hover:bg-gray-200 rounded-full transition-colors duration-150"
+                                aria-label="Delete notification"
+                                title="Delete notification"
+                              >
+                                <svg
+                                  className="w-4 h-4 text-gray-400 hover:text-gray-600"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1 line-clamp-4 whitespace-pre-wrap">
+                            {notification.message}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-2">{formatDate(notification.createdAt)}</p>
+                        </div>
                       </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
       </div>
     </>
   );

@@ -8,6 +8,15 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
+  const cacheSomethingXAuth = (token, authUser) => {
+    if (token) {
+      localStorage.setItem('somethingx_auth_token', token);
+    }
+    if (authUser) {
+      localStorage.setItem('somethingx_auth_user', JSON.stringify(authUser));
+    }
+  };
+
   // Load auth state from JWT token
   const loadAuth = async () => {
     try {
@@ -50,6 +59,14 @@ export const AuthProvider = ({ children }) => {
           userType: userType || 'APPLICANT'
         };
         console.log('[AuthContext] Storing user info from URL:', userInfo);
+        cacheSomethingXAuth(token, userInfo);
+        // Optimistic auth state to avoid redirect flicker while /auth/me validates token
+        setUser({
+          authenticated: true,
+          ...userInfo,
+          picture: ''
+        });
+        setIsAuthenticated(true);
       }
 
       // Clean URL - remove query parameters
@@ -71,13 +88,45 @@ export const AuthProvider = ({ children }) => {
     }
   }, []); // Only run once on mount
 
-  const updateAuth = (authData) => {
-    if (authData.authenticated) {
+  const exchangeToken = async (token, email, name, userType) => {
+    try {
+      if (!token) return false;
+
+      localStorage.setItem('token', token);
+      const optimisticUser = {
+        email: email || '',
+        name: name || '',
+        userType: userType || 'APPLICANT'
+      };
+      cacheSomethingXAuth(token, optimisticUser);
       setUser({
-        ...authData,
-        userType: authData.userType || 'APPLICANT',
+        authenticated: true,
+        ...optimisticUser,
+        picture: ''
       });
       setIsAuthenticated(true);
+
+      await loadAuth();
+      return true;
+    } catch (error) {
+      console.error('[AuthContext] Token exchange failed:', error);
+      return false;
+    }
+  };
+
+  const updateAuth = (authData) => {
+    if (authData.authenticated) {
+      const normalized = {
+        ...authData,
+        userType: authData.userType || 'APPLICANT',
+      };
+      setUser(normalized);
+      setIsAuthenticated(true);
+      cacheSomethingXAuth(localStorage.getItem('token'), {
+        email: normalized.email || '',
+        name: normalized.name || '',
+        userType: normalized.userType || 'APPLICANT'
+      });
     } else {
       setUser(null);
       setIsAuthenticated(false);
@@ -88,6 +137,8 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setIsAuthenticated(false);
     localStorage.removeItem('token');
+    localStorage.removeItem('somethingx_auth_token');
+    localStorage.removeItem('somethingx_auth_user');
   };
 
   // Helper to check if user is INDUSTRY type
@@ -103,7 +154,7 @@ export const AuthProvider = ({ children }) => {
   const isApplicantOrStudent = isApplicant || isStudent;
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, loading, updateAuth, clearAuth, isIndustry, isApplicant, isStudent, isApplicantOrStudent }}>
+    <AuthContext.Provider value={{ user, isAuthenticated, loading, updateAuth, clearAuth, exchangeToken, isIndustry, isApplicant, isStudent, isApplicantOrStudent }}>
       {children}
     </AuthContext.Provider>
   );

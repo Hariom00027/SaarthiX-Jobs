@@ -37,6 +37,8 @@ public class Hackathon {
     private String year;                  // Year (e.g., "1st Year", "2nd Year", "Any")
     private String venueLocation;         // Venue location (for offline/hybrid)
     private String venueTime;             // Venue time (for offline/hybrid)
+    private String venueDate;             // Venue reporting date (for offline/hybrid)
+    private String venueReportingTime;    // Venue reporting time (for offline/hybrid)
     private String submissionProcedure;   // What participants must submit
     private Integer participantLimit;     // Max number of participants/teams
     @JsonDeserialize(using = HackathonPhaseDeserializer.class)
@@ -112,6 +114,12 @@ public class Hackathon {
 
     public String getVenueTime() { return venueTime; }
     public void setVenueTime(String venueTime) { this.venueTime = venueTime; }
+
+    public String getVenueDate() { return venueDate; }
+    public void setVenueDate(String venueDate) { this.venueDate = venueDate; }
+
+    public String getVenueReportingTime() { return venueReportingTime; }
+    public void setVenueReportingTime(String venueReportingTime) { this.venueReportingTime = venueReportingTime; }
 
     public String getSubmissionProcedure() { return submissionProcedure; }
     public void setSubmissionProcedure(String submissionProcedure) { this.submissionProcedure = submissionProcedure; }

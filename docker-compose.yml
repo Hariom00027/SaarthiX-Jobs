@@ -25,7 +25,7 @@ services:
         BUILDKIT_INLINE_CACHE: 1
     container_name: jobs-backend
     ports:
-      - "2000:8080"
+      - "2000:2000"
     env_file:
       - .env
     environment:

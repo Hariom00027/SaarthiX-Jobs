@@ -16,7 +16,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.core.Authentication;
 import jakarta.servlet.http.HttpServletRequest;
+import java.time.LocalDate;
 import java.util.Optional;
+import java.util.Comparator;
 import java.util.stream.Collectors;
 
 @RestController
@@ -98,6 +100,75 @@ public class HackathonController {
         return null;
     }
     // ------------------------------
+    private ResponseEntity<?> validateHackathonDates(Hackathon hackathon) {
+        if (hackathon == null) {
+            return ResponseEntity.badRequest().body("Hackathon payload is missing.");
+        }
+
+        LocalDate today = LocalDate.now();
+        LocalDate startDate = null;
+        LocalDate endDate = null;
+
+        try {
+            if (hackathon.getStartDate() != null && !hackathon.getStartDate().isBlank()) {
+                startDate = LocalDate.parse(hackathon.getStartDate().trim());
+                if (startDate.isBefore(today)) {
+                    return ResponseEntity.badRequest().body("Hackathon start date cannot be in the past.");
+                }
+            }
+            if (hackathon.getEndDate() != null && !hackathon.getEndDate().isBlank()) {
+                endDate = LocalDate.parse(hackathon.getEndDate().trim());
+            }
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Invalid start or end date format. Please use YYYY-MM-DD.");
+        }
+
+        if (startDate != null && endDate != null && endDate.isBefore(startDate)) {
+            return ResponseEntity.badRequest().body("Hackathon end date cannot be before the start date.");
+        }
+
+        if (hackathon.getPhases() != null && !hackathon.getPhases().isEmpty()) {
+            var sortedPhases = hackathon.getPhases().stream()
+                    .sorted(Comparator.comparingInt(phase -> {
+                        try {
+                            return Integer.parseInt(phase.getId());
+                        } catch (Exception ignored) {
+                            return Integer.MAX_VALUE;
+                        }
+                    }))
+                    .collect(Collectors.toList());
+
+            LocalDate previousPhaseDate = null;
+            for (int i = 0; i < sortedPhases.size(); i++) {
+                var phase = sortedPhases.get(i);
+                if (phase.getDeadline() == null || phase.getDeadline().isBlank()) {
+                    continue;
+                }
+
+                LocalDate phaseDate;
+                try {
+                    phaseDate = LocalDate.parse(phase.getDeadline().trim());
+                } catch (Exception e) {
+                    return ResponseEntity.badRequest().body("Invalid deadline format for phase " + (i + 1) + ". Please use YYYY-MM-DD.");
+                }
+
+                if (startDate != null && phaseDate.isBefore(startDate)) {
+                    return ResponseEntity.badRequest().body("Phase " + (i + 1) + " deadline cannot be before the hackathon start date.");
+                }
+                if (endDate != null && phaseDate.isAfter(endDate)) {
+                    return ResponseEntity.badRequest().body("Phase " + (i + 1) + " deadline cannot be after the hackathon end date.");
+                }
+
+                if (previousPhaseDate != null && phaseDate.isBefore(previousPhaseDate)) {
+                    return ResponseEntity.badRequest().body("Phase " + (i + 1) + " deadline cannot be before the previous phase deadline.");
+                }
+
+                previousPhaseDate = phaseDate;
+            }
+        }
+
+        return null;
+    }
 
     // GET all hackathons (public)
     @GetMapping
@@ -161,6 +232,11 @@ public class HackathonController {
                 return ResponseEntity.status(403).body("Only industry users can create hackathons. You are: " + user.getUserType());
             }
 
+            ResponseEntity<?> dateValidation = validateHackathonDates(hackathon);
+            if (dateValidation != null) {
+                return dateValidation;
+            }
+
             hackathon.setCreatedByIndustryId(user.getId());
             hackathon.setViews(0);
 
@@ -196,6 +272,11 @@ public class HackathonController {
             return ResponseEntity.status(403).body("You can only update your own hackathons");
         }
 
+        ResponseEntity<?> dateValidation = validateHackathonDates(updatedHackathon);
+        if (dateValidation != null) {
+            return dateValidation;
+        }
+
         // Update fields
         existingHackathon.setTitle(updatedHackathon.getTitle());
         existingHackathon.setDescription(updatedHackathon.getDescription());
@@ -216,6 +297,8 @@ public class HackathonController {
         existingHackathon.setYear(updatedHackathon.getYear());
         existingHackathon.setVenueLocation(updatedHackathon.getVenueLocation());
         existingHackathon.setVenueTime(updatedHackathon.getVenueTime());
+        existingHackathon.setVenueDate(updatedHackathon.getVenueDate());
+        existingHackathon.setVenueReportingTime(updatedHackathon.getVenueReportingTime());
         existingHackathon.setSubmissionProcedure(updatedHackathon.getSubmissionProcedure());
         existingHackathon.setParticipantLimit(updatedHackathon.getParticipantLimit());
         existingHackathon.setPhases(updatedHackathon.getPhases());

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { recordJobApplication, getUserProfile } from '../api/jobApi';
 import { useAuth } from '../context/AuthContext';
+import { getMissingMandatoryProfileFields } from '../utils/jobsProfileUtils';
 
 const STORAGE_KEY = 'jobApplicationFormData';
 const STORAGE_JOB_KEY = 'jobApplicationJobData';
@@ -27,6 +28,7 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
+  const [missingMandatoryFields, setMissingMandatoryFields] = useState([]);
   const [useProfileData, setUseProfileData] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(true);
 
@@ -141,6 +143,7 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
         const profile = await getUserProfile();
         if (profile) {
           setUserProfile(profile);
+          setMissingMandatoryFields(getMissingMandatoryProfileFields(profile));
         }
       } catch (err) {
         console.error('Error loading profile:', err);
@@ -177,6 +180,8 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
       }
     }
   }, [useProfileData, userProfile, user]);
+
+  const canApplyUsingProfile = Boolean(userProfile) && missingMandatoryFields.length === 0;
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -268,8 +273,23 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
       return;
     }
 
+    if (!formData.linkedInUrl.trim()) {
+      setError('LinkedIn URL is required');
+      return;
+    }
+
     if (!formData.coverLetter.trim()) {
       setError('Cover letter is required');
+      return;
+    }
+
+    if (!formData.availability.trim()) {
+      setError('Availability is required');
+      return;
+    }
+
+    if (!formData.experience.trim()) {
+      setError('Years of experience is required');
       return;
     }
 
@@ -400,7 +420,20 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
     localStorage.setItem(STORAGE_JOB_KEY, JSON.stringify(jobDataToSave));
     
     // Navigate to build-profile with return path
-    navigate('/build-profile', { state: { returnToApplication: true, jobId: job.id } });
+    navigate('/build-profile', { state: { returnToApplication: true, jobId: job.id, mandatoryProfile: true, missingFields: missingMandatoryFields } });
+  };
+
+  const handleApplyByProfile = () => {
+    setError(null);
+    if (!userProfile) {
+      setError('Profile not found. Please create your profile first.');
+      return;
+    }
+    if (!canApplyUsingProfile) {
+      setError(`Complete profile fields for quick apply: ${missingMandatoryFields.join(', ')}`);
+      return;
+    }
+    setUseProfileData(true);
   };
 
   const formatFileSize = (bytes) => {
@@ -440,28 +473,41 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
           )}
 
           {/* Use Profile Data Toggle */}
-          {userProfile && !loadingProfile && (
-            <div className="rounded-md border border-gray-200 bg-gray-50 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Use Saved Profile Data</p>
-                  <p className="text-xs text-gray-600 mt-1">
-                    Auto-fill this form with your saved profile information
-                  </p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={useProfileData}
-                    onChange={(e) => setUseProfileData(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-gray-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gray-800"></div>
-                </label>
+          {!loadingProfile && (
+            <div className="rounded-md border border-blue-200 bg-blue-50 p-4">
+              <p className="text-sm font-semibold text-blue-900">Quick apply options</p>
+              <p className="text-xs text-blue-800 mt-1">
+                You can apply using your profile or fill mandatory details manually.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleApplyByProfile}
+                  className="rounded-md px-3 py-2 text-xs font-semibold bg-blue-700 text-white hover:bg-blue-800"
+                >
+                  Apply by Profile
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUseProfileData(false)}
+                  className="rounded-md bg-white px-3 py-2 text-xs font-semibold text-blue-800 border border-blue-300 hover:bg-blue-100"
+                >
+                  Fill Mandatory Details
+                </button>
               </div>
-              {!useProfileData && (
-                <p className="text-xs text-gray-500 mt-2">
-                  💡 Tip: Enable this to quickly fill the form with your saved profile data
+              {userProfile ? (
+                canApplyUsingProfile ? (
+                  <p className="text-xs text-green-700 mt-2">
+                    Profile is ready for quick apply (Resume, LinkedIn, Cover letter, Availability, Phone number, Experience available).
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-700 mt-2">
+                    Complete profile fields for quick apply: {missingMandatoryFields.join(', ')}
+                  </p>
+                )
+              ) : (
+                <p className="text-xs text-amber-700 mt-2">
+                  Create your profile to unlock quick apply.
                 </p>
               )}
             </div>
@@ -524,7 +570,7 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="linkedInUrl" className="block text-sm font-medium text-gray-700 mb-1">
-                  LinkedIn Profile (Optional)
+                  LinkedIn Profile <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="url"
@@ -532,6 +578,7 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
                   name="linkedInUrl"
                   value={formData.linkedInUrl}
                   onChange={handleInputChange}
+                  required
                   className="w-full rounded-md border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-500 transition focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
                   placeholder="https://linkedin.com/in/yourprofile"
                 />
@@ -556,7 +603,7 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
             <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="experience" className="block text-sm font-medium text-gray-700 mb-1">
-                  Years of Experience
+                  Years of Experience <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
@@ -564,6 +611,7 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
                   name="experience"
                   value={formData.experience}
                   onChange={handleInputChange}
+                  required
                   className="w-full rounded-md border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-500 transition focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
                   placeholder="e.g., 3-5 years"
                 />
@@ -571,13 +619,14 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
 
               <div>
                 <label htmlFor="availability" className="block text-sm font-medium text-gray-700 mb-1">
-                  Availability
+                  Availability <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="availability"
                   name="availability"
                   value={formData.availability}
                   onChange={handleInputChange}
+                  required
                   className="w-full rounded-md border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 transition focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-400"
                 >
                   <option value="Immediately">Immediately</option>

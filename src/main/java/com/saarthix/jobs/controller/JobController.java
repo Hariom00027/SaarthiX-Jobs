@@ -14,8 +14,11 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.*;
 import com.saarthix.jobs.service.EmailService;
 import com.saarthix.jobs.service.JobService;
+import com.saarthix.jobs.service.NotificationService;
 import jakarta.servlet.http.HttpServletRequest;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -30,14 +33,16 @@ public class JobController {
     private final EmailService emailService;
     private final JobService jobService;
     private final UserProfileRepository userProfileRepository;
+    private final NotificationService notificationService;
 
-    public JobController(JobRepository jobRepository, UserRepository userRepository, ApplicationRepository applicationRepository, EmailService emailService, JobService jobService, UserProfileRepository userProfileRepository) {
+    public JobController(JobRepository jobRepository, UserRepository userRepository, ApplicationRepository applicationRepository, EmailService emailService, JobService jobService, UserProfileRepository userProfileRepository, NotificationService notificationService) {
         this.jobRepository = jobRepository;
         this.userRepository = userRepository;
         this.applicationRepository = applicationRepository;
         this.emailService = emailService;
         this.jobService = jobService;
         this.userProfileRepository = userProfileRepository;
+        this.notificationService = notificationService;
     }
 
     // ✅ GET all jobs (public - no auth required)
@@ -166,6 +171,14 @@ public class JobController {
             return ResponseEntity.status(403).body("You can only edit your own jobs");
         }
 
+        LocalDateTime postedAt = job.getCreatedAt() != null ? job.getCreatedAt() : LocalDateTime.now();
+        if (LocalDateTime.now().isAfter(postedAt.plusHours(24))) {
+            return ResponseEntity.status(403).body(Map.of("message", "Job details can only be edited within 24 hours of posting."));
+        }
+
+        Job before = shallowCopyJob(job);
+        List<Application> applicants = applicationRepository.findByJobId(id);
+
         job.setTitle(updatedJob.getTitle());
         job.setDescription(updatedJob.getDescription());
         job.setCompany(updatedJob.getCompany());
@@ -177,8 +190,32 @@ public class JobController {
         job.setJobMinSalary(updatedJob.getJobMinSalary());
         job.setJobMaxSalary(updatedJob.getJobMaxSalary());
         job.setJobSalaryCurrency(updatedJob.getJobSalaryCurrency());
+        job.setYearsOfExperience(updatedJob.getYearsOfExperience());
 
-        return ResponseEntity.ok(jobRepository.save(job));
+        Job saved = jobRepository.save(job);
+
+        if (!applicants.isEmpty()) {
+            notificationService.createJobDetailsUpdatedNotifications(before, saved, applicants);
+        }
+
+        return ResponseEntity.ok(saved);
+    }
+
+    private static Job shallowCopyJob(Job j) {
+        Job c = new Job();
+        c.setTitle(j.getTitle());
+        c.setDescription(j.getDescription());
+        c.setCompany(j.getCompany());
+        c.setLocation(j.getLocation());
+        c.setIndustry(j.getIndustry());
+        c.setEmploymentType(j.getEmploymentType());
+        c.setSkills(j.getSkills() != null ? new ArrayList<>(j.getSkills()) : null);
+        c.setJobMinSalary(j.getJobMinSalary());
+        c.setJobMaxSalary(j.getJobMaxSalary());
+        c.setJobSalaryCurrency(j.getJobSalaryCurrency());
+        c.setYearsOfExperience(j.getYearsOfExperience());
+        c.setActive(j.isActive());
+        return c;
     }
 
     // ✅ DELETE a job (INDUSTRY users only)
@@ -305,7 +342,25 @@ public class JobController {
         if (email != null) {
             Optional<User> userOpt = userRepository.findByEmail(email);
             if (userOpt.isPresent()) {
-                return userOpt.get();
+                User existingUser = userOpt.get();
+                boolean shouldUpdate = false;
+
+                // Keep DB user role aligned with the incoming JWT role for cross-app SSO.
+                if (userType != null && !userType.isBlank() && !userType.equals(existingUser.getUserType())) {
+                    existingUser.setUserType(userType);
+                    shouldUpdate = true;
+                }
+
+                if (name != null && !name.isBlank() && !name.equals(existingUser.getName())) {
+                    existingUser.setName(name);
+                    shouldUpdate = true;
+                }
+
+                if (shouldUpdate) {
+                    existingUser = userRepository.save(existingUser);
+                }
+
+                return existingUser;
             }
 
             // User doesn't exist - create from JWT token claims

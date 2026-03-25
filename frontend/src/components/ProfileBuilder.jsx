@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { getUserProfile, saveUserProfile } from '../api/jobApi';
+import { getUserProfile, getSomethingXUserProfile, saveUserProfile } from '../api/jobApi';
 import { useAuth } from '../context/AuthContext';
 
 const STORAGE_KEY = 'jobApplicationFormData';
@@ -33,70 +33,90 @@ const COMMON_HOBBIES = [
   'Trekking', 'Camping', 'Fishing', 'Bird Watching'
 ];
 
+const ROLE_PREFERENCE_OPTIONS = [
+  'Frontend Developer',
+  'Backend Developer',
+  'Full Stack Developer',
+  'Data Analyst',
+  'Data Scientist',
+  'DevOps Engineer',
+  'UI/UX Designer',
+  'QA Engineer',
+  'Product Manager'
+];
+
+const OPPORTUNITY_TYPE_OPTIONS = [
+  { value: 'INTERNSHIP', label: 'Internship' },
+  { value: 'FREELANCE', label: 'Freelance' },
+  { value: 'CONTRACT', label: 'Contract' },
+  { value: 'FULL_TIME', label: 'Full-time' },
+  { value: 'PART_TIME', label: 'Part-time' }
+];
+
 // Section definitions for the journey
 const PROFILE_SECTIONS = [
   {
     id: 'personal',
-    title: 'Personal Information',
+    title: 'Personal Details',
     icon: '👤',
-    description: 'Tell us about yourself',
+    description: 'Basic contact and profile information',
     fields: ['profilePicture', 'fullName', 'phoneNumber', 'email']
   },
   {
     id: 'professional',
-    title: 'Professional Background',
+    title: 'Professional Info',
     icon: '💼',
-    description: 'Your work experience and skills',
-    fields: ['professionalExperiences', 'skills', 'summary']
+    description: 'Experience, skills, and summary',
+    fields: ['experience', 'professionalExperiences', 'skills', 'summary']
   },
   {
     id: 'education',
-    title: 'Education & Certifications',
+    title: 'Education',
     icon: '🎓',
-    description: 'Academic achievements and credentials',
+    description: 'Academic background and certifications',
     fields: ['educationEntries', 'certificationFiles']
   },
   {
     id: 'location',
     title: 'Location Preferences',
     icon: '📍',
-    description: 'Where do you want to work?',
+    description: 'Current and preferred job locations',
     fields: ['currentLocation', 'preferredLocations', 'workPreference', 'willingToRelocate']
   },
   {
     id: 'hobbies',
-    title: 'Hobbies & Interests',
-    icon: '🎨',
-    description: 'Share your hobbies and interests',
+    title: 'Hobbies',
+    icon: '🎯',
+    description: 'Interests and extracurricular activities',
     fields: ['hobbies']
   },
   {
     id: 'projects',
     title: 'Projects',
     icon: '🚀',
-    description: 'Showcase your projects and work',
+    description: 'Highlight your key projects',
     fields: ['projects']
   },
   {
     id: 'links',
-    title: 'Online Presence',
+    title: 'Social Links',
     icon: '🔗',
-    description: 'Connect your profiles and portfolios',
+    description: 'Portfolio and professional links',
     fields: ['linkedInUrl', 'portfolioUrl', 'githubUrl', 'websiteUrl']
   },
   {
     id: 'additional',
-    title: 'Additional Details',
+    title: 'Application Preferences',
     icon: '📝',
-    description: 'Availability and expectations',
-    fields: ['availability', 'expectedSalary', 'coverLetterTemplate']
+    description: 'Job role and opportunity preferences',
+    fields: ['rolePreferences', 'opportunityPreferences', 'availability', 'expectedSalary']
   },
   {
     id: 'resume',
     title: 'Resume Upload',
     icon: '📄',
     description: 'Upload your resume document',
-    fields: ['resume']
+    fields: ['resume', 'coverLetterTemplate']
   }
 ];
 
@@ -109,6 +129,8 @@ export default function ProfileBuilder() {
   // Check if user came from application form
   const cameFromApplication = location.state?.returnToApplication || false;
   const jobId = location.state?.jobId || null;
+  const mandatoryProfile = location.state?.mandatoryProfile || false;
+  const missingMandatoryFields = Array.isArray(location.state?.missingFields) ? location.state.missingFields : [];
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -135,6 +157,8 @@ export default function ProfileBuilder() {
     currentLocation: '',
     preferredLocations: [],
     workPreference: 'Remote',
+    rolePreferences: [],
+    opportunityPreferences: [],
     willingToRelocate: false,
     linkedInUrl: '',
     portfolioUrl: '',
@@ -153,6 +177,7 @@ export default function ProfileBuilder() {
 
   const [resume, setResume] = useState(null);
   const [skillsInput, setSkillsInput] = useState('');
+  const [rolePreferenceInput, setRolePreferenceInput] = useState('');
   const [locationInput, setLocationInput] = useState('');
   const [hobbiesInput, setHobbiesInput] = useState('');
   const [isDragging, setIsDragging] = useState(false);
@@ -160,7 +185,65 @@ export default function ProfileBuilder() {
   const [showSkillsSuggestions, setShowSkillsSuggestions] = useState(false);
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
   const [showHobbiesSuggestions, setShowHobbiesSuggestions] = useState(false);
+  const autoSaveTimerRef = useRef(null);
+  const skipNextDraftAutoSaveRef = useRef(true);
   const certificationFileInputRef = useRef(null);
+
+  const parseArrayField = (value) => {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return [];
+      try {
+        const parsed = JSON.parse(trimmed);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_) {
+        return trimmed.split(',').map(item => item.trim()).filter(Boolean);
+      }
+    }
+    return [];
+  };
+
+  const mapSomethingXProfileToJobsProfile = (homeProfile) => {
+    if (!homeProfile) return {};
+    return {
+      fullName: homeProfile.name || '',
+      phoneNumber: homeProfile.phone || '',
+      email: homeProfile.email || '',
+      profilePictureBase64: homeProfile.picture || '',
+      profilePictureFileType: homeProfile.picture ? 'image/jpeg' : '',
+      profilePictureFileName: homeProfile.picture ? 'profile-picture.jpg' : '',
+      profilePictureFileSize: 0,
+      experience: homeProfile.experience || '',
+      skills: parseArrayField(homeProfile.skills),
+      summary: homeProfile.bio || '',
+      currentLocation: homeProfile.location || '',
+      linkedInUrl: homeProfile.linkedinUrl || homeProfile.linkedin || '',
+      portfolioUrl: homeProfile.portfolioUrl || homeProfile.portfolio || '',
+      githubUrl: homeProfile.githubUrl || homeProfile.github || '',
+      websiteUrl: homeProfile.websiteUrl || homeProfile.website || '',
+      rolePreferences: parseArrayField(homeProfile.rolePreferences),
+      opportunityPreferences: parseArrayField(homeProfile.opportunityPreferences),
+      educationEntries: parseArrayField(homeProfile.academicBackground),
+      projects: parseArrayField(homeProfile.projects),
+    };
+  };
+
+  const isBlankValue = (value) => {
+    if (Array.isArray(value)) return value.length === 0;
+    return value === null || value === undefined || value === '';
+  };
+
+  const mergeProfileData = (baseProfile, incomingProfile) => {
+    const merged = { ...baseProfile };
+    Object.keys(incomingProfile || {}).forEach((key) => {
+      if (isBlankValue(merged[key]) && !isBlankValue(incomingProfile[key])) {
+        merged[key] = incomingProfile[key];
+      }
+    });
+    return merged;
+  };
 
   useEffect(() => {
     if (!authLoading) {
@@ -176,71 +259,88 @@ export default function ProfileBuilder() {
     try {
       setLoading(true);
       setError(null);
-      const profile = await getUserProfile();
-      if (profile) {
-        console.log('Loading profile data from database:', profile);
+      const [profileResult, homeProfileResult] = await Promise.allSettled([
+        getUserProfile(),
+        getSomethingXUserProfile(),
+      ]);
+      const profile = profileResult.status === 'fulfilled' ? profileResult.value : null;
+      const homeProfileRaw = homeProfileResult.status === 'fulfilled' ? homeProfileResult.value : null;
+      const mappedHomeProfile = mapSomethingXProfileToJobsProfile(homeProfileRaw);
+      const effectiveProfile = profile
+        ? mergeProfileData(profile, mappedHomeProfile)
+        : mappedHomeProfile;
+
+      if (profileResult.status === 'rejected') {
+        console.warn('Jobs profile fetch failed. Continuing with SaarthiX Home profile:', profileResult.reason);
+      }
+
+      if (effectiveProfile && Object.keys(effectiveProfile).length > 0) {
+        console.log('Loading merged profile data:', effectiveProfile);
 
         setFormData({
-          fullName: profile.fullName || user?.name || '',
-          phoneNumber: profile.phoneNumber || '',
-          email: profile.email || user?.email || '',
-          profilePictureBase64: profile.profilePictureBase64 || '',
-          profilePictureFileType: profile.profilePictureFileType || '',
-          profilePictureFileName: profile.profilePictureFileName || '',
-          profilePictureFileSize: profile.profilePictureFileSize || 0,
-          currentPosition: profile.currentPosition || '',
-          currentCompany: profile.currentCompany || '',
-          experience: profile.experience || '',
-          skills: profile.skills || [],
-          summary: profile.summary || '',
-          currentLocation: profile.currentLocation || '',
-          preferredLocations: profile.preferredLocations || (profile.preferredLocation ? [profile.preferredLocation] : []),
-          workPreference: profile.workPreference || 'Remote',
-          willingToRelocate: profile.willingToRelocate || false,
-          linkedInUrl: profile.linkedInUrl || '',
-          portfolioUrl: profile.portfolioUrl || '',
-          githubUrl: profile.githubUrl || '',
-          websiteUrl: profile.websiteUrl || '',
-          availability: profile.availability || 'Immediately',
-          expectedSalary: profile.expectedSalary || '',
-          coverLetterTemplate: profile.coverLetterTemplate || '',
-          education: profile.education || '',
-          educationEntries: profile.educationEntries || [],
-          certifications: profile.certifications || '',
-          certificationFiles: profile.certificationFiles || [],
-          professionalExperiences: profile.professionalExperiences || [],
-          hobbies: profile.hobbies || [],
-          projects: profile.projects || [],
+          fullName: effectiveProfile.fullName || user?.name || '',
+          phoneNumber: effectiveProfile.phoneNumber || '',
+          email: effectiveProfile.email || user?.email || '',
+          profilePictureBase64: effectiveProfile.profilePictureBase64 || '',
+          profilePictureFileType: effectiveProfile.profilePictureFileType || '',
+          profilePictureFileName: effectiveProfile.profilePictureFileName || '',
+          profilePictureFileSize: effectiveProfile.profilePictureFileSize || 0,
+          currentPosition: effectiveProfile.currentPosition || '',
+          currentCompany: effectiveProfile.currentCompany || '',
+          experience: effectiveProfile.experience || '',
+          skills: effectiveProfile.skills || [],
+          summary: effectiveProfile.summary || '',
+          currentLocation: effectiveProfile.currentLocation || '',
+          preferredLocations: effectiveProfile.preferredLocations || (effectiveProfile.preferredLocation ? [effectiveProfile.preferredLocation] : []),
+          workPreference: effectiveProfile.workPreference || 'Remote',
+          rolePreferences: effectiveProfile.rolePreferences || [],
+          opportunityPreferences: effectiveProfile.opportunityPreferences || [],
+          willingToRelocate: effectiveProfile.willingToRelocate || false,
+          linkedInUrl: effectiveProfile.linkedInUrl || '',
+          portfolioUrl: effectiveProfile.portfolioUrl || '',
+          githubUrl: effectiveProfile.githubUrl || '',
+          websiteUrl: effectiveProfile.websiteUrl || '',
+          availability: effectiveProfile.availability || 'Immediately',
+          expectedSalary: effectiveProfile.expectedSalary || '',
+          coverLetterTemplate: effectiveProfile.coverLetterTemplate || '',
+          education: effectiveProfile.education || '',
+          educationEntries: effectiveProfile.educationEntries || [],
+          certifications: effectiveProfile.certifications || '',
+          certificationFiles: effectiveProfile.certificationFiles || [],
+          professionalExperiences: effectiveProfile.professionalExperiences || [],
+          hobbies: effectiveProfile.hobbies || [],
+          projects: effectiveProfile.projects || [],
         });
 
         setSkillsInput('');
         setLocationInput('');
         setHobbiesInput('');
 
-        if (profile.resumeBase64 && profile.resumeFileName) {
+        if (effectiveProfile.resumeBase64 && effectiveProfile.resumeFileName) {
           const resumeFile = {
-            name: profile.resumeFileName,
-            type: profile.resumeFileType || 'application/pdf',
-            size: profile.resumeFileSize || 0,
+            name: effectiveProfile.resumeFileName,
+            type: effectiveProfile.resumeFileType || 'application/pdf',
+            size: effectiveProfile.resumeFileSize || 0,
             isFromProfile: true,
-            base64: profile.resumeBase64,
+            base64: effectiveProfile.resumeBase64,
           };
           setResume(resumeFile);
         }
 
         setProfileLoaded(true);
+        skipNextDraftAutoSaveRef.current = true;
 
         // Calculate completion directly from loaded profile data
         const completed = new Set();
         PROFILE_SECTIONS.forEach(section => {
           const isComplete = section.fields.every(field => {
             if (field === 'resume') {
-              return profile.resumeBase64 && profile.resumeFileName;
+              return effectiveProfile.resumeBase64 && effectiveProfile.resumeFileName;
             }
             if (field === 'profilePicture') {
-              return profile.profilePictureBase64 && profile.profilePictureBase64.length > 0;
+              return effectiveProfile.profilePictureBase64 && effectiveProfile.profilePictureBase64.length > 0;
             }
-            const value = profile[field];
+            const value = effectiveProfile[field];
             if (field === 'skills' || field === 'preferredLocations' || field === 'hobbies' ||
               field === 'professionalExperiences' || field === 'educationEntries' ||
               field === 'certificationFiles' || field === 'projects') {
@@ -263,9 +363,16 @@ export default function ProfileBuilder() {
           email: user?.email || '',
         }));
         setProfileLoaded(false);
+        skipNextDraftAutoSaveRef.current = true;
       }
     } catch (err) {
       console.error('Error loading profile:', err);
+      setFormData(prev => ({
+        ...prev,
+        fullName: user?.name || '',
+        email: user?.email || '',
+      }));
+      skipNextDraftAutoSaveRef.current = true;
       if (err.response?.status !== 404) {
         setError('Failed to load profile from database');
       }
@@ -273,6 +380,48 @@ export default function ProfileBuilder() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (loading || authLoading || !isAuthenticated) return;
+    if (skipNextDraftAutoSaveRef.current) {
+      skipNextDraftAutoSaveRef.current = false;
+      return;
+    }
+    if (!formData.fullName?.trim()) return;
+
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    autoSaveTimerRef.current = setTimeout(async () => {
+      const profileData = { ...formData };
+      try {
+        if (resume) {
+          if (resume.isFromProfile && resume.base64) {
+            profileData.resumeFileName = resume.name;
+            profileData.resumeFileType = resume.type;
+            profileData.resumeBase64 = resume.base64;
+            profileData.resumeFileSize = resume.size;
+          } else if (resume && resume.size) {
+            const resumeBase64 = await convertFileToBase64(resume);
+            profileData.resumeFileName = resume.name;
+            profileData.resumeFileType = resume.type;
+            profileData.resumeBase64 = resumeBase64;
+            profileData.resumeFileSize = resume.size;
+          }
+        }
+        await autoSaveProfile(profileData);
+      } catch (error) {
+        console.error('Draft auto-save failed:', error);
+      }
+    }, 1200);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [formData, resume, loading, authLoading, isAuthenticated]);
 
   const isFieldFilled = (fieldName) => {
     const value = formData[fieldName];
@@ -286,6 +435,13 @@ export default function ProfileBuilder() {
       fieldName === 'professionalExperiences' || fieldName === 'educationEntries' || fieldName === 'certificationFiles' ||
       fieldName === 'projects') {
       return Array.isArray(value) && value.length > 0;
+    }
+    if (fieldName === 'rolePreferences') {
+      return Array.isArray(value) && value.length > 0;
+    }
+    if (fieldName === 'opportunityPreferences') {
+      if (!Array.isArray(value)) return false;
+      return value.includes('INTERNSHIP') || value.includes('FREELANCE');
     }
     if (fieldName === 'willingToRelocate') {
       return true; // Checkbox is always considered filled
@@ -303,6 +459,7 @@ export default function ProfileBuilder() {
       console.log('Auto-saving section to database...');
       await saveUserProfile(dataToSave);
       console.log('Section auto-saved successfully');
+      window.dispatchEvent(new Event('profileSaved'));
       return true;
     } catch (err) {
       console.error('Auto-save failed:', err);
@@ -407,6 +564,39 @@ export default function ProfileBuilder() {
       // Force update of completed sections
       setTimeout(() => updateCompletedSections(), 100);
     }
+  };
+
+  const handleAddRolePreference = (role) => {
+    const trimmedRole = role.trim();
+    if (trimmedRole && !formData.rolePreferences.includes(trimmedRole)) {
+      setFormData(prev => ({
+        ...prev,
+        rolePreferences: [...prev.rolePreferences, trimmedRole]
+      }));
+      setRolePreferenceInput('');
+      setTimeout(() => updateCompletedSections(), 100);
+    }
+  };
+
+  const handleRemoveRolePreference = (roleToRemove) => {
+    setFormData(prev => ({
+      ...prev,
+      rolePreferences: prev.rolePreferences.filter(role => role !== roleToRemove)
+    }));
+    setTimeout(() => updateCompletedSections(), 100);
+  };
+
+  const handleToggleOpportunityPreference = (optionValue) => {
+    setFormData(prev => {
+      const alreadySelected = prev.opportunityPreferences.includes(optionValue);
+      return {
+        ...prev,
+        opportunityPreferences: alreadySelected
+          ? prev.opportunityPreferences.filter(value => value !== optionValue)
+          : [...prev.opportunityPreferences, optionValue]
+      };
+    });
+    setTimeout(() => updateCompletedSections(), 100);
   };
 
   const handleRemoveLocation = (locationToRemove) => {
@@ -790,7 +980,12 @@ export default function ProfileBuilder() {
 
       setSuccess(true);
 
-      if (profileLoaded) {
+      if (savedProfile?._savedLocallyOnly) {
+        toast.success('Profile saved for Jobs apply flow. 🎉', {
+          position: "top-right",
+          autoClose: 3000,
+        });
+      } else if (profileLoaded) {
         toast.success('Profile updated successfully! 🎉', {
           position: "top-right",
           autoClose: 3000,
@@ -879,12 +1074,7 @@ export default function ProfileBuilder() {
                 ← Back to Application Form
               </button>
             ) : (
-              <button
-                onClick={() => navigate('/')}
-                className="text-gray-500 hover:text-gray-700 font-medium flex items-center gap-2 text-sm transition-colors"
-              >
-                ← Back to Dashboard
-              </button>
+              <div />
             )}
             {cameFromApplication && (
               <div className="text-xs text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200">
@@ -892,6 +1082,19 @@ export default function ProfileBuilder() {
               </div>
             )}
           </div>
+
+          {mandatoryProfile && (
+            <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4">
+              <p className="text-sm font-semibold text-amber-900 mb-2">
+                Job application profile is mandatory before applying.
+              </p>
+              {missingMandatoryFields.length > 0 && (
+                <p className="text-xs text-amber-800">
+                  Missing fields: {missingMandatoryFields.join(', ')}
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="flex items-center gap-4 mb-6">
             <div className="w-16 h-16 bg-indigo-50 rounded-xl flex items-center justify-center border border-indigo-200">
@@ -936,7 +1139,7 @@ export default function ProfileBuilder() {
             </div>
 
             {/* Section Indicators */}
-            <div className="mt-6 grid grid-cols-7 gap-2">
+            <div className="mt-6 grid grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-2">
               {PROFILE_SECTIONS.map((section, index) => (
                 <button
                   key={section.id}
@@ -1153,6 +1356,28 @@ export default function ProfileBuilder() {
 
             {currentSection.id === 'professional' && (
               <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    Years of Experience
+                    {isFieldFilled('experience') && <span className="text-blue-600 text-xs">✓</span>}
+                  </label>
+                  <select
+                    name="experience"
+                    value={formData.experience}
+                    onChange={handleInputChange}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-700 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                  >
+                    <option value="">Select years of experience</option>
+                    <option value="Less than 1 year">Less than 1 year</option>
+                    <option value="1 year">1 year</option>
+                    <option value="2 years">2 years</option>
+                    <option value="3 years">3 years</option>
+                    <option value="4 years">4 years</option>
+                    <option value="5 years">5 years</option>
+                    <option value="6+ years">6+ years</option>
+                  </select>
+                </div>
+
                 <div className="flex items-center justify-between mb-4">
                   <label className="block text-sm font-medium text-gray-700 flex items-center gap-2">
                     Professional Experiences
@@ -1957,6 +2182,96 @@ export default function ProfileBuilder() {
                 <div className="grid md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      Role Preferences <span className="text-pink-400">*</span>
+                      {isFieldFilled('rolePreferences') && <span className="text-blue-600 text-xs">✓</span>}
+                    </label>
+
+                    {formData.rolePreferences.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {formData.rolePreferences.map((role, index) => (
+                          <span
+                            key={index}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium border border-blue-200"
+                          >
+                            {role}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveRolePreference(role)}
+                              className="text-blue-600 hover:text-blue-700 focus:outline-none"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2 mb-2">
+                      <input
+                        type="text"
+                        value={rolePreferenceInput}
+                        onChange={(e) => setRolePreferenceInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && rolePreferenceInput.trim()) {
+                            e.preventDefault();
+                            handleAddRolePreference(rolePreferenceInput);
+                          }
+                        }}
+                        placeholder="Add preferred role and press Enter"
+                        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-700 placeholder-gray-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleAddRolePreference(rolePreferenceInput)}
+                        className="px-4 py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium"
+                      >
+                        Add
+                      </button>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {ROLE_PREFERENCE_OPTIONS.filter(role => !formData.rolePreferences.includes(role)).map((role) => (
+                        <button
+                          key={role}
+                          type="button"
+                          onClick={() => handleAddRolePreference(role)}
+                          className="px-3 py-1 text-xs rounded-full border border-gray-300 text-gray-700 hover:bg-gray-50"
+                        >
+                          {role}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      Opportunity Type <span className="text-pink-400">*</span>
+                      {isFieldFilled('opportunityPreferences') && <span className="text-blue-600 text-xs">✓</span>}
+                    </label>
+                    <p className="text-xs text-gray-500 mb-2">
+                      Select at least Internship or Freelance.
+                    </p>
+                    <div className="space-y-2">
+                      {OPPORTUNITY_TYPE_OPTIONS.map((option) => (
+                        <label key={option.value} className="flex items-center gap-3 text-sm text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={formData.opportunityPreferences.includes(option.value)}
+                            onChange={() => handleToggleOpportunityPreference(option.value)}
+                            className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-200"
+                          />
+                          {option.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
                       Availability
                       {isFieldFilled('availability') && <span className="text-blue-600 text-xs">✓</span>}
                     </label>
@@ -1990,20 +2305,6 @@ export default function ProfileBuilder() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                    Cover Letter Template <span className="text-gray-400 font-normal text-xs">(Optional)</span>
-                    {isFieldFilled('coverLetterTemplate') && <span className="text-blue-600 text-xs">✓</span>}
-                  </label>
-                  <textarea
-                    name="coverLetterTemplate"
-                    value={formData.coverLetterTemplate}
-                    onChange={handleInputChange}
-                    rows={6}
-                    placeholder="Default cover letter template that can be used when applying to jobs..."
-                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-700 placeholder-gray-400 transition-colors focus:border-lavender-400 focus:outline-none focus:ring-1 focus:ring-lavender-200 resize-none"
-                  />
-                </div>
               </div>
             )}
 
@@ -2069,6 +2370,21 @@ export default function ProfileBuilder() {
                     </div>
                   </div>
                 )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    Cover Letter Template
+                    {isFieldFilled('coverLetterTemplate') && <span className="text-blue-600 text-xs">✓</span>}
+                  </label>
+                  <textarea
+                    name="coverLetterTemplate"
+                    value={formData.coverLetterTemplate}
+                    onChange={handleInputChange}
+                    rows={6}
+                    placeholder="Write your default cover letter for quick job applications..."
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-700 placeholder-gray-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100 resize-none"
+                  />
+                </div>
               </div>
             )}
           </div>

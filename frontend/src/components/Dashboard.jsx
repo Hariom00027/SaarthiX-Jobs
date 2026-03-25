@@ -1,12 +1,12 @@
 import React from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { loginWithGoogle } from "../api/authApi";
+import { redirectToSomethingXLogin } from "../config/redirectUrls";
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { isAuthenticated, isIndustry, isApplicant, user, loading: authLoading, exchangeToken } = useAuth();
+  const { isAuthenticated, isIndustry, exchangeToken } = useAuth();
 
   // Handle URL parameters and route from SomethingX redirect
   React.useEffect(() => {
@@ -65,56 +65,6 @@ export default function Dashboard() {
     }
   }, [searchParams, navigate, exchangeToken]);
 
-  // Handle routing after OAuth login based on redirectRoute
-  React.useEffect(() => {
-    // Wait for auth to finish loading
-    if (authLoading || !isAuthenticated || !user) {
-      return;
-    }
-
-    // Check if user has a redirectRoute set (from login button clicks or login page)
-    const redirectRoute = localStorage.getItem('redirectRoute');
-    const loginIntent = localStorage.getItem('loginIntent');
-    
-    if (redirectRoute) {
-      // Check if user has a role
-      if (!user.userType || user.userType === '') {
-        // User doesn't have a role yet - redirect to role selection with intent
-        const email = user.email;
-        const name = user.name;
-        const picture = user.picture;
-        const intent = loginIntent || (redirectRoute === 'apply-jobs' ? 'applicant' : 'industry');
-        navigate(`/choose-role?email=${encodeURIComponent(email)}&name=${encodeURIComponent(name || '')}&picture=${encodeURIComponent(picture || '')}&intent=${intent}`);
-        return;
-      }
-
-      // User has a role - check if it matches the redirect route
-      if (redirectRoute === 'apply-jobs' && user.userType === 'APPLICANT') {
-        localStorage.removeItem('redirectRoute');
-        localStorage.removeItem('loginIntent');
-        navigate('/apply-jobs');
-        return;
-      } else if (redirectRoute === 'post-jobs' && user.userType === 'INDUSTRY') {
-        localStorage.removeItem('redirectRoute');
-        localStorage.removeItem('loginIntent');
-        navigate('/manage-applications');
-        return;
-      } else if (redirectRoute === 'role-selection') {
-        // Route to role selection page (for editing role)
-        const email = user.email;
-        const name = user.name;
-        const picture = user.picture;
-        localStorage.removeItem('redirectRoute');
-        navigate(`/choose-role?email=${encodeURIComponent(email)}&name=${encodeURIComponent(name || '')}&picture=${encodeURIComponent(picture || '')}`);
-        return;
-      }
-      
-      // If redirectRoute doesn't match user's role, clear it and stay on dashboard
-      localStorage.removeItem('redirectRoute');
-      localStorage.removeItem('loginIntent');
-    }
-  }, [isAuthenticated, user, authLoading, navigate]);
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 flex items-center justify-center px-4 py-16">
       <div className="w-full max-w-6xl">
@@ -155,13 +105,7 @@ export default function Dashboard() {
           <div
             onClick={() => {
               if (!isAuthenticated) {
-                // Not logged in - clear any previous intent and save applicant intent
-                localStorage.removeItem('loginIntent');
-                localStorage.removeItem('redirectRoute');
-                localStorage.setItem('loginIntent', 'applicant');
-                localStorage.setItem('redirectRoute', 'apply-jobs'); // Route to applicant dashboard
-                console.log('[DASHBOARD] Setting loginIntent to: applicant, redirectRoute to: apply-jobs');
-                loginWithGoogle();
+                redirectToSomethingXLogin("student");
               } else {
                 // Already logged in - go to jobs
                 navigate("/apply-jobs");
@@ -275,13 +219,7 @@ export default function Dashboard() {
             <div
               onClick={() => {
                 if (!isAuthenticated) {
-                  // Not logged in - clear any previous intent and save industry intent
-                  localStorage.removeItem('loginIntent');
-                  localStorage.removeItem('redirectRoute');
-                  localStorage.setItem('loginIntent', 'industry');
-                  localStorage.setItem('redirectRoute', 'post-jobs'); // Route to industry dashboard
-                  console.log('[DASHBOARD] Setting loginIntent to: industry, redirectRoute to: post-jobs');
-                  loginWithGoogle();
+                  redirectToSomethingXLogin("industry");
                 } else if (isIndustry) {
                   // Already logged in as INDUSTRY - go to posting form
                   navigate("/manage-applications");
