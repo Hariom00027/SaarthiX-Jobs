@@ -5,6 +5,12 @@ import { getSomethingXUrl } from '../config/redirectUrls';
 const JOBS_PROFILE_LOCAL_KEY = 'jobs_profile_local_cache_v1';
 const getProfileAuthToken = () => localStorage.getItem('somethingx_auth_token') || localStorage.getItem('token');
 const shouldUseLocalOnlyProfile = () => !getProfileAuthToken();
+const shouldAvoidRelativeApiBase = () => {
+  if (typeof window === 'undefined' || !window.location) return false;
+  const host = window.location.hostname;
+  const port = window.location.port;
+  return (host === 'localhost' || host === '127.0.0.1') && port === '3500';
+};
 
 const isBlankValue = (value) => {
   if (Array.isArray(value)) return value.length === 0;
@@ -20,6 +26,11 @@ const mergeProfileData = (baseProfile, incomingProfile) => {
   });
   return merged;
 };
+
+const mergePreferIncoming = (baseProfile, incomingProfile) => ({
+  ...(baseProfile || {}),
+  ...(incomingProfile || {}),
+});
 
 const readLocalJobsProfile = () => {
   try {
@@ -171,17 +182,29 @@ export const recordJobApplication = async (applicationData) => {
 };
 
 // Profile API functions
+const getJobsBackendProfile = async () => {
+  const response = await apiClient.get('/profile');
+  return response.data || null;
+};
+
+const saveJobsBackendProfile = async (profileData) => {
+  const response = await apiClient.post('/profile', profileData);
+  return response.data || null;
+};
+
 export const getUserProfile = async () => {
   if (shouldUseLocalOnlyProfile()) {
     return readLocalJobsProfile();
   }
 
   try {
-    const [homeUnifiedResult, homeAuthResult] = await Promise.allSettled([
+    const [jobsProfileResult, homeUnifiedResult, homeAuthResult] = await Promise.allSettled([
+      getJobsBackendProfile(),
       getSomethingXUnifiedProfile(),
       getSomethingXUserProfile(),
     ]);
 
+    const jobsProfile = jobsProfileResult.status === 'fulfilled' ? jobsProfileResult.value : null;
     const homeUnifiedProfile = homeUnifiedResult.status === 'fulfilled' ? homeUnifiedResult.value : null;
     const homeAuthProfile = homeAuthResult.status === 'fulfilled' ? homeAuthResult.value : null;
 
@@ -205,7 +228,11 @@ export const getUserProfile = async () => {
       projects: Array.isArray(homeAuthProfile.projects) ? homeAuthProfile.projects : [],
     } : null;
 
-    const mergedProfile = mergeProfileData(homeUnifiedProfile, mappedHomeAuthProfile);
+    // Home unified profile is the canonical shared profile for cross-microservice access.
+    const mergedFromHome = mergeProfileData(homeUnifiedProfile, mappedHomeAuthProfile);
+    const mergedProfile = mergedFromHome
+      ? mergeProfileData(mergedFromHome, jobsProfile)
+      : jobsProfile;
 
     if (mergedProfile && Object.keys(mergedProfile).length > 0) {
       writeLocalJobsProfile(mergedProfile);
@@ -243,7 +270,9 @@ export const getSomethingXUserProfile = async () => {
     // Ignore URL derivation issues and use fallback URLs
   }
 
-  pushUnique('/api');
+  if (!shouldAvoidRelativeApiBase()) {
+    pushUnique('/api');
+  }
   pushUnique('http://localhost:8080/api');
   pushUnique('http://127.0.0.1:8080/api');
 
@@ -288,7 +317,9 @@ const getSomethingXUnifiedProfile = async () => {
     // Ignore URL derivation issues and use fallback URLs
   }
 
-  pushUnique('/api');
+  if (!shouldAvoidRelativeApiBase()) {
+    pushUnique('/api');
+  }
   pushUnique('http://localhost:3000/api');
   pushUnique('http://127.0.0.1:3000/api');
   pushUnique('http://localhost:8080/api');
@@ -335,7 +366,9 @@ const saveSomethingXUnifiedProfile = async (profileData) => {
     // Ignore URL derivation issues and use fallback URLs
   }
 
-  pushUnique('/api');
+  if (!shouldAvoidRelativeApiBase()) {
+    pushUnique('/api');
+  }
   pushUnique('http://localhost:3000/api');
   pushUnique('http://127.0.0.1:3000/api');
   pushUnique('http://localhost:8080/api');
@@ -365,37 +398,45 @@ export const saveUserProfile = async (profileData) => {
   }
 
   try {
+    // Primary persistence target: shared Home profile API for all microservices.
     const homeSavedProfile = await saveSomethingXUnifiedProfile(profileData);
+    if (!homeSavedProfile || Object.keys(homeSavedProfile).length === 0) {
+      throw new Error('Shared profile save was not accepted by Home backend');
+    }
     const savedProfile = homeSavedProfile && Object.keys(homeSavedProfile).length > 0
-      ? mergeProfileData(homeSavedProfile, profileData)
+      ? mergePreferIncoming(homeSavedProfile, profileData)
       : profileData;
     writeLocalJobsProfile(savedProfile);
+
+    // Best-effort mirror into Jobs backend profile collection.
+    try {
+      await saveJobsBackendProfile(savedProfile);
+    } catch (syncError) {
+      console.warn('Shared profile saved, but Jobs mirror sync failed:', syncError?.message || syncError);
+    }
+
     return savedProfile;
   } catch (error) {
-    console.error('Error saving user profile:', error);
-    writeLocalJobsProfile(profileData);
-    return { ...profileData, _savedLocallyOnly: true };
+    console.error('Error saving user profile to shared Home backend:', error);
+
+    // Fallback: save directly into Jobs backend before local-only fallback.
+    try {
+      const jobsSavedProfile = await saveJobsBackendProfile(profileData);
+      const savedProfile = jobsSavedProfile && Object.keys(jobsSavedProfile).length > 0
+        ? jobsSavedProfile
+        : profileData;
+      writeLocalJobsProfile(savedProfile);
+      return savedProfile;
+    } catch (jobsError) {
+      console.error('Error saving user profile to Jobs backend:', jobsError);
+      writeLocalJobsProfile(profileData);
+      return { ...profileData, _savedLocallyOnly: true };
+    }
   }
 };
 
 export const updateUserProfile = async (profileData) => {
-  if (shouldUseLocalOnlyProfile()) {
-    writeLocalJobsProfile(profileData);
-    return { ...profileData, _savedLocallyOnly: true };
-  }
-
-  try {
-    const homeSavedProfile = await saveSomethingXUnifiedProfile(profileData);
-    const savedProfile = homeSavedProfile && Object.keys(homeSavedProfile).length > 0
-      ? mergeProfileData(homeSavedProfile, profileData)
-      : profileData;
-    writeLocalJobsProfile(savedProfile);
-    return savedProfile;
-  } catch (error) {
-    console.error('Error updating user profile:', error);
-    writeLocalJobsProfile(profileData);
-    return { ...profileData, _savedLocallyOnly: true };
-  }
+  return saveUserProfile(profileData);
 };
 
 // Industry API functions

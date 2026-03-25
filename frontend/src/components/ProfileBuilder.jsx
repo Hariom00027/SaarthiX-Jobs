@@ -48,6 +48,7 @@ const ROLE_PREFERENCE_OPTIONS = [
 const OPPORTUNITY_TYPE_OPTIONS = [
   { value: 'INTERNSHIP', label: 'Internship' },
   { value: 'FREELANCE', label: 'Freelance' },
+  { value: 'CONTRACT', label: 'Contract' },
   { value: 'FULL_TIME', label: 'Full-time' },
   { value: 'PART_TIME', label: 'Part-time' }
 ];
@@ -66,7 +67,7 @@ const PROFILE_SECTIONS = [
     title: 'Professional Info',
     icon: '💼',
     description: 'Experience, skills, and summary',
-    fields: ['professionalExperiences', 'skills', 'summary']
+    fields: ['experience', 'professionalExperiences', 'skills', 'summary']
   },
   {
     id: 'education',
@@ -108,14 +109,14 @@ const PROFILE_SECTIONS = [
     title: 'Application Preferences',
     icon: '📝',
     description: 'Job role and opportunity preferences',
-    fields: ['rolePreferences', 'opportunityPreferences', 'availability', 'expectedSalary', 'coverLetterTemplate']
+    fields: ['rolePreferences', 'opportunityPreferences', 'availability', 'expectedSalary']
   },
   {
     id: 'resume',
     title: 'Resume Upload',
     icon: '📄',
     description: 'Upload your resume document',
-    fields: ['resume']
+    fields: ['resume', 'coverLetterTemplate']
   }
 ];
 
@@ -184,6 +185,8 @@ export default function ProfileBuilder() {
   const [showSkillsSuggestions, setShowSkillsSuggestions] = useState(false);
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
   const [showHobbiesSuggestions, setShowHobbiesSuggestions] = useState(false);
+  const autoSaveTimerRef = useRef(null);
+  const skipNextDraftAutoSaveRef = useRef(true);
   const certificationFileInputRef = useRef(null);
 
   const parseArrayField = (value) => {
@@ -325,6 +328,7 @@ export default function ProfileBuilder() {
         }
 
         setProfileLoaded(true);
+        skipNextDraftAutoSaveRef.current = true;
 
         // Calculate completion directly from loaded profile data
         const completed = new Set();
@@ -359,6 +363,7 @@ export default function ProfileBuilder() {
           email: user?.email || '',
         }));
         setProfileLoaded(false);
+        skipNextDraftAutoSaveRef.current = true;
       }
     } catch (err) {
       console.error('Error loading profile:', err);
@@ -367,6 +372,7 @@ export default function ProfileBuilder() {
         fullName: user?.name || '',
         email: user?.email || '',
       }));
+      skipNextDraftAutoSaveRef.current = true;
       if (err.response?.status !== 404) {
         setError('Failed to load profile from database');
       }
@@ -374,6 +380,48 @@ export default function ProfileBuilder() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (loading || authLoading || !isAuthenticated) return;
+    if (skipNextDraftAutoSaveRef.current) {
+      skipNextDraftAutoSaveRef.current = false;
+      return;
+    }
+    if (!formData.fullName?.trim()) return;
+
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    autoSaveTimerRef.current = setTimeout(async () => {
+      const profileData = { ...formData };
+      try {
+        if (resume) {
+          if (resume.isFromProfile && resume.base64) {
+            profileData.resumeFileName = resume.name;
+            profileData.resumeFileType = resume.type;
+            profileData.resumeBase64 = resume.base64;
+            profileData.resumeFileSize = resume.size;
+          } else if (resume && resume.size) {
+            const resumeBase64 = await convertFileToBase64(resume);
+            profileData.resumeFileName = resume.name;
+            profileData.resumeFileType = resume.type;
+            profileData.resumeBase64 = resumeBase64;
+            profileData.resumeFileSize = resume.size;
+          }
+        }
+        await autoSaveProfile(profileData);
+      } catch (error) {
+        console.error('Draft auto-save failed:', error);
+      }
+    }, 1200);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [formData, resume, loading, authLoading, isAuthenticated]);
 
   const isFieldFilled = (fieldName) => {
     const value = formData[fieldName];
@@ -411,6 +459,7 @@ export default function ProfileBuilder() {
       console.log('Auto-saving section to database...');
       await saveUserProfile(dataToSave);
       console.log('Section auto-saved successfully');
+      window.dispatchEvent(new Event('profileSaved'));
       return true;
     } catch (err) {
       console.error('Auto-save failed:', err);
@@ -1307,6 +1356,28 @@ export default function ProfileBuilder() {
 
             {currentSection.id === 'professional' && (
               <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    Years of Experience
+                    {isFieldFilled('experience') && <span className="text-blue-600 text-xs">✓</span>}
+                  </label>
+                  <select
+                    name="experience"
+                    value={formData.experience}
+                    onChange={handleInputChange}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-700 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                  >
+                    <option value="">Select years of experience</option>
+                    <option value="Less than 1 year">Less than 1 year</option>
+                    <option value="1 year">1 year</option>
+                    <option value="2 years">2 years</option>
+                    <option value="3 years">3 years</option>
+                    <option value="4 years">4 years</option>
+                    <option value="5 years">5 years</option>
+                    <option value="6+ years">6+ years</option>
+                  </select>
+                </div>
+
                 <div className="flex items-center justify-between mb-4">
                   <label className="block text-sm font-medium text-gray-700 flex items-center gap-2">
                     Professional Experiences
@@ -2234,20 +2305,6 @@ export default function ProfileBuilder() {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                    Cover Letter Template <span className="text-gray-400 font-normal text-xs">(Optional)</span>
-                    {isFieldFilled('coverLetterTemplate') && <span className="text-blue-600 text-xs">✓</span>}
-                  </label>
-                  <textarea
-                    name="coverLetterTemplate"
-                    value={formData.coverLetterTemplate}
-                    onChange={handleInputChange}
-                    rows={6}
-                    placeholder="Default cover letter template that can be used when applying to jobs..."
-                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-700 placeholder-gray-400 transition-colors focus:border-lavender-400 focus:outline-none focus:ring-1 focus:ring-lavender-200 resize-none"
-                  />
-                </div>
               </div>
             )}
 
@@ -2313,6 +2370,21 @@ export default function ProfileBuilder() {
                     </div>
                   </div>
                 )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    Cover Letter Template
+                    {isFieldFilled('coverLetterTemplate') && <span className="text-blue-600 text-xs">✓</span>}
+                  </label>
+                  <textarea
+                    name="coverLetterTemplate"
+                    value={formData.coverLetterTemplate}
+                    onChange={handleInputChange}
+                    rows={6}
+                    placeholder="Write your default cover letter for quick job applications..."
+                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-700 placeholder-gray-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100 resize-none"
+                  />
+                </div>
               </div>
             )}
           </div>

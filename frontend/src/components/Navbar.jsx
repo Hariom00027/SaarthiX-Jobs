@@ -3,7 +3,13 @@ import { createPortal } from "react-dom";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { logout } from "../api/authApi";
+import { getUserProfile, getSomethingXUserProfile } from "../api/jobApi";
 import { redirectToSomethingX, redirectToProfiling } from "../config/redirectUrls";
+import {
+  getProfileBuilderStyleCompletionPercent,
+  mapSomethingXProfileToJobsShape,
+  mergeJobsProfilesForCompletion,
+} from "../utils/jobsProfileUtils";
 import NotificationCenter from "./NotificationCenter";
 import LogoImage from "./logo_png.png";
 
@@ -22,6 +28,7 @@ const Navbar = () => {
   const [isTablet, setIsTablet] = useState(
     window.innerWidth >= 768 && window.innerWidth < 1024
   );
+  const [jobsProfileCompletion, setJobsProfileCompletion] = useState(0);
 
   // Get SomethingX user info from localStorage
   const getSomethingXUser = () => {
@@ -41,6 +48,73 @@ const Navbar = () => {
   const somethingxUser = getSomethingXUser();
   const somethingxToken = getSomethingXToken();
   const displayUser = somethingxUser || user;
+  const isApplicantOrStudent = displayUser?.userType === "APPLICANT" || displayUser?.userType === "STUDENT";
+
+  useEffect(() => {
+    let isMounted = true;
+    const updateCompletion = async () => {
+      if (!isAuthenticated || !isApplicantOrStudent) {
+        if (isMounted) setJobsProfileCompletion(0);
+        return;
+      }
+      const [jobsRes, homeRes] = await Promise.allSettled([
+        getUserProfile(),
+        getSomethingXUserProfile(),
+      ]);
+      const jobsProfile = jobsRes.status === "fulfilled" ? jobsRes.value : null;
+      const homeRaw = homeRes.status === "fulfilled" ? homeRes.value : null;
+      const mappedHome = mapSomethingXProfileToJobsShape(homeRaw);
+      const effective = mergeJobsProfilesForCompletion(jobsProfile, mappedHome);
+      if (isMounted) {
+        setJobsProfileCompletion(getProfileBuilderStyleCompletionPercent(effective));
+      }
+    };
+
+    updateCompletion();
+    window.addEventListener("profileSaved", updateCompletion);
+    return () => {
+      isMounted = false;
+      window.removeEventListener("profileSaved", updateCompletion);
+    };
+  }, [isAuthenticated, isApplicantOrStudent]);
+
+  const ProfileCompletionIndicator = ({ size = 28, fontSize = 10 }) => {
+    const normalized = Math.max(0, Math.min(100, jobsProfileCompletion));
+    const degrees = normalized * 3.6;
+    return (
+      <span
+        style={{
+          width: `${size}px`,
+          height: `${size}px`,
+          borderRadius: "9999px",
+          background: `conic-gradient(#115FD5 ${degrees}deg, #E5E7EB 0deg)`,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
+          padding: "2px",
+        }}
+      >
+        <span
+          style={{
+            width: "100%",
+            height: "100%",
+            borderRadius: "9999px",
+            background: "#FFFFFF",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#115FD5",
+            fontWeight: 700,
+            fontSize: `${fontSize}px`,
+            lineHeight: 1,
+          }}
+        >
+          {normalized}%
+        </span>
+      </span>
+    );
+  };
 
   // Handle window resize
   useEffect(() => {
@@ -488,13 +562,14 @@ const Navbar = () => {
 
                 <NotificationCenter />
 
-                {(displayUser?.userType === "APPLICANT" || displayUser?.userType === "STUDENT") && (
+                {isApplicantOrStudent && (
                   <Link
-                    to="/view-profile"
+                    to="/build-profile"
                     style={{
                       display: "flex",
                       justifyContent: "center",
                       alignItems: "center",
+                      gap: "8px",
                       padding: "10px 20px",
                       background: "#FFFFFF",
                       border: "1px solid #115FD5",
@@ -507,6 +582,7 @@ const Navbar = () => {
                       textDecoration: "none",
                     }}
                   >
+                    <ProfileCompletionIndicator size={26} fontSize={9} />
                     Profile
                   </Link>
                 )}
@@ -563,10 +639,10 @@ const Navbar = () => {
                         overflow: "hidden",
                       }}
                     >
-                      {(displayUser?.userType === 'APPLICANT' || displayUser?.userType === 'STUDENT') && (
+                      {isApplicantOrStudent && (
                         <>
                           <Link
-                            to="/view-profile"
+                            to="/build-profile"
                             onClick={() => setShowUserMenu(false)}
                             style={{
                               display: "block",
@@ -576,8 +652,12 @@ const Navbar = () => {
                               fontWeight: 500,
                               fontSize: "15px",
                               borderBottom: "1px solid #F3F4F6",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
                             }}
                           >
+                            <ProfileCompletionIndicator size={24} fontSize={8} />
                             Profile
                           </Link>
                         </>
@@ -1009,9 +1089,9 @@ const Navbar = () => {
               >
                 {isAuthenticated ? (
                   <>
-                    {(displayUser?.userType === 'APPLICANT' || displayUser?.userType === 'STUDENT') && (
+                    {isApplicantOrStudent && (
                       <Link
-                        to="/view-profile"
+                        to="/build-profile"
                         onClick={() => setIsMobileMenuOpen(false)}
                         style={{
                           padding: '12px 16px',
@@ -1019,9 +1099,13 @@ const Navbar = () => {
                           textDecoration: 'none',
                           color: '#333333',
                           fontWeight: '500',
-                          fontSize: '16px'
+                          fontSize: '16px',
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
                         }}
                       >
+                        <ProfileCompletionIndicator size={24} fontSize={8} />
                         Profile
                       </Link>
                     )}

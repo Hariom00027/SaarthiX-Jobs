@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { AuthProvider } from './context/AuthContext';
@@ -21,7 +21,53 @@ import IndustryHackathonResults from './components/IndustryHackathonResults';
 import IndustryCertificatePublishPage from './components/IndustryCertificatePublishPage';
 import StudentDatabase from './components/StudentDatabase';
 import DemoViewSwitcher from './components/DemoViewSwitcher';
-import SharedProfileRedirect from './components/SharedProfileRedirect';
+
+function AppShell() {
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search || '');
+  const isEmbeddedProfileBuilder =
+    searchParams.get('embed') === '1' &&
+    (location.pathname === '/build-profile' || location.pathname === '/view-profile');
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {!isEmbeddedProfileBuilder && <Navbar />}
+      {!isEmbeddedProfileBuilder && <DemoViewSwitcher />}
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/apply-jobs" element={<JobList />} />
+        <Route path="/post-jobs" element={<JobBuilder />} />
+        <Route path="/job-tracker" element={<JobTracker />} />
+        <Route path="/edit-profile" element={<EditProfile />} />
+        <Route path="/build-profile" element={<ProfileBuilder />} />
+        <Route path="/view-profile" element={<ProfileBuilder />} />
+        <Route path="/manage-applications" element={<IndustryApplications />} />
+        <Route path="/manage-hackathons" element={<IndustryHackathons />} />
+        <Route path="/create-hackathon" element={<HackathonForm />} />
+        <Route path="/edit-hackathon" element={<HackathonForm />} />
+        <Route path="/browse-hackathons" element={<ApplicantHackathons />} />
+        <Route path="/hackathon-application/:applicationId" element={<HackathonApplicationDashboard />} />
+        <Route path="/hackathon-application/:applicationId/results" element={<ApplicantResults />} />
+        <Route path="/industry/hackathon/:hackathonId/dashboard" element={<IndustryHackathonDashboard />} />
+        <Route path="/industry/hackathon/:hackathonId/results" element={<IndustryHackathonResults />} />
+        <Route path="/industry/hackathon/:hackathonId/publish-certificates" element={<IndustryCertificatePublishPage />} />
+        <Route path="/student-database" element={<StudentDatabase />} />
+      </Routes>
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
+    </div>
+  );
+}
 
 function App() {
   // Get basename calculated in main.jsx
@@ -33,42 +79,7 @@ function App() {
   return (
     <AuthProvider>
       <Router basename={basename}>
-        <div className="min-h-screen bg-gray-50">
-          <Navbar />
-          <DemoViewSwitcher />
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/apply-jobs" element={<JobList />} />
-            <Route path="/post-jobs" element={<JobBuilder />} />
-            <Route path="/job-tracker" element={<JobTracker />} />
-            <Route path="/edit-profile" element={<EditProfile />} />
-            <Route path="/build-profile" element={<ProfileBuilder />} />
-            <Route path="/view-profile" element={<SharedProfileRedirect />} />
-            <Route path="/manage-applications" element={<IndustryApplications />} />
-            <Route path="/manage-hackathons" element={<IndustryHackathons />} />
-            <Route path="/create-hackathon" element={<HackathonForm />} />
-            <Route path="/edit-hackathon" element={<HackathonForm />} />
-            <Route path="/browse-hackathons" element={<ApplicantHackathons />} />
-            <Route path="/hackathon-application/:applicationId" element={<HackathonApplicationDashboard />} />
-            <Route path="/hackathon-application/:applicationId/results" element={<ApplicantResults />} />
-            <Route path="/industry/hackathon/:hackathonId/dashboard" element={<IndustryHackathonDashboard />} />
-            <Route path="/industry/hackathon/:hackathonId/results" element={<IndustryHackathonResults />} />
-            <Route path="/industry/hackathon/:hackathonId/publish-certificates" element={<IndustryCertificatePublishPage />} />
-            <Route path="/student-database" element={<StudentDatabase />} />
-          </Routes>
-          <ToastContainer
-            position="top-right"
-            autoClose={3000}
-            hideProgressBar={false}
-            newestOnTop={false}
-            closeOnClick
-            rtl={false}
-            pauseOnFocusLoss
-            draggable
-            pauseOnHover
-            theme="light"
-          />
-        </div>
+        <AppShell />
       </Router>
     </AuthProvider>
   );

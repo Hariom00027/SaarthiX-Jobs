@@ -35,12 +35,12 @@ public class UserProfileController {
             return ResponseEntity.status(401).body("Must be logged in to view profile");
         }
 
-        User user = resolveUserFromOAuth(auth);
-        if (user == null) {
-            return ResponseEntity.status(401).body("User not found");
+        String email = extractEmailFromAuth(auth);
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.status(401).body("User email not found in token");
         }
 
-        Optional<UserProfile> profileOpt = userProfileRepository.findByApplicantEmail(user.getEmail());
+        Optional<UserProfile> profileOpt = userProfileRepository.findByApplicantEmail(email);
         if (profileOpt.isPresent()) {
             return ResponseEntity.ok(profileOpt.get());
         } else {
@@ -73,22 +73,32 @@ public class UserProfileController {
                 return ResponseEntity.status(401).body("Must be logged in to save profile");
             }
 
-            User user = resolveUserFromOAuth(auth);
-            if (user == null) {
-                System.err.println("ERROR: User not found in database");
-                return ResponseEntity.status(401).body("User not found");
+            String email = extractEmailFromAuth(auth);
+            if (email == null || email.isBlank()) {
+                System.err.println("ERROR: User email not found in token");
+                return ResponseEntity.status(401).body("User email not found in token");
             }
 
-            System.out.println("User found: " + user.getEmail() + ", UserType: " + user.getUserType());
+            Optional<User> userOpt = userRepository.findByEmail(email);
+            String userType = userOpt
+                    .map(User::getUserType)
+                    .orElseGet(() -> {
+                        Object userTypeFromRequest = profileData.get("userType");
+                        if (userTypeFromRequest instanceof String) {
+                            return ((String) userTypeFromRequest).trim().toUpperCase();
+                        }
+                        return "STUDENT";
+                    });
+            System.out.println("Resolved user email: " + email + ", UserType: " + userType + ", UserInJobsDb: " + userOpt.isPresent());
 
             // Check if user is APPLICANT or STUDENT type
-            if (!"APPLICANT".equals(user.getUserType()) && !"STUDENT".equals(user.getUserType())) {
-                System.err.println("ERROR: User is not APPLICANT or STUDENT type: " + user.getUserType());
+            if (!"APPLICANT".equals(userType) && !"STUDENT".equals(userType)) {
+                System.err.println("ERROR: User is not APPLICANT or STUDENT type: " + userType);
                 return ResponseEntity.status(403).body("Only APPLICANT or STUDENT users can create profiles");
             }
 
             // Check if profile already exists
-            Optional<UserProfile> existingProfileOpt = userProfileRepository.findByApplicantEmail(user.getEmail());
+            Optional<UserProfile> existingProfileOpt = userProfileRepository.findByApplicantEmail(email);
             UserProfile profile;
             boolean isNewProfile = !existingProfileOpt.isPresent();
 
@@ -99,9 +109,9 @@ public class UserProfileController {
             } else {
                 // Create new profile
                 profile = new UserProfile();
-                profile.setApplicantEmail(user.getEmail());
-                profile.setApplicantId(user.getId());
-                System.out.println("Creating new profile for user: " + user.getEmail());
+                profile.setApplicantEmail(email);
+                profile.setApplicantId(userOpt.map(User::getId).orElse(email));
+                System.out.println("Creating new profile for user: " + email);
             }
 
             // Update profile fields - ALWAYS set all fields from request to ensure complete state is saved
@@ -116,9 +126,9 @@ public class UserProfileController {
             profile.setPhoneNumber(phoneNumber != null ? phoneNumber : "");
             System.out.println("Phone Number set: " + (phoneNumber != null && !phoneNumber.isEmpty() ? phoneNumber : "empty"));
             
-            String email = (String) profileData.getOrDefault("email", user.getEmail());
-            profile.setEmail(email != null ? email : user.getEmail());
-            System.out.println("Email set: " + (email != null && !email.isEmpty() ? email : "empty"));
+            String profileEmail = (String) profileData.getOrDefault("email", email);
+            profile.setEmail(profileEmail != null ? profileEmail : email);
+            System.out.println("Email set: " + (profileEmail != null && !profileEmail.isEmpty() ? profileEmail : "empty"));
 
             // Resume information
             String resumeFileName = (String) profileData.getOrDefault("resumeFileName", "");
@@ -491,27 +501,17 @@ public class UserProfileController {
         return saveProfile(profileData, auth);
     }
 
-    /**
-     * Helper method to extract user from OAuth2 principal
-     */
-    private User resolveUserFromOAuth(Authentication auth) {
+    private String extractEmailFromAuth(Authentication auth) {
         if (auth == null || auth.getPrincipal() == null) {
             return null;
         }
-
         Object principal = auth.getPrincipal();
-        String email = null;
-
         if (principal instanceof OAuth2User oauthUser) {
-            email = oauthUser.getAttribute("email");
-        } else if (principal instanceof String) {
-            email = (String) principal;
+            return oauthUser.getAttribute("email");
         }
-
-        if (email != null) {
-            return userRepository.findByEmail(email).orElse(null);
+        if (principal instanceof String) {
+            return (String) principal;
         }
-
         return null;
     }
 }

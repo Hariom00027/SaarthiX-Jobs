@@ -185,7 +185,7 @@ export default function Header() {
                     </Link> */}
                     {user?.userType === 'APPLICANT' && (
                       <Link
-                        to="/view-profile"
+                        to="/build-profile"
                         onClick={() => setDropdownOpen(false)}
                         className="flex items-center gap-3 px-5 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors duration-200 group"
                       >

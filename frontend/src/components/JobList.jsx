@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useLocation, useNavigate, Link } from "react-router-dom";
 import { toast } from "react-toastify";
-import { fetchJobs, fetchJobDetails, getRecommendedJobs, getUserProfile } from "../api/jobApi";
+import { fetchJobs, fetchJobDetails, getRecommendedJobs, getUserJobApplications, getUserProfile } from "../api/jobApi";
 import { useAuth } from "../context/AuthContext";
 import apiClient from "../api/apiClient";
 import JobApplicationForm from "./JobApplicationForm";
 import { redirectToSomethingXLogin } from "../config/redirectUrls";
+import { getMissingMandatoryProfileFields } from "../utils/jobsProfileUtils";
 
 // Component to format and display job description in an organized way
 function FormattedJobDescription({ description }) {
@@ -230,61 +231,16 @@ export default function JobList() {
   const [jobMatchReasons, setJobMatchReasons] = useState({});
   const [userProfile, setUserProfile] = useState(null);
   const [missingMandatoryFields, setMissingMandatoryFields] = useState([]);
+  const [appliedLocalJobIds, setAppliedLocalJobIds] = useState(new Set());
+  const reviewJobOpenedRef = useRef(null);
 
-  const { isAuthenticated, isIndustry, isApplicant, user } = useAuth();
-
+  const { isAuthenticated, isIndustry, isApplicant, isApplicantOrStudent, user } = useAuth();
   const normalizeLower = (value) => (value || "").toString().trim().toLowerCase();
-
-  const getMissingMandatoryProfileFields = (profile) => {
-    if (!profile) {
-      return [
-        "Resume",
-        "Role preference",
-        "Skills",
-        "Projects",
-        "LinkedIn",
-        "GitHub",
-        "Portfolio",
-        "Location preferences",
-        "Work preference",
-        "Freelance/Internship preference"
-      ];
-    }
-
-    const missing = [];
-    const hasResume = Boolean(profile.resumeBase64 || profile.resumeFileName);
-    const hasRolePreferences = Array.isArray(profile.rolePreferences) && profile.rolePreferences.length > 0;
-    const hasSkills = Array.isArray(profile.skills) && profile.skills.length > 0;
-    const hasProjects = Array.isArray(profile.projects) && profile.projects.length > 0;
-    const hasLinkedIn = Boolean(profile.linkedInUrl);
-    const hasGithub = Boolean(profile.githubUrl);
-    const hasPortfolio = Boolean(profile.portfolioUrl);
-    const hasLocationPreferences = Array.isArray(profile.preferredLocations) && profile.preferredLocations.length > 0;
-    const hasWorkPreference = Boolean(profile.workPreference);
-    const opportunityPreferences = Array.isArray(profile.opportunityPreferences) ? profile.opportunityPreferences : [];
-    const hasFreelanceOrInternshipPreference = opportunityPreferences.some((value) => {
-      const normalized = normalizeLower(value);
-      return normalized === "freelance" || normalized === "internship";
-    });
-
-    if (!hasResume) missing.push("Resume");
-    if (!hasRolePreferences) missing.push("Role preference");
-    if (!hasSkills) missing.push("Skills");
-    if (!hasProjects) missing.push("Projects");
-    if (!hasLinkedIn) missing.push("LinkedIn");
-    if (!hasGithub) missing.push("GitHub");
-    if (!hasPortfolio) missing.push("Portfolio");
-    if (!hasLocationPreferences) missing.push("Location preferences");
-    if (!hasWorkPreference) missing.push("Work preference (WFH/WFO/Remote)");
-    if (!hasFreelanceOrInternshipPreference) missing.push("Freelance/Internship preference");
-
-    return missing;
-  };
 
   // Load user profile for skill highlighting
   const loadUserProfile = async () => {
     try {
-      if (isAuthenticated && isApplicant) {
+      if (isAuthenticated && isApplicantOrStudent) {
         const profile = await getUserProfile();
         setUserProfile(profile);
       }
@@ -294,94 +250,86 @@ export default function JobList() {
     }
   };
 
+  const loadAppliedJobs = async () => {
+    try {
+      if (!isAuthenticated || !isApplicantOrStudent) {
+        setAppliedLocalJobIds(new Set());
+        return;
+      }
+      const applications = await getUserJobApplications();
+      const appliedIds = new Set(
+        (Array.isArray(applications) ? applications : [])
+          .map((app) => (app?.jobId || "").toString().trim())
+          .filter(Boolean)
+      );
+      setAppliedLocalJobIds(appliedIds);
+    } catch (err) {
+      console.error("Error loading applied jobs:", err);
+    }
+  };
+
   // Calculate match percentage for a job based on user profile
   const calculateJobMatch = (job, userProfile) => {
-    if (!userProfile || !userProfile.skills) {
+    if (!userProfile) {
       return { percentage: 0, reasons: ["Complete your profile to see match insights"] };
     }
 
-    const userSkills = userProfile.skills.map(s => s.toLowerCase());
-    const jobSkills = (job.raw?.skills || []).map(s => s.toLowerCase());
-    const userLocations = [
+    const normalizeList = (values) =>
+      (Array.isArray(values) ? values : [])
+        .map((v) => normalizeLower(v))
+        .filter(Boolean);
+    const splitLocationTokens = (value) =>
+      normalizeLower(value)
+        .split(/[,\|/]/)
+        .map((v) => normalizeLower(v))
+        .filter(Boolean);
+
+    const userSkills = normalizeList(userProfile.skills);
+    const jobSkills = normalizeList(job.raw?.skills);
+    const userLocations = normalizeList([
       ...(userProfile.preferredLocations || []),
       userProfile.currentLocation || []
-    ].map(l => l.toLowerCase()).filter(Boolean);
-    const jobLocation = (job.location || '').toLowerCase();
-    const workPreference = normalizeLower(userProfile.workPreference);
-    const employmentType = normalizeLower(job.raw?.employmentType || job.raw?.job_employment_type || "");
-    const userRolePreferences = (userProfile.rolePreferences || []).map((role) => normalizeLower(role));
+    ]);
+    const jobLocation = normalizeLower(job.location || "");
+    const jobLocationTokens = splitLocationTokens(job.location || "");
+    const userLocationTokens = userLocations.flatMap(splitLocationTokens);
+    const userRolePreferences = normalizeList(userProfile.rolePreferences);
     const jobTitle = normalizeLower(job.title);
-    const opportunityPreferences = (userProfile.opportunityPreferences || []).map((type) => normalizeLower(type));
+    const matchedSkills = jobSkills.filter((jobSkill) => userSkills.includes(jobSkill));
+    const skillsMatch = jobSkills.length > 0 ? (matchedSkills.length / jobSkills.length) * 100 : 0;
+    const strictSkillsPass = jobSkills.length > 0 && matchedSkills.length > 0;
 
-    // Skills match (60% weight)
-    let skillsMatch = 50; // Base score if no skills listed
-    let matchedSkills = [];
-    if (jobSkills.length > 0) {
-      matchedSkills = jobSkills.filter(jobSkill =>
-        userSkills.some(userSkill => 
-          jobSkill.includes(userSkill) || userSkill.includes(jobSkill)
-        )
-      );
-      skillsMatch = (matchedSkills.length / jobSkills.length) * 100;
+    const strictLocationPass = jobLocation
+      ? userLocationTokens.some((token) => jobLocationTokens.includes(token))
+      : false;
+
+    const strictRolePass = userRolePreferences.length > 0
+      ? userRolePreferences.some((role) => role === jobTitle)
+      : false;
+
+    let roundedPercentage = Math.round(
+      (skillsMatch * 0.6) + (strictLocationPass ? 25 : 0) + (strictRolePass ? 15 : 0)
+    );
+    if (!(strictSkillsPass && strictLocationPass && strictRolePass)) {
+      roundedPercentage = Math.min(roundedPercentage, 35);
     }
-
-    // Location match (40% weight)
-    let locationMatch = 50; // Base score if no location specified
-    if (jobLocation) {
-      const isLocationMatch = userLocations.some(loc =>
-        jobLocation.includes(loc) || loc.includes(jobLocation)
-      );
-      locationMatch = isLocationMatch ? 100 : (jobLocation.includes('remote') ? 75 : 0);
-    }
-
-    let roleMatch = 50;
-    if (userRolePreferences.length > 0) {
-      roleMatch = userRolePreferences.some((role) => jobTitle.includes(role) || role.includes(jobTitle)) ? 100 : 20;
-    }
-
-    let workModeMatch = 50;
-    if (workPreference) {
-      if (jobLocation.includes("remote")) {
-        workModeMatch = workPreference.includes("remote") ? 100 : 50;
-      } else if (jobLocation.includes("hybrid")) {
-        workModeMatch = (workPreference.includes("hybrid") || workPreference.includes("wfo")) ? 100 : 40;
-      } else {
-        workModeMatch = (workPreference.includes("office") || workPreference.includes("wfo") || workPreference.includes("on-site")) ? 100 : 40;
-      }
-    }
-
-    let opportunityMatch = 50;
-    if (opportunityPreferences.length > 0 && employmentType) {
-      const expectsInternship = opportunityPreferences.includes("internship");
-      const expectsFreelance = opportunityPreferences.includes("freelance");
-      if ((expectsInternship && employmentType.includes("intern")) || (expectsFreelance && employmentType.includes("freelance"))) {
-        opportunityMatch = 100;
-      } else {
-        opportunityMatch = 25;
-      }
-    }
-
-    const totalMatch = (skillsMatch * 0.45) + (locationMatch * 0.25) + (roleMatch * 0.15) + (workModeMatch * 0.1) + (opportunityMatch * 0.05);
-    const roundedPercentage = Math.round(Math.min(totalMatch, 100));
+    roundedPercentage = Math.max(0, Math.min(100, roundedPercentage));
 
     const reasons = [];
     if (matchedSkills.length > 0) {
-      reasons.push(`Skills matched: ${matchedSkills.slice(0, 3).join(", ")}`);
+      reasons.push(`Strict skills matched: ${matchedSkills.slice(0, 3).join(", ")}`);
+    } else {
+      reasons.push("No strict skill match");
     }
-    if (locationMatch >= 75) {
-      reasons.push("Location preference matched");
+    if (strictLocationPass) {
+      reasons.push("Strict location preference matched");
+    } else {
+      reasons.push("Location preference not matched strictly");
     }
-    if (roleMatch >= 90) {
-      reasons.push("Role preference aligned");
-    }
-    if (workModeMatch >= 90) {
-      reasons.push(`Work mode matched (${userProfile.workPreference})`);
-    }
-    if (opportunityMatch >= 90) {
-      reasons.push("Opportunity type matched");
-    }
-    if (reasons.length === 0) {
-      reasons.push("Low alignment with your profile preferences");
+    if (strictRolePass) {
+      reasons.push("Strict role preference matched");
+    } else {
+      reasons.push("Role preference not matched strictly");
     }
 
     return { percentage: roundedPercentage, reasons };
@@ -390,37 +338,31 @@ export default function JobList() {
   // Load recommended jobs match percentages
   const loadRecommendedJobs = async () => {
     try {
-      if (isAuthenticated && isApplicant) {
-        // Try to get recommended jobs from backend first
-        const recommendedJobs = await getRecommendedJobs();
-        const matchMap = {};
-        const reasonsMap = {};
-        if (Array.isArray(recommendedJobs)) {
-          recommendedJobs.forEach(item => {
-            matchMap[item.job.id] = item.matchPercentage;
-            reasonsMap[item.job.id] = [`Recommended by profile engine (${Math.round(item.matchPercentage)}% match)`];
-          });
-        }
-        
-        // Also calculate matches for all loaded jobs using user profile
-        if (userProfile && jobs && jobs.length > 0) {
-          jobs.forEach(job => {
-            if (matchMap[job.id] === undefined) {
-              // Only calculate if not already in recommended list
-              const result = calculateJobMatch(job, userProfile);
-              matchMap[job.id] = result.percentage;
-              reasonsMap[job.id] = result.reasons;
-            }
-          });
-        }
-        
-        setJobMatchPercentages(matchMap);
-        setJobMatchReasons(reasonsMap);
-      }
+      if (!isAuthenticated || !isApplicantOrStudent || !userProfile || !jobs?.length) return;
+
+      const recommendedJobs = await getRecommendedJobs().catch(() => []);
+      const recommendedIds = new Set(
+        (Array.isArray(recommendedJobs) ? recommendedJobs : [])
+          .map((item) => item?.job?.id)
+          .filter(Boolean)
+      );
+
+      const matchMap = {};
+      const reasonsMap = {};
+      jobs.forEach((job) => {
+        const result = calculateJobMatch(job, userProfile);
+        matchMap[job.id] = result.percentage;
+        reasonsMap[job.id] = recommendedIds.has(job.id)
+          ? [...result.reasons, "Also recommended by profile engine"]
+          : result.reasons;
+      });
+
+      setJobMatchPercentages(matchMap);
+      setJobMatchReasons(reasonsMap);
     } catch (err) {
       console.error("Error loading recommended jobs:", err);
       // Fallback: calculate matches for all jobs using user profile
-      if (userProfile && isApplicant && jobs && jobs.length > 0) {
+      if (userProfile && isApplicantOrStudent && jobs && jobs.length > 0) {
         const matchMap = {};
         const reasonsMap = {};
         jobs.forEach(job => {
@@ -611,14 +553,18 @@ export default function JobList() {
     const matchesSource = filterSource === "All" || job.source === filterSource;
     const matchesLocation = filterLocation === "All" || job.location === filterLocation;
     
+    const alreadyAppliedLocal =
+      job.source !== "External" && appliedLocalJobIds.has((job.id || "").toString());
+    
     return matchesSearch && matchesRole && matchesIndustry && matchesCompany && 
-           matchesSkill && matchesSource && matchesLocation;
+           matchesSkill && matchesSource && matchesLocation && !alreadyAppliedLocal;
   });
 
   useEffect(() => {
     loadJobs();
     loadRecommendedJobs();
     loadUserProfile();
+    loadAppliedJobs();
   }, []);
 
   // Recalculate match percentages when jobs or user profile changes
@@ -629,31 +575,16 @@ export default function JobList() {
   }, [jobs, userProfile]);
 
   useEffect(() => {
-    if (!isAuthenticated || !isApplicant) {
+    loadAppliedJobs();
+  }, [isAuthenticated, isApplicantOrStudent, user?.email, user?.id]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !isApplicantOrStudent) {
       setMissingMandatoryFields([]);
       return;
     }
     setMissingMandatoryFields(getMissingMandatoryProfileFields(userProfile));
-  }, [isAuthenticated, isApplicant, userProfile]);
-
-  useEffect(() => {
-    if (!isAuthenticated || !isApplicant) return;
-    if (missingMandatoryFields.length === 0) return;
-    if (location.state?.returnFromProfile) return;
-
-    const identity = user?.email || user?.id || "anonymous";
-    const storageKey = `jobs_mandatory_profile_prompt_seen_${identity}`;
-    const alreadyPrompted = localStorage.getItem(storageKey) === "true";
-    if (alreadyPrompted) return;
-
-    localStorage.setItem(storageKey, "true");
-    navigate('/build-profile', {
-      state: {
-        mandatoryProfile: true,
-        missingFields: missingMandatoryFields
-      }
-    });
-  }, [isAuthenticated, isApplicant, missingMandatoryFields, navigate, location.state, user]);
+  }, [isAuthenticated, isApplicantOrStudent, userProfile]);
 
   // Check if user returned from build-profile and should open application form
   useEffect(() => {
@@ -763,6 +694,23 @@ export default function JobList() {
     }
   };
 
+  // Open job details when user arrives from a "job updated" notification
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- handleViewDetails is stable enough; avoid re-running on every render
+  useEffect(() => {
+    const reviewJobId = location.state?.reviewJobId;
+    if (!reviewJobId) {
+      reviewJobOpenedRef.current = null;
+      return;
+    }
+    if (!jobs.length) return;
+    if (reviewJobOpenedRef.current === reviewJobId) return;
+    const job = jobs.find((j) => j.id === reviewJobId);
+    if (!job) return;
+    reviewJobOpenedRef.current = reviewJobId;
+    handleViewDetails(job);
+    navigate(".", { replace: true, state: {} });
+  }, [jobs, location.state?.reviewJobId, navigate]);
+
   const handleApply = async (job, details) => {
     // For external jobs, redirect to the company's website
     if (job.source === "External") {
@@ -793,25 +741,17 @@ export default function JobList() {
       return;
     }
 
+    if (job.source !== "External" && appliedLocalJobIds.has((job.id || "").toString())) {
+      toast.info("You have already applied for this job.", {
+        position: "top-right",
+        autoClose: 2500,
+      });
+      return;
+    }
+
     const latestProfile = await getUserProfile().catch(() => userProfile);
     if (latestProfile) {
       setUserProfile(latestProfile);
-    }
-    const mandatoryMissing = getMissingMandatoryProfileFields(latestProfile || userProfile);
-    if (mandatoryMissing.length > 0) {
-      toast.warning("Please complete your mandatory job profile fields first.", {
-        position: "top-right",
-        autoClose: 3500
-      });
-      navigate('/build-profile', {
-        state: {
-          mandatoryProfile: true,
-          missingFields: mandatoryMissing,
-          returnToApplication: true,
-          jobId: job.id
-        }
-      });
-      return;
     }
 
     // Show application form for local jobs only
@@ -820,6 +760,9 @@ export default function JobList() {
   };
 
   const handleApplicationSuccess = () => {
+    if (jobToApply?.source !== "External" && jobToApply?.id) {
+      setAppliedLocalJobIds((prev) => new Set([...prev, (jobToApply.id || "").toString()]));
+    }
     setShowApplicationForm(false);
     setJobToApply(null);
     closeModal();
@@ -889,15 +832,15 @@ export default function JobList() {
           </p>
         </div>
 
-        {isApplicant && isAuthenticated && missingMandatoryFields.length > 0 && (
+        {isApplicantOrStudent && isAuthenticated && missingMandatoryFields.length > 0 && (
           <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
                 <p className="text-sm font-semibold text-amber-900">
-                  Complete mandatory profile fields before applying to jobs
+                  Complete your profile
                 </p>
                 <p className="text-xs text-amber-800 mt-1">
-                  Missing: {missingMandatoryFields.join(', ')}
+                  Add these fields for profile-based apply: {missingMandatoryFields.join(', ')}
                 </p>
               </div>
               <button
@@ -1431,7 +1374,7 @@ export default function JobList() {
                   </div>
 
                   {/* Your Matching Profile Section */}
-                  {userProfile && isApplicant && (
+                  {userProfile && isApplicantOrStudent && (
                     <div className="p-3 sm:p-4 lg:p-5 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg sm:rounded-xl border-2 border-indigo-300">
                       <div className="flex items-center gap-1.5 sm:gap-2 mb-3 sm:mb-4">
                         <svg className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1540,7 +1483,7 @@ export default function JobList() {
                   )}
 
                   {/* Missing Skills & Location Mismatch Section */}
-                  {userProfile && isApplicant && (
+                  {userProfile && isApplicantOrStudent && (
                     <div className="p-3 sm:p-4 lg:p-5 bg-gradient-to-br from-red-50 to-orange-50 rounded-lg sm:rounded-xl border-2 border-red-200">
                       <div className="flex items-center gap-1.5 sm:gap-2 mb-3 sm:mb-4">
                         <svg className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

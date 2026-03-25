@@ -73,7 +73,7 @@ apiClient.interceptors.request.use(
             config.baseURL = runtimeBaseUrl;
         }
 
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('token') || localStorage.getItem('somethingx_auth_token');
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
