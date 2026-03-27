@@ -14,6 +14,7 @@ ENV VITE_RAPIDAPI_KEY=$VITE_RAPIDAPI_KEY
 
 # Copy source files (excluding node_modules)
 COPY src ./src
+COPY public ./public
 COPY index.html ./
 COPY postcss.config.js tailwind.config.js vite.config.js ./
 # Build the application

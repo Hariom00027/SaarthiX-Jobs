@@ -1,10 +1,141 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getAllStudents, shortlistStudent, removeShortlist } from '../api/studentDatabaseApi';
 import { useAuth } from '../context/AuthContext';
 import StudentDetailModal from './StudentDetailModal';
 
+function MultiSelectFilterInput({
+  label,
+  placeholder,
+  options,
+  values,
+  onChange,
+}) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    const onDocClick = (event) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  const normalizedValues = values.map((v) => String(v || '').trim().toLowerCase());
+  const availableOptions = options.filter((opt) => !normalizedValues.includes(String(opt).trim().toLowerCase()));
+  const filteredOptions = query
+    ? availableOptions.filter((opt) => String(opt).toLowerCase().includes(query.toLowerCase()))
+    : availableOptions;
+
+  const addValue = (value) => {
+    const next = String(value || '').trim();
+    if (!next) return;
+    const exists = values.some((v) => String(v).trim().toLowerCase() === next.toLowerCase());
+    if (!exists) onChange([...values, next]);
+    setQuery('');
+    setOpen(true);
+  };
+
+  const removeValue = (value) => {
+    onChange(values.filter((v) => v !== value));
+  };
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <div
+        className="w-full min-h-[42px] rounded-lg border border-gray-300 bg-white px-2 py-1.5 focus-within:ring-2 focus-within:ring-gray-900 focus-within:border-transparent"
+        onClick={() => {
+          setOpen(true);
+          inputRef.current?.focus();
+        }}
+      >
+        <div className="flex flex-wrap items-center gap-1.5">
+          {values.map((value) => (
+            <span key={value} className="inline-flex items-center gap-1 rounded-md bg-blue-100 text-blue-800 px-2 py-0.5 text-xs">
+              {value}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeValue(value);
+                }}
+                className="text-blue-700 hover:text-blue-900"
+                aria-label={`Remove ${value}`}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onFocus={() => setOpen(true)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setOpen(true);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && query.trim()) {
+                e.preventDefault();
+                addValue(query);
+              } else if (e.key === 'Backspace' && !query && values.length > 0) {
+                onChange(values.slice(0, -1));
+              }
+            }}
+            placeholder={values.length === 0 ? placeholder : ''}
+            className="flex-1 min-w-[120px] border-0 bg-transparent text-sm outline-none"
+          />
+        </div>
+      </div>
+      {open && filteredOptions.length > 0 && (
+        <div className="absolute z-30 mt-1 max-h-44 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+          {filteredOptions.slice(0, 80).map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => addValue(option)}
+              className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-100"
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function StudentDatabase() {
+  const MULTI_VALUE_SEPARATOR = '||';
   const { user, isIndustry } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const getFiltersFromParams = (searchString = '') => {
+    const params = new URLSearchParams(searchString);
+    return {
+      keyword: params.get('q')?.trim() ?? '',
+      degree: params.get('degree')?.trim() ?? '',
+      skills: params.get('skills')?.trim() ?? '',
+      roles: params.get('roles')?.trim() ?? '',
+      shortlisted: params.get('shortlisted')?.trim() ?? '',
+      location: params.get('location')?.trim() ?? '',
+      graduationYear: params.get('graduationYear')?.trim() ?? '',
+      availability: params.get('availability')?.trim() ?? '',
+      specialization: params.get('specialization')?.trim() ?? '',
+      gender: params.get('gender')?.trim() ?? '',
+      college: params.get('college')?.trim() ?? '',
+      gradingType: params.get('gradingType')?.trim() ?? '',
+      gradingValue: params.get('gradingValue')?.trim() ?? '',
+      experience: params.get('experience')?.trim() ?? '',
+    };
+  };
   const [students, setStudents] = useState([]);
   const [allStudents, setAllStudents] = useState([]); // Store all students for filter options
   const [loading, setLoading] = useState(true);
@@ -15,24 +146,25 @@ export default function StudentDatabase() {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   
   // Filter states
-  const [filters, setFilters] = useState({
-    keyword: '',
-    degree: '',
-    skills: '',
-    location: '',
-    graduationYear: '',
-    availability: '',
-  });
+  const [filters, setFilters] = useState(() => getFiltersFromParams(location.search));
   const [showFilters, setShowFilters] = useState(true);
+  const toMultiValues = (value) =>
+    String(value || '')
+      .split(MULTI_VALUE_SEPARATOR)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  const fromMultiValues = (arr) => arr.join(MULTI_VALUE_SEPARATOR);
 
   // Column configuration
   const [columnOrder, setColumnOrder] = useState([
-    'name', 'degree', 'specialization', 'institution', 'year', 'skills', 'location', 'experience', 'resume', 'actions'
+    'name', 'gender', 'degree', 'specialization', 'roles', 'institution', 'year', 'skills', 'location', 'experience', 'resume', 'actions'
   ]);
   const [columnVisibility, setColumnVisibility] = useState({
     name: true,
+    gender: true,
     degree: true,
     specialization: true,
+    roles: true,
     institution: true,
     year: true,
     skills: true,
@@ -42,16 +174,18 @@ export default function StudentDatabase() {
     actions: true,
   });
   const [columnWidths, setColumnWidths] = useState({
-    name: 14,
+    name: 13,
+    gender: 8,
     degree: 7,
-    specialization: 10,
+    specialization: 9,
+    roles: 10,
     institution: 12,
     year: 6,
-    skills: 18,
+    skills: 16,
     location: 10,
-    experience: 5,
+    experience: 6,
     resume: 6,
-    actions: 5,
+    actions: 7,
   });
   const [resizingColumn, setResizingColumn] = useState(null);
   const [draggedColumn, setDraggedColumn] = useState(null);
@@ -60,6 +194,22 @@ export default function StudentDatabase() {
   const tableRef = useRef(null);
   const resizeStartX = useRef(0);
   const resizeStartWidth = useRef(0);
+  const getRoleValues = (student) => {
+    const roles = [];
+    const pushRole = (value) => {
+      const next = String(value || '').trim();
+      if (next) roles.push(next);
+    };
+
+    pushRole(student?.currentPosition);
+    if (Array.isArray(student?.professionalExperiences)) {
+      student.professionalExperiences.forEach((exp) => {
+        pushRole(exp?.jobTitle);
+      });
+    }
+
+    return Array.from(new Set(roles));
+  };
 
   // Column definitions
   const columnDefinitions = {
@@ -96,6 +246,17 @@ export default function StudentDatabase() {
         </div>
       )
     },
+    gender: {
+      id: 'gender',
+      label: 'Gender',
+      sortKey: 'gender',
+      sortable: true,
+      render: (student) => (
+        <div className="text-xs text-gray-900 truncate" title={student.gender || 'N/A'}>
+          {student.gender || 'N/A'}
+        </div>
+      )
+    },
     degree: { 
       id: 'degree', 
       label: 'Degree', 
@@ -117,6 +278,19 @@ export default function StudentDatabase() {
           {student.specialization || 'N/A'}
         </div>
       )
+    },
+    roles: {
+      id: 'roles',
+      label: 'Role',
+      sortable: false,
+      render: (student) => {
+        const roles = getRoleValues(student);
+        return (
+          <div className="text-xs text-gray-900 truncate" title={roles.join(', ') || 'N/A'}>
+            {roles[0] || 'N/A'}
+          </div>
+        );
+      },
     },
     institution: { 
       id: 'institution', 
@@ -234,6 +408,11 @@ export default function StudentDatabase() {
     },
   };
 
+  // Sync filters when opening /browse with search params (or params update without remount)
+  useEffect(() => {
+    setFilters(getFiltersFromParams(location.search));
+  }, [location.search]);
+
   // Fetch students on mount
   useEffect(() => {
     if (isIndustry) {
@@ -277,28 +456,56 @@ export default function StudentDatabase() {
   const filterOptions = useMemo(() => {
     const options = {
       degrees: new Set(),
+      specializations: new Set(),
       skills: new Set(),
+      roles: new Set(),
       locations: new Set(),
+      colleges: new Set(),
+      genders: new Set(),
+      experiences: new Set(),
       graduationYears: new Set(),
       availability: new Set(),
     };
 
     allStudents.forEach(student => {
       if (student.degree) options.degrees.add(student.degree);
+      if (student.specialization) options.specializations.add(student.specialization);
       if (student.skills && Array.isArray(student.skills)) {
         student.skills.forEach(skill => {
           if (skill) options.skills.add(skill);
         });
       }
+      getRoleValues(student).forEach((role) => options.roles.add(role));
       if (student.currentLocation) options.locations.add(student.currentLocation);
+      if (student.institution) options.colleges.add(student.institution);
+      if (student.gender) options.genders.add(student.gender);
+      if (student.experience !== undefined && student.experience !== null) options.experiences.add(String(student.experience));
       if (student.graduationYear) options.graduationYears.add(student.graduationYear);
       if (student.availability) options.availability.add(student.availability);
+
+      if (Array.isArray(student.educationEntries)) {
+        student.educationEntries.forEach((edu) => {
+          if (edu?.degree) options.degrees.add(edu.degree);
+          if (edu?.level) options.degrees.add(edu.level);
+          if (edu?.stream) options.specializations.add(edu.stream);
+          if (edu?.specialization) options.specializations.add(edu.specialization);
+          if (edu?.institution) options.colleges.add(edu.institution);
+          if (edu?.collegeName) options.colleges.add(edu.collegeName);
+          if (edu?.passingYear) options.graduationYears.add(String(edu.passingYear));
+          if (edu?.graduationYear) options.graduationYears.add(String(edu.graduationYear));
+        });
+      }
     });
 
     return {
       degrees: Array.from(options.degrees).sort(),
+      specializations: Array.from(options.specializations).sort(),
       skills: Array.from(options.skills).sort(),
+      roles: Array.from(options.roles).sort(),
       locations: Array.from(options.locations).sort(),
+      colleges: Array.from(options.colleges).sort(),
+      genders: Array.from(options.genders).sort(),
+      experiences: Array.from(options.experiences).sort((a, b) => Number.parseFloat(a) - Number.parseFloat(b)),
       graduationYears: Array.from(options.graduationYears).sort((a, b) => b.localeCompare(a)),
       availability: Array.from(options.availability).sort(),
     };
@@ -306,36 +513,214 @@ export default function StudentDatabase() {
 
   // Apply filters to students
   const filteredStudents = useMemo(() => {
+    const getFirstValue = (student, keys) => {
+      for (const key of keys) {
+        const value = student[key];
+        if (value !== undefined && value !== null && String(value).trim() !== '') {
+          return String(value);
+        }
+      }
+      return '';
+    };
+
+    const getEducationValues = (student, keys) => {
+      if (!Array.isArray(student.educationEntries)) return [];
+      return student.educationEntries
+        .map((entry) => {
+          for (const key of keys) {
+            const value = entry?.[key];
+            if (value !== undefined && value !== null && String(value).trim() !== '') {
+              return String(value).trim();
+            }
+          }
+          return '';
+        })
+        .filter(Boolean);
+    };
+
+    const normalizeText = (value) =>
+      String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const canonicalDegree = (value) => {
+      const text = normalizeText(value);
+      if (!text) return '';
+      if (text.includes('b tech') || text.includes('btech') || text.includes('be') || text.includes('b e') || text.includes('be b tech')) return 'be_btech';
+      if (text.includes('m tech') || text.includes('mtech') || text === 'm e' || text === 'me') return 'me_mtech';
+      if (text.includes('b sc') || text.includes('bsc')) return 'bsc';
+      if (text.includes('m sc') || text.includes('msc')) return 'msc';
+      if (text.includes('mca')) return 'mca';
+      if (text.includes('mbbs')) return 'mbbs';
+      if (text.includes('bba')) return 'bba';
+      if (text.includes('agri') || text.includes('agriculture')) return 'agriculture';
+      return '';
+    };
+
+    const strictMatch = (source, query) => normalizeText(source) === normalizeText(query);
+    const strictSome = (values, query) => values.some((value) => strictMatch(value, query));
+    const parseMultiValues = (value) =>
+      String(value || '')
+        .split(MULTI_VALUE_SEPARATOR)
+        .map((item) => item.trim())
+        .filter(Boolean);
+
     return allStudents.filter(student => {
       // Keyword filter (name, skills, institution)
       if (filters.keyword) {
-        const keyword = filters.keyword.toLowerCase();
-        const matchesKeyword = 
-          (student.fullName && student.fullName.toLowerCase().includes(keyword)) ||
-          (student.skills && student.skills.some(skill => skill.toLowerCase().includes(keyword))) ||
-          (student.institution && student.institution.toLowerCase().includes(keyword));
-        if (!matchesKeyword) return false;
-      }
+        const keywordValues = parseMultiValues(filters.keyword);
+        const hasKeywordMatch = keywordValues.some((keyword) => {
+          const keywordDegree = canonicalDegree(keyword);
+        const degreeValues = [
+          student.degree,
+          ...getEducationValues(student, ['degree', 'level']),
+        ].filter(Boolean);
+
+        if (keywordDegree) {
+            return degreeValues.some((value) => canonicalDegree(value) === keywordDegree);
+        } else {
+          const keywordSources = [
+            student.fullName,
+            student.institution,
+            student.degree,
+            student.specialization,
+            student.currentLocation,
+            ...(Array.isArray(student.skills) ? student.skills : []),
+            ...getEducationValues(student, ['degree', 'level', 'stream', 'specialization', 'institution', 'collegeName']),
+          ].filter(Boolean);
+            return strictSome(keywordSources, keyword);
+          }
+        });
+        if (!hasKeywordMatch) return false;
+        }
 
       // Degree filter
-      if (filters.degree && student.degree !== filters.degree) return false;
+      if (filters.degree) {
+        const queryDegrees = parseMultiValues(filters.degree);
+        const degreeOptions = [getFirstValue(student, ['degree']), ...getEducationValues(student, ['degree', 'level'])].filter(Boolean);
+        const hasDegreeMatch = queryDegrees.some((queryDegreeValue) => {
+          const queryDegree = canonicalDegree(queryDegreeValue);
+          return queryDegree
+            ? degreeOptions.some((value) => canonicalDegree(value) === queryDegree)
+            : strictSome(degreeOptions, queryDegreeValue);
+        });
+        if (!hasDegreeMatch) return false;
+      }
+
+      // Specialization filter
+      if (filters.specialization) {
+        const querySpecializations = parseMultiValues(filters.specialization);
+        const specializationOptions = [
+          getFirstValue(student, ['specialization']),
+          ...getEducationValues(student, ['stream', 'specialization']),
+        ].filter(Boolean);
+        const hasSpecializationMatch = querySpecializations.some((query) => strictSome(specializationOptions, query));
+        if (!hasSpecializationMatch) return false;
+      }
 
       // Skills filter
       if (filters.skills) {
-        const hasSkill = student.skills && student.skills.some(skill => 
-          skill.toLowerCase().includes(filters.skills.toLowerCase())
-        );
-        if (!hasSkill) return false;
+        const querySkills = parseMultiValues(filters.skills);
+        const skillLikeValues = [
+          ...(Array.isArray(student.skills) ? student.skills : []),
+          getFirstValue(student, ['specialization', 'degree']),
+          ...getEducationValues(student, ['stream', 'specialization', 'degree', 'level']),
+        ].filter(Boolean);
+
+        const hasSkillMatch = querySkills.some((query) => strictSome(skillLikeValues, query));
+        if (!hasSkillMatch) return false;
+      }
+
+      // Role filter
+      if (filters.roles) {
+        const queryRoles = parseMultiValues(filters.roles);
+        const roleValues = getRoleValues(student);
+        const hasRoleMatch = queryRoles.some((query) => strictSome(roleValues, query));
+        if (!hasRoleMatch) return false;
+      }
+
+      if (filters.shortlisted && filters.shortlisted.toLowerCase() === 'true' && !student.isShortlisted) {
+        return false;
       }
 
       // Location filter
-      if (filters.location && student.currentLocation !== filters.location) return false;
+      if (filters.location) {
+        const queryLocations = parseMultiValues(filters.location);
+        const location = getFirstValue(student, ['currentLocation', 'location']);
+        const hasLocationMatch = queryLocations.some((query) => strictMatch(location, query));
+        if (!hasLocationMatch) return false;
+      }
+
+      // Gender filter
+      if (filters.gender) {
+        const queryGenders = parseMultiValues(filters.gender);
+        const gender = getFirstValue(student, ['gender']);
+        const hasGenderMatch = queryGenders.some((query) => strictMatch(gender, query));
+        if (!gender || !hasGenderMatch) return false;
+      }
+
+      // College filter
+      if (filters.college) {
+        const queryColleges = parseMultiValues(filters.college);
+        const collegeOptions = [
+          getFirstValue(student, ['institution', 'college', 'collegeName']),
+          ...getEducationValues(student, ['institution', 'college', 'collegeName']),
+        ].filter(Boolean);
+        const hasCollegeMatch = queryColleges.some((query) => strictSome(collegeOptions, query));
+        if (!hasCollegeMatch) return false;
+      }
 
       // Graduation year filter
-      if (filters.graduationYear && student.graduationYear !== filters.graduationYear) return false;
+      if (filters.graduationYear) {
+        const queryYears = parseMultiValues(filters.graduationYear);
+        const years = [
+          getFirstValue(student, ['graduationYear']),
+          ...getEducationValues(student, ['passingYear', 'graduationYear']),
+        ].filter(Boolean);
+        const hasYearMatch = queryYears.some((query) => strictSome(years, query));
+        if (!hasYearMatch) return false;
+      }
+
+      // Experience filter
+      if (filters.experience) {
+        const queryExperiences = parseMultiValues(filters.experience);
+        const experienceValue = getFirstValue(student, ['experience', 'yearsOfExperience']);
+        const hasExperienceMatch = queryExperiences.some((query) => {
+          const expectedExperience = Number.parseFloat(query);
+          const studentExperience = Number.parseFloat(experienceValue);
+          if (!Number.isNaN(expectedExperience)) {
+            return !Number.isNaN(studentExperience) && studentExperience === expectedExperience;
+          }
+          return strictMatch(experienceValue, query);
+        });
+        if (!hasExperienceMatch) return false;
+      }
 
       // Availability filter
-      if (filters.availability && student.availability !== filters.availability) return false;
+      if (filters.availability) {
+        const queryAvailabilityValues = parseMultiValues(filters.availability);
+        const hasAvailabilityMatch = queryAvailabilityValues.some((query) => strictMatch(student.availability, query));
+        if (!hasAvailabilityMatch) return false;
+      }
+
+      // Grading filter
+      if (filters.gradingType && filters.gradingValue) {
+        const gradeFieldCandidates = filters.gradingType.toLowerCase() === 'cgpa'
+          ? ['cgpa', 'gradePoint', 'gpa']
+          : ['percentage', 'marksPercentage', 'scorePercentage'];
+        const gradeRaw = [
+          getFirstValue(student, gradeFieldCandidates),
+          ...getEducationValues(student, gradeFieldCandidates),
+        ].find(Boolean) || '';
+        const studentGrade = Number.parseFloat(gradeRaw);
+        const expectedGrade = Number.parseFloat(filters.gradingValue);
+
+        if (!Number.isNaN(expectedGrade)) {
+          if (Number.isNaN(studentGrade) || studentGrade < expectedGrade) return false;
+        }
+      }
 
       return true;
     });
@@ -388,9 +773,17 @@ export default function StudentDatabase() {
       keyword: '',
       degree: '',
       skills: '',
+      roles: '',
+      shortlisted: '',
       location: '',
       graduationYear: '',
       availability: '',
+      specialization: '',
+      gender: '',
+      college: '',
+      gradingType: '',
+      gradingValue: '',
+      experience: '',
     });
   };
 
@@ -534,8 +927,15 @@ export default function StudentDatabase() {
       <div className="w-full mx-auto">
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-4">
             <div>
+              <button
+                type="button"
+                onClick={() => navigate('/student-database')}
+                className="mb-3 text-sm font-medium text-[#337ab7] hover:underline"
+              >
+                ← Back to overview
+              </button>
               <h1 className="text-3xl font-bold text-gray-900">Student Database</h1>
               <p className="text-gray-600 mt-1">Browse and filter registered student profiles</p>
             </div>
@@ -543,6 +943,12 @@ export default function StudentDatabase() {
               <span className="text-sm text-gray-600">
                 Showing <span className="font-semibold text-gray-900">{students.length}</span> of <span className="font-semibold text-gray-900">{allStudents.length}</span> students
               </span>
+            <button
+              onClick={() => handleFilterChange('shortlisted', filters.shortlisted === 'true' ? '' : 'true')}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg transition-colors border border-[#337ab7]/30 text-[#337ab7] bg-white hover:bg-[#337ab7]/5"
+            >
+              {filters.shortlisted === 'true' ? 'Show All Students' : 'See Shortlisted Students'}
+            </button>
               <button
                 onClick={() => setShowFilters(!showFilters)}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
@@ -559,6 +965,9 @@ export default function StudentDatabase() {
           {showFilters && (
             <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="md:col-span-2 lg:col-span-3 text-xs text-gray-500">
+                  Tip: Select from list; each selected value appears as a removable chip.
+                </div>
                 {/* Keyword Search */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
@@ -572,79 +981,121 @@ export default function StudentDatabase() {
                 </div>
 
                 {/* Degree Dropdown */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Degree</label>
-                  <select
-                    value={filters.degree}
-                    onChange={(e) => handleFilterChange('degree', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent bg-white"
-                  >
-                    <option value="">All Degrees</option>
-                    {filterOptions.degrees.map(degree => (
-                      <option key={degree} value={degree}>{degree}</option>
-                    ))}
-                  </select>
-                </div>
+                <MultiSelectFilterInput
+                  label="Degree"
+                  placeholder="Select degree"
+                  options={filterOptions.degrees}
+                  values={toMultiValues(filters.degree)}
+                  onChange={(next) => handleFilterChange('degree', fromMultiValues(next))}
+                />
 
                 {/* Skills Dropdown */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Skills</label>
-                  <select
-                    value={filters.skills}
-                    onChange={(e) => handleFilterChange('skills', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent bg-white"
-                  >
-                    <option value="">All Skills</option>
-                    {filterOptions.skills.map(skill => (
-                      <option key={skill} value={skill}>{skill}</option>
-                    ))}
-                  </select>
-                </div>
+                <MultiSelectFilterInput
+                  label="Skills"
+                  placeholder="Select skills"
+                  options={filterOptions.skills}
+                  values={toMultiValues(filters.skills)}
+                  onChange={(next) => handleFilterChange('skills', fromMultiValues(next))}
+                />
+
+                <MultiSelectFilterInput
+                  label="Roles"
+                  placeholder="Select role"
+                  options={filterOptions.roles}
+                  values={toMultiValues(filters.roles)}
+                  onChange={(next) => handleFilterChange('roles', fromMultiValues(next))}
+                />
 
                 {/* Location Dropdown */}
+                <MultiSelectFilterInput
+                  label="Location"
+                  placeholder="Select location"
+                  options={filterOptions.locations}
+                  values={toMultiValues(filters.location)}
+                  onChange={(next) => handleFilterChange('location', fromMultiValues(next))}
+                />
+
+                {/* Graduation Year Dropdown */}
+                <MultiSelectFilterInput
+                  label="Graduation Year"
+                  placeholder="Select graduation year"
+                  options={filterOptions.graduationYears}
+                  values={toMultiValues(filters.graduationYear)}
+                  onChange={(next) => handleFilterChange('graduationYear', fromMultiValues(next))}
+                />
+
+                {/* Specialization Dropdown */}
+                <MultiSelectFilterInput
+                  label="Specialization"
+                  placeholder="Select specialization"
+                  options={filterOptions.specializations}
+                  values={toMultiValues(filters.specialization)}
+                  onChange={(next) => handleFilterChange('specialization', fromMultiValues(next))}
+                />
+
+                {/* College Dropdown */}
+                <MultiSelectFilterInput
+                  label="College"
+                  placeholder="Select college"
+                  options={filterOptions.colleges}
+                  values={toMultiValues(filters.college)}
+                  onChange={(next) => handleFilterChange('college', fromMultiValues(next))}
+                />
+
+                {/* Gender Dropdown */}
+                <MultiSelectFilterInput
+                  label="Gender"
+                  placeholder="Select gender"
+                  options={filterOptions.genders}
+                  values={toMultiValues(filters.gender)}
+                  onChange={(next) => handleFilterChange('gender', fromMultiValues(next))}
+                />
+
+                {/* Experience Dropdown */}
+                <MultiSelectFilterInput
+                  label="Experience"
+                  placeholder="Select experience"
+                  options={filterOptions.experiences}
+                  values={toMultiValues(filters.experience)}
+                  onChange={(next) => handleFilterChange('experience', fromMultiValues(next))}
+                />
+
+                {/* Grading Type Dropdown */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Grading Type</label>
                   <select
-                    value={filters.location}
-                    onChange={(e) => handleFilterChange('location', e.target.value)}
+                    value={filters.gradingType}
+                    onChange={(e) => handleFilterChange('gradingType', e.target.value)}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent bg-white"
                   >
-                    <option value="">All Locations</option>
-                    {filterOptions.locations.map(location => (
-                      <option key={location} value={location}>{location}</option>
-                    ))}
+                    <option value="">Any Grading Type</option>
+                    <option value="percentage">Percentage</option>
+                    <option value="cgpa">CGPA</option>
                   </select>
                 </div>
 
-                {/* Graduation Year Dropdown */}
+                {/* Minimum Grade Input */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Graduation Year</label>
-                  <select
-                    value={filters.graduationYear}
-                    onChange={(e) => handleFilterChange('graduationYear', e.target.value)}
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Minimum Grade</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={filters.gradingValue}
+                    onChange={(e) => handleFilterChange('gradingValue', e.target.value)}
+                    placeholder={filters.gradingType === 'cgpa' ? 'e.g. 8.5' : 'e.g. 75'}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent bg-white"
-                  >
-                    <option value="">All Years</option>
-                    {filterOptions.graduationYears.map(year => (
-                      <option key={year} value={year}>{year}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
 
                 {/* Availability Dropdown */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Availability</label>
-                  <select
-                    value={filters.availability}
-                    onChange={(e) => handleFilterChange('availability', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-gray-900 focus:border-transparent bg-white"
-                  >
-                    <option value="">All Availability</option>
-                    {filterOptions.availability.map(avail => (
-                      <option key={avail} value={avail}>{avail}</option>
-                    ))}
-                  </select>
-                </div>
+                <MultiSelectFilterInput
+                  label="Availability"
+                  placeholder="Select availability"
+                  options={filterOptions.availability}
+                  values={toMultiValues(filters.availability)}
+                  onChange={(next) => handleFilterChange('availability', fromMultiValues(next))}
+                />
               </div>
               <div className="flex gap-3 mt-4">
                 <button

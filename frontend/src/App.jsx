@@ -20,6 +20,7 @@ import IndustryHackathonDashboard from './components/IndustryHackathonDashboard'
 import IndustryHackathonResults from './components/IndustryHackathonResults';
 import IndustryCertificatePublishPage from './components/IndustryCertificatePublishPage';
 import StudentDatabase from './components/StudentDatabase';
+import StudentDatabaseIntro from './components/StudentDatabaseIntro';
 import DemoViewSwitcher from './components/DemoViewSwitcher';
 
 function AppShell() {
@@ -28,11 +29,12 @@ function AppShell() {
   const isEmbeddedProfileBuilder =
     searchParams.get('embed') === '1' &&
     (location.pathname === '/build-profile' || location.pathname === '/view-profile');
+  const isStudentDatabaseMarketing = location.pathname === '/student-database';
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {!isEmbeddedProfileBuilder && <Navbar />}
-      {!isEmbeddedProfileBuilder && <DemoViewSwitcher />}
+      {!isEmbeddedProfileBuilder && !isStudentDatabaseMarketing && <Navbar />}
+      {!isEmbeddedProfileBuilder && !isStudentDatabaseMarketing && <DemoViewSwitcher />}
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/apply-jobs" element={<JobList />} />
@@ -51,7 +53,8 @@ function AppShell() {
         <Route path="/industry/hackathon/:hackathonId/dashboard" element={<IndustryHackathonDashboard />} />
         <Route path="/industry/hackathon/:hackathonId/results" element={<IndustryHackathonResults />} />
         <Route path="/industry/hackathon/:hackathonId/publish-certificates" element={<IndustryCertificatePublishPage />} />
-        <Route path="/student-database" element={<StudentDatabase />} />
+        <Route path="/student-database" element={<StudentDatabaseIntro />} />
+        <Route path="/student-database/browse" element={<StudentDatabase />} />
       </Routes>
       <ToastContainer
         position="top-right"
