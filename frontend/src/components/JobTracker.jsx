@@ -7,6 +7,7 @@ import { redirectToSomethingXLogin } from "../config/redirectUrls";
 export default function JobTracker() {
   const navigate = useNavigate();
   const { isAuthenticated, loading: authLoading } = useAuth();
+  const notebookIcon = `${import.meta.env.BASE_URL}Container (7).png`;
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -137,12 +138,56 @@ export default function JobTracker() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl">
-        {/* Header */}
-        <div className="mb-10 animate-fadeIn">
-          <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-3 tracking-tight">Application Tracker</h1>
-          <p className="mt-2 text-gray-600 text-base font-light">Monitor the status of your job applications</p>
+    <div className="min-h-screen bg-white px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1254px]">
+        <div className="mb-8 flex flex-wrap gap-3">
+          <button
+            onClick={() => navigate("/apply-jobs")}
+            className="h-[39px] rounded-[6px] border border-black bg-white px-[18px] text-[14px] font-medium text-black"
+          >
+            Apply for Jobs
+          </button>
+          <button
+            onClick={() => navigate("/browse-hackathons")}
+            className="h-[39px] rounded-[6px] border border-black bg-white px-[18px] text-[14px] font-medium text-black shadow-[0px_1px_2px_rgba(37,99,235,0.2)]"
+          >
+            Hackathons
+          </button>
+          <button
+            onClick={() => navigate("/job-tracker")}
+            className="h-[39px] rounded-[6px] border border-white bg-black px-[18px] text-[14px] font-medium text-white"
+          >
+            My Applicationssss
+          </button>
+        </div>
+
+        <div className="mb-5 flex items-center gap-3">
+          <button
+            onClick={() => navigate("/")}
+            className="rounded-[6px] bg-[#3170A5] px-3 py-1.5 text-[12px] font-normal text-white"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-black/50 bg-white shadow-[0px_1px_2px_rgba(0,0,0,0.05)]">
+              <svg className="h-7 w-7 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 7v-7h7v7h-7z" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-[48px] font-bold leading-[1.05] tracking-[-0.5px] text-[#0F1724]">Application Tracker</h1>
+              <p className="text-[16px] text-black/75">Monitor the status of your job applications</p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate("/apply-jobs")}
+            className="mt-2 h-[39px] rounded-[10px] bg-[#3170A5] px-5 text-[16px] font-semibold text-white"
+          >
+            Browse Job Opportunities
+          </button>
         </div>
 
         {/* Error Message */}
@@ -152,52 +197,63 @@ export default function JobTracker() {
           </div>
         )}
 
-        {/* Applications List */}
-        {filteredApplications.length === 0 ? (
-          <div className="rounded-2xl border border-gray-200 bg-white p-16 text-center shadow-sm animate-fadeIn">
-            <div className="text-5xl mb-4">📋</div>
-            <h3 className="font-bold text-xl text-gray-900 mb-3">No applications found</h3>
-            {applications.length === 0 ? (
-              <>
-                <p className="text-base text-gray-600 mb-8 font-light">You haven't applied to any positions yet.</p>
-                <button
-                  onClick={() => navigate("/apply-jobs")}
-                  className="px-8 py-3 bg-gray-900 hover:bg-gray-800 text-white rounded-xl font-semibold transition-all duration-200 shadow-md hover:shadow-lg hover:-translate-y-0.5"
-                >
-                  Browse Job Opportunities
-                </button>
-              </>
-            ) : (
-              <p className="text-base text-gray-600 font-light">Try adjusting your filters</p>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredApplications.map((app, index) => (
-              <div
-                key={app.id}
-                onClick={() => setSelectedApplication(app)}
-                className="bg-white rounded-2xl border border-gray-200 hover:border-gray-300 hover:shadow-xl transition-all duration-300 cursor-pointer p-6 hover-lift animate-fadeIn"
-                style={{ animationDelay: `${index * 0.05}s` }}
+        <div className="relative min-h-[463px] w-full rounded-[6px] border border-black/40 bg-white shadow-[0px_4px_4px_rgba(0,0,0,0.25)]">
+          {filteredApplications.length === 0 ? (
+            <>
+              <div className="absolute left-1/2 top-[70px] -translate-x-1/2">
+                <img src={notebookIcon} alt="Notebook icon" className="h-[49px] w-[40px] object-contain" />
+              </div>
+              <button
+                onClick={() => navigate("/apply-jobs")}
+                className="absolute left-1/2 top-[270px] h-[100px] w-[540px] -translate-x-1/2 rounded-[6px] border border-black/70 bg-[#3170A5] text-[35px] font-semibold leading-[42px] text-white"
               >
-                <div className="flex items-start justify-between gap-3 mb-4">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-lg text-gray-900 truncate mb-2 leading-tight">{app.jobTitle || "Job Title"}</h3>
-                    <div className="flex items-center gap-2 mb-4">
-                      <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                      </svg>
-                      <p className="text-gray-700 font-semibold text-sm">{app.company || "Company"}</p>
+                Browse Job Opportunities
+              </button>
+            </>
+          ) : (
+            <div className="grid grid-cols-1 gap-6 p-6 md:grid-cols-2 lg:grid-cols-3">
+              {filteredApplications.map((app, index) => (
+                <div
+                  key={app.id}
+                  onClick={() => setSelectedApplication(app)}
+                  className="flex h-[298px] w-full max-w-[346px] flex-col rounded-[10px] border border-black/20 bg-white p-5 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.18)] transition-all duration-300 cursor-pointer hover:shadow-[inset_2px_2px_4px_rgba(0,0,0,0.25)] animate-fadeIn"
+                  style={{ animationDelay: `${index * 0.05}s` }}
+                >
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="line-clamp-1 text-[18px] font-semibold leading-[27px] text-[#0A1905]">{app.jobTitle || "Job Title"}</h3>
+                      <div className="mt-1 flex items-center gap-2">
+                        <svg className="h-4 w-4 flex-shrink-0 text-black/45" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                        <p className="line-clamp-1 text-[14px] font-medium leading-[21px] text-black/75">{app.company || "Company"}</p>
+                      </div>
                     </div>
+                    <span
+                      className={`rounded-[10px] border px-3 py-1 text-[12px] font-semibold ${
+                        statusColors[app.status] || "bg-gray-50 border-gray-200 text-gray-700"
+                      }`}
+                    >
+                      {getStatusLabel(app.status)}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1 text-[14px] leading-[21px] text-black/70">
+                    <p>Location: {app.location || "Remote"}</p>
+                    <p>Applied: {app.appliedAt ? new Date(app.appliedAt).toLocaleDateString() : "N/A"}</p>
+                    <p>Status: {getStatusLabel(app.status)}</p>
+                  </div>
+
+                  <div className="mt-auto border-t border-black/30 pt-3">
+                    <button className="h-[35px] rounded-[10px] bg-[#3170A5] px-5 text-[15px] font-semibold text-white">
+                      View Details
+                    </button>
                   </div>
                 </div>
-                <span className={`inline-block px-4 py-2 rounded-xl text-xs font-bold border ${statusColors[app.status] || "bg-gray-50 border-gray-200 text-gray-700"}`}>
-                  {getStatusLabel(app.status)}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Application Details Modal */}
         {selectedApplication && (

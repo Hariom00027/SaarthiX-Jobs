@@ -15,193 +15,33 @@ function FormattedJobDescription({ description }) {
       <p className="text-gray-500 italic text-sm">No description available.</p>
     );
   }
-
-  // Function to parse and organize the description
-  const parseDescription = (desc) => {
-    // First, try to extract text from HTML while preserving line breaks
-    let textOnly = desc;
-    
-    // Replace common HTML list tags with markers
-    textOnly = textOnly.replace(/<ul[^>]*>/gi, '\n').replace(/<\/ul>/gi, '\n');
-    textOnly = textOnly.replace(/<ol[^>]*>/gi, '\n').replace(/<\/ol>/gi, '\n');
-    textOnly = textOnly.replace(/<li[^>]*>/gi, '• ').replace(/<\/li>/gi, '\n');
-    textOnly = textOnly.replace(/<p[^>]*>/gi, '\n').replace(/<\/p>/gi, '\n');
-    textOnly = textOnly.replace(/<br\s*\/?>/gi, '\n');
-    textOnly = textOnly.replace(/<div[^>]*>/gi, '\n').replace(/<\/div>/gi, '\n');
-    textOnly = textOnly.replace(/<h[1-6][^>]*>/gi, '\n### ').replace(/<\/h[1-6]>/gi, '\n');
-    textOnly = textOnly.replace(/<strong[^>]*>/gi, '**').replace(/<\/strong>/gi, '**');
-    textOnly = textOnly.replace(/<b[^>]*>/gi, '**').replace(/<\/b>/gi, '**');
-    textOnly = textOnly.replace(/<em[^>]*>/gi, '*').replace(/<\/em>/gi, '*');
-    textOnly = textOnly.replace(/<i[^>]*>/gi, '*').replace(/<\/i>/gi, '*');
-    
-    // Remove remaining HTML tags
-    textOnly = textOnly.replace(/<[^>]*>/g, '');
-    
-    // Clean up whitespace but preserve line breaks
-    textOnly = textOnly.replace(/[ \t]+/g, ' '); // Multiple spaces to single
-    textOnly = textOnly.replace(/\n{3,}/g, '\n\n'); // Multiple newlines to double
-    textOnly = textOnly.trim();
-    
-    // Common section headers to look for (improved patterns)
-    const sectionPatterns = [
-      { pattern: /(?:^|\n)\s*(?:about\s+(?:the\s+)?(?:role|position|job)|overview|summary|introduction|job\s+summary)[:•\-]?\s*/i, title: "About the Role" },
-      { pattern: /(?:^|\n)\s*(?:responsibilities|what\s+you'?ll\s+do|key\s+responsibilities|duties|role\s+and\s+responsibilities|what\s+we\s+do)[:•\-]?\s*/i, title: "Responsibilities" },
-      { pattern: /(?:^|\n)\s*(?:requirements|qualifications|what\s+we'?re\s+looking\s+for|must\s+have|required|skills?\s+required|key\s+requirements)[:•\-]?\s*/i, title: "Requirements" },
-      { pattern: /(?:^|\n)\s*(?:preferred|nice\s+to\s+have|bonus|additional|pluses?)[:•\-]?\s*/i, title: "Preferred Qualifications" },
-      { pattern: /(?:^|\n)\s*(?:benefits?|perks?|what\s+we\s+offer|compensation|salary|rewards?)[:•\-]?\s*/i, title: "Benefits & Perks" },
-      { pattern: /(?:^|\n)\s*(?:education|degree|academic|bachelor|master|phd)[:•\-]?\s*/i, title: "Education" },
-      { pattern: /(?:^|\n)\s*(?:experience|years?\s+of\s+experience|work\s+experience|professional\s+experience)[:•\-]?\s*/i, title: "Experience" },
-    ];
-
-    // Try to split by common patterns
-    let sections = [];
-    let remainingText = textOnly;
-
-    // Find all section headers
-    const foundSections = [];
-    sectionPatterns.forEach(({ pattern, title }) => {
-      const match = remainingText.search(pattern);
-      if (match !== -1) {
-        foundSections.push({ index: match, title, pattern });
-      }
-    });
-
-    // Sort by index
-    foundSections.sort((a, b) => a.index - b.index);
-
-    // If we found sections, split accordingly
-    if (foundSections.length > 0) {
-      foundSections.forEach((section, idx) => {
-        const startIndex = section.index;
-        const endIndex = idx < foundSections.length - 1 ? foundSections[idx + 1].index : remainingText.length;
-        let content = remainingText.substring(startIndex, endIndex)
-          .replace(section.pattern, '')
-          .trim();
-        
-        // Split content into items (by bullets, numbers, or lines)
-        const items = content.split(/\n+/)
-          .map(line => line.trim())
-          .filter(line => line.length > 0 && !line.match(/^###/)); // Remove empty and headers
-        
-        if (items.length > 0) {
-          sections.push({ title: section.title, content: items });
-        }
-      });
-      
-      // Add content before first section if any
-      if (foundSections[0].index > 0) {
-        const intro = remainingText.substring(0, foundSections[0].index).trim();
-        if (intro.length > 20) { // Only if substantial content
-          sections.unshift({ title: "Job Overview", content: [intro] });
-        }
-      }
-    }
-
-    // If no sections found, try to split by bullet points or numbered lists
-    if (sections.length === 0) {
-      // Check if it's a bullet list (look for lines starting with bullets)
-      const lines = textOnly.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-      const bulletLines = lines.filter(line => 
-        /^[•·▪▫◦‣⁃\-\*]\s/.test(line) || 
-        /^\d+[\.\)]\s/.test(line) ||
-        line.startsWith('•') || 
-        line.startsWith('-') ||
-        line.startsWith('*')
-      );
-      
-      if (bulletLines.length > 2) {
-        // It's a list, organize by context
-        const listItems = bulletLines.map(item => 
-          item.replace(/^[•·▪▫◦‣⁃\-\*\d+\.\)]\s*/, '').trim()
-        ).filter(item => item.length > 0);
-        
-        // Try to group by keywords
-        const responsibilities = [];
-        const requirements = [];
-        const benefits = [];
-        const other = [];
-
-        listItems.forEach(item => {
-          const lower = item.toLowerCase();
-          if (lower.includes('responsibilit') || lower.includes('develop') || lower.includes('build') || 
-              lower.includes('create') || lower.includes('design') || lower.includes('implement') ||
-              lower.includes('maintain') || lower.includes('collaborate') || lower.includes('work with')) {
-            responsibilities.push(item);
-          } else if (lower.includes('requirement') || lower.includes('qualification') || 
-                     lower.includes('experience') || lower.includes('skill') || lower.includes('degree') ||
-                     lower.includes('bachelor') || lower.includes('master') || lower.includes('years') ||
-                     lower.includes('proficient') || lower.includes('knowledge') || lower.includes('familiar')) {
-            requirements.push(item);
-          } else if (lower.includes('benefit') || lower.includes('perk') || lower.includes('salary') ||
-                     lower.includes('compensation') || lower.includes('insurance') || lower.includes('remote') ||
-                     lower.includes('health') || lower.includes('vacation') || lower.includes('pto')) {
-            benefits.push(item);
-          } else {
-            other.push(item);
-          }
-        });
-
-        if (responsibilities.length > 0) sections.push({ title: "Responsibilities", content: responsibilities });
-        if (requirements.length > 0) sections.push({ title: "Requirements", content: requirements });
-        if (benefits.length > 0) sections.push({ title: "Benefits & Perks", content: benefits });
-        if (other.length > 0 && other.length < 10) sections.push({ title: "Additional Information", content: other });
-        if (other.length >= 10) {
-          // Too many items, split into responsibilities and requirements
-          const split = Math.ceil(other.length / 2);
-          if (sections.length === 0) {
-            sections.push({ title: "Key Points", content: other.slice(0, split) });
-            sections.push({ title: "Additional Details", content: other.slice(split) });
-          } else {
-            sections.push({ title: "Additional Information", content: other });
-          }
-        }
-      } else {
-        // Just plain text, split into paragraphs
-        const paragraphs = lines.filter(p => p.length > 20); // Only substantial paragraphs
-        if (paragraphs.length > 1) {
-          sections.push({ title: "Job Overview", content: paragraphs });
-        } else {
-          sections.push({ title: "Job Description", content: [textOnly] });
-        }
-      }
-    }
-
-    // If still no sections, just return the text as a single section
-    if (sections.length === 0) {
-      sections.push({ title: "Job Description", content: [textOnly] });
-    }
-
-    return sections;
-  };
-
-  const sections = parseDescription(description);
+  const normalized = String(description)
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<p[^>]*>/gi, "")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "• ")
+    .replace(/<[^>]*>/g, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  const lines = normalized.split("\n").map((line) => line.trim()).filter(Boolean);
+  const hasBulletStyle = lines.some((line) => /^([•\-*]|\d+[\.\)])\s+/.test(line));
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {sections.map((section, sectionIdx) => (
-        <div key={sectionIdx} className="bg-gradient-to-r from-gray-50 to-white rounded-lg p-3 sm:p-4 border-l-4 border-blue-500 shadow-sm">
-          <h4 className="text-sm sm:text-base font-bold text-gray-900 mb-3 sm:mb-4 flex items-center gap-1.5 sm:gap-2">
-            <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-              <svg className="w-3 h-3 sm:w-4 sm:h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
+    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+      {!hasBulletStyle ? (
+        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{normalized}</p>
+      ) : (
+        <div className="space-y-2">
+          {lines.map((line, idx) => (
+            <div key={idx} className="flex items-start gap-2 text-sm text-gray-700 leading-relaxed">
+              <span className="mt-1 text-blue-600">•</span>
+              <span>{line.replace(/^([•\-*]|\d+[\.\)])\s+/, "")}</span>
             </div>
-            {section.title}
-          </h4>
-          <div className="space-y-2 sm:space-y-2.5 ml-0 sm:ml-8 lg:ml-10">
-            {Array.isArray(section.content) ? (
-              section.content.map((item, itemIdx) => (
-                <div key={itemIdx} className="flex items-start gap-2 sm:gap-3 text-xs sm:text-sm text-gray-700 leading-relaxed group hover:bg-blue-50/50 rounded-md p-1.5 sm:p-2 -m-1.5 sm:-m-2 transition-colors">
-                  <span className="text-blue-500 mt-1 sm:mt-1.5 flex-shrink-0 font-bold">•</span>
-                  <span className="flex-1">{item}</span>
-                </div>
-              ))
-            ) : (
-              <p className="text-xs sm:text-sm text-gray-700 leading-relaxed whitespace-pre-line">{section.content}</p>
-            )}
-          </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }
@@ -209,6 +49,7 @@ function FormattedJobDescription({ description }) {
 export default function JobList() {
   const location = useLocation();
   const navigate = useNavigate();
+  const heroSilhouette = `${import.meta.env.BASE_URL}Silhouette_illustration_of_a_man_working_overtime-removebg-preview%201.png`;
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -220,6 +61,7 @@ export default function JobList() {
   const [filterSource, setFilterSource] = useState("All");
   const [filterLocation, setFilterLocation] = useState("All");
   const [refreshing, setRefreshing] = useState(false);
+  const [visibleJobsCount, setVisibleJobsCount] = useState(6);
 
   const [selectedJob, setSelectedJob] = useState(null);
   const [jobDetails, setJobDetails] = useState(null);
@@ -440,8 +282,12 @@ export default function JobList() {
         source: "External",
         raw: job,
       }));
-
-      setJobs([...localJobs, ...rapidJobs]);
+      const parseTime = (item) => {
+        const dateVal = item?.raw?.createdAt || item?.raw?.job_posted_at_datetime_utc;
+        const ts = dateVal ? new Date(dateVal).getTime() : 0;
+        return Number.isNaN(ts) ? 0 : ts;
+      };
+      setJobs([...localJobs, ...rapidJobs].sort((a, b) => parseTime(b) - parseTime(a)));
 
       if (
         localResult.status === "rejected" &&
@@ -560,6 +406,8 @@ export default function JobList() {
            matchesSkill && matchesSource && matchesLocation && !alreadyAppliedLocal;
   });
 
+  const displayedJobs = filteredJobs.slice(0, visibleJobsCount);
+
   useEffect(() => {
     loadJobs();
     loadRecommendedJobs();
@@ -577,6 +425,10 @@ export default function JobList() {
   useEffect(() => {
     loadAppliedJobs();
   }, [isAuthenticated, isApplicantOrStudent, user?.email, user?.id]);
+
+  useEffect(() => {
+    setVisibleJobsCount(6);
+  }, [searchQuery, filterRole, filterIndustry, filterCompany, filterSkill, filterSource, filterLocation, jobs.length]);
 
   useEffect(() => {
     if (!isAuthenticated || !isApplicantOrStudent) {
@@ -674,6 +526,11 @@ export default function JobList() {
         job_salary_currency: job.raw?.job_salary_currency || job.raw?.jobSalaryCurrency || "USD",
         job_posted_at_datetime_utc: job.raw?.createdAt,
         skills: job.raw?.skills || [],
+        must_have_skills: job.raw?.mustHaveSkills || [],
+        good_to_have_skills: job.raw?.goodToHaveSkills || [],
+        jd_file_name: job.raw?.jdFileName || '',
+        jd_file_type: job.raw?.jdFileType || '',
+        jd_file_base64: job.raw?.jdFileBase64 || '',
       });
       return;
     }
@@ -786,379 +643,283 @@ export default function JobList() {
     );
   }
 
+  const hasActiveFilters =
+    filterRole !== "All" ||
+    filterCompany !== "All" ||
+    filterIndustry !== "All" ||
+    filterSkill !== "All" ||
+    filterLocation !== "All" ||
+    filterSource !== "All" ||
+    Boolean(searchQuery);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 py-6 sm:py-12 px-4 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
-        {/* Navigation Buttons */}
-        <div className="mb-6 sm:mb-8 flex flex-wrap gap-3 sm:gap-4 justify-center sm:justify-start">
-          <Link
-            to="/apply-jobs"
-            className={`px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg font-semibold text-sm sm:text-base transition-all duration-200 no-underline ${
-              location.pathname === '/apply-jobs'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
-                : 'bg-white text-blue-600 border-2 border-blue-600 hover:bg-blue-50'
-            }`}
-          >
-            Apply for Jobs
-          </Link>
-          <Link
-            to="/browse-hackathons"
-            className={`px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg font-semibold text-sm sm:text-base bg-white text-blue-600 border-2 border-blue-600 hover:bg-blue-50 transition-all duration-200 no-underline ${
-              location.pathname === '/browse-hackathons'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
-                : 'bg-white text-blue-600 border-2 border-blue-600 hover:bg-blue-50'
-            }`}
-          >
-            Hackathons
-          </Link>
-          <Link
-            to="/job-tracker"
-            className={`px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg font-semibold text-sm sm:text-base bg-white text-blue-600 border-2 border-blue-600 hover:bg-blue-50 transition-all duration-200 no-underline ${
-              location.pathname === '/job-tracker'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
-                : 'bg-white text-blue-600 border-2 border-blue-600 hover:bg-blue-50'
-            }`}
-          >
-            My Applications
-          </Link>
-        </div>
+    <div className="min-h-screen bg-[#ffffff] px-0 py-3 sm:px-0 lg:px-0">
+      <div className="w-full max-w-none">
+        <div
+          className="relative min-h-[420px] overflow-visible border border-[#d5dde8] md:min-h-[450px]"
+          style={{
+            width: "100%",
+            maxWidth: "100%",
+            borderRadius: "10px",
+            marginTop: "8px",
+            backgroundColor: "#3170A5",
+            backgroundImage:
+              "linear-gradient(rgba(49, 112, 165, 0.82), rgba(49, 112, 165, 0.82)), url('/Group.png')",
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat",
+          }}
+        >
+          <div className="relative mx-auto max-w-[1440px] px-4 pb-14 pt-10 sm:px-8 md:px-12 lg:px-16 xl:px-20">
+            <div className="mb-6 flex flex-wrap gap-3">
+              <Link
+                to="/apply-jobs"
+                className={`h-[39px] rounded-[6px] border px-[18px] py-[10px] text-[14px] font-medium leading-[17px] no-underline ${
+                  location.pathname === "/apply-jobs"
+                    ? "border-black bg-black text-white"
+                    : "border-[#d1d5db] bg-white text-[#111827]"
+                }`}
+              >
+                Apply for Jobs
+              </Link>
+              <Link
+                to="/browse-hackathons"
+                className={`h-[39px] rounded-[6px] border px-[18px] py-[10px] text-[14px] font-medium leading-[17px] no-underline ${
+                  location.pathname === "/browse-hackathons"
+                    ? "border-black bg-black text-white"
+                    : "border-[#d1d5db] bg-white text-[#111827]"
+                }`}
+              >
+                Hackathons
+              </Link>
+              <Link
+                to="/job-tracker"
+                className={`h-[39px] rounded-[6px] border px-[18px] py-[10px] text-[14px] font-medium leading-[17px] no-underline ${
+                  location.pathname === "/job-tracker"
+                    ? "border-black bg-black text-white"
+                    : "border-[#d1d5db] bg-white text-[#111827]"
+                }`}
+              >
+                My Applications
+              </Link>
+            </div>
 
-        <div className="mb-6 sm:mb-10 animate-fadeIn">
-          <h1 className="text-2xl sm:text-4xl md:text-5xl font-bold text-gray-900 mb-2 sm:mb-3 tracking-tight">
-            Job Opportunities
-          </h1>
-          <p className="mt-1 sm:mt-2 text-gray-600 text-sm sm:text-base font-light">
-            Explore positions from <span style={{ fontFamily: "'Times New Roman', serif", fontWeight: 'bold', fontStyle: 'italic' }}>Saarthix</span> and partner organizations.
-          </p>
-        </div>
-
-        {isApplicantOrStudent && isAuthenticated && missingMandatoryFields.length > 0 && (
-          <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-amber-900">
-                  Complete your profile
-                </p>
-                <p className="text-xs text-amber-800 mt-1">
-                  Add these fields for profile-based apply: {missingMandatoryFields.join(', ')}
+            <div className="grid grid-cols-1 items-center gap-6 md:grid-cols-2 md:gap-8 lg:gap-10">
+              <div className="min-w-0 pt-1">
+                <h1
+                  className="text-[clamp(2.25rem,5vw,4.25rem)] font-bold leading-[0.96] tracking-[-1.5px] text-transparent"
+                  style={{
+                    fontFamily: "'Instrument Sans', 'Inter', sans-serif",
+                    background: "linear-gradient(180deg, #DDB9AD 6.06%, #EDEBEB 100%)",
+                    WebkitBackgroundClip: "text",
+                    backgroundClip: "text",
+                  }}
+                >
+                  Less searching,
+                  <br />
+                  More applying
+                </h1>
+                <p
+                  className="mt-[14px] max-w-[820px] text-[clamp(1rem,2.2vw,1.5625rem)] font-medium leading-[1.28] text-[#ffffff]"
+                  style={{ fontFamily: "'Instrument Sans', 'Inter', sans-serif" }}
+                >
+                  A gateway to your roles from Saarthix and leading partner companies.
                 </p>
               </div>
-              <button
-                onClick={() => navigate('/build-profile', { state: { mandatoryProfile: true, missingFields: missingMandatoryFields } })}
-                className="rounded-lg bg-amber-600 hover:bg-amber-700 px-4 py-2 text-white text-sm font-semibold"
-              >
-                Complete Profile
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Main Filter Section - Prominent at Top */}
-        <div className="mb-6 sm:mb-10 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-xl sm:rounded-2xl border-2 border-blue-200 shadow-lg p-4 sm:p-6 lg:p-8 animate-fadeIn">
-          <div className="mb-4 sm:mb-6">
-            <h2 className="text-lg sm:text-2xl font-bold text-gray-900 mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3">
-              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-blue-600 flex items-center justify-center flex-shrink-0">
-                <svg className="w-4 h-4 sm:w-6 sm:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                </svg>
-              </div>
-              Filter Jobs
-            </h2>
-            <p className="text-gray-600 text-xs sm:text-sm">Find your perfect opportunity by filtering jobs below</p>
-          </div>
-
-          {/* Primary Filters - Role, Company, Industry, Skills */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
-            {/* Filter by Role */}
-            <div className="bg-white rounded-lg sm:rounded-xl border-2 border-indigo-200 p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow">
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5 sm:mb-2 flex items-center gap-1.5 sm:gap-2">
-                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-                Filter by Role
-              </label>
-              <select
-                value={filterRole}
-                onChange={(e) => setFilterRole(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-gray-900 transition-all duration-200 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-              >
-                <option value="All">All Roles</option>
-                {roles.filter(r => r !== "All").map((role) => (
-                  <option key={role} value={role}>
-                    {role}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Filter by Company */}
-            <div className="bg-white rounded-lg sm:rounded-xl border-2 border-green-200 p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow">
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5 sm:mb-2 flex items-center gap-1.5 sm:gap-2">
-                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
-                Filter by Company
-              </label>
-              <select
-                value={filterCompany}
-                onChange={(e) => setFilterCompany(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-gray-900 transition-all duration-200 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-200"
-              >
-                <option value="All">All Companies</option>
-                {companies.filter(c => c !== "All").map((company) => (
-                  <option key={company} value={company}>
-                    {company}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Filter by Industry */}
-            <div className="bg-white rounded-lg sm:rounded-xl border-2 border-blue-200 p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow">
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5 sm:mb-2 flex items-center gap-1.5 sm:gap-2">
-                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-                Filter by Industry
-              </label>
-              <select
-                value={filterIndustry}
-                onChange={(e) => setFilterIndustry(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-gray-900 transition-all duration-200 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              >
-                <option value="All">All Industries</option>
-                {industries.filter(i => i !== "All").map((industry) => (
-                  <option key={industry} value={industry}>
-                    {industry}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Filter by Skills/Education */}
-            <div className="bg-white rounded-lg sm:rounded-xl border-2 border-purple-200 p-3 sm:p-4 shadow-sm hover:shadow-md transition-shadow">
-              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1.5 sm:mb-2 flex items-center gap-1.5 sm:gap-2">
-                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-                Filter by Skills/Education
-              </label>
-              <select
-                value={filterSkill}
-                onChange={(e) => setFilterSkill(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-gray-900 transition-all duration-200 focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-200"
-              >
-                <option value="All">All Skills</option>
-                {skills.filter(s => s !== "All").slice(0, 50).map((skill) => (
-                  <option key={skill} value={skill}>
-                    {skill}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Secondary Filters and Search - Collapsible/Compact */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-lg sm:rounded-xl border border-gray-200 p-3 sm:p-4">
-            <div className="flex flex-col gap-3 sm:gap-4 sm:flex-row sm:items-end sm:justify-between">
-              {/* Search Bar */}
-              <div className="relative flex-1 max-w-md">
-                <div className="absolute inset-y-0 left-0 pl-2.5 sm:pl-3 flex items-center pointer-events-none">
-                  <svg className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search by job title or description..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white pl-8 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 text-xs sm:text-sm text-gray-900 placeholder-gray-500 transition-all duration-200 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-200"
+              <div className="flex justify-center md:justify-end md:pr-2 lg:pr-6">
+                <img
+                  src={heroSilhouette}
+                  alt=""
+                  className="pointer-events-none h-auto max-h-[200px] w-auto max-w-[min(298px,88vw)] object-contain object-bottom md:max-h-[260px] lg:max-h-[280px] lg:-translate-y-2"
                 />
               </div>
-
-              {/* Additional Filters */}
-              <div className="flex gap-2 sm:gap-3 flex-wrap items-end">
-                <select
-                  value={filterLocation}
-                  onChange={(e) => setFilterLocation(e.target.value)}
-                  className="rounded-lg border border-gray-300 bg-white px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-gray-900 transition-all duration-200 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-200"
-                >
-                  <option value="All">All Locations</option>
-                  {locations.filter(l => l !== "All").map((location) => (
-                    <option key={location} value={location}>{location}</option>
-                  ))}
-                </select>
-
-                <select
-                  value={filterSource}
-                  onChange={(e) => setFilterSource(e.target.value)}
-                  className="rounded-lg border border-gray-300 bg-white px-2.5 sm:px-3 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-gray-900 transition-all duration-200 focus:border-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-200"
-                >
-                  <option value="All">All Sources</option>
-                  <option value="Local">Local</option>
-                  <option value="External">External</option>
-                </select>
-
-                <button
-                  onClick={handleRefresh}
-                  disabled={refreshing}
-                  className="rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:bg-gray-100 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-gray-900 transition-all duration-200 disabled:cursor-not-allowed"
-                  title="Refresh jobs list"
-                >
-                  {refreshing ? (
-                    <span className="flex items-center gap-1.5 sm:gap-2">
-                      <div className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin rounded-full border-2 border-gray-600 border-t-transparent"></div>
-                    </span>
-                  ) : (
-                    "Refresh"
-                  )}
-                </button>
-
-                {/* Clear Filters Button */}
-                {(filterRole !== "All" || filterCompany !== "All" || filterIndustry !== "All" || filterSkill !== "All" || 
-                  searchQuery || filterLocation !== "All" || filterSource !== "All") && (
-                  <button
-                    onClick={() => {
-                      setFilterRole("All");
-                      setFilterCompany("All");
-                      setFilterIndustry("All");
-                      setFilterSkill("All");
-                      setSearchQuery("");
-                      setFilterLocation("All");
-                      setFilterSource("All");
-                    }}
-                    className="rounded-lg border border-red-300 bg-red-50 hover:bg-red-100 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold text-red-700 transition-all duration-200"
-                  >
-                    Clear Filters
-                  </button>
-                )}
-              </div>
             </div>
           </div>
-        </div>
 
-        {/* Results Counter */}
-        <div className={`mb-4 sm:mb-6 rounded-lg sm:rounded-xl border px-3 sm:px-5 py-3 sm:py-4 shadow-sm animate-fadeIn ${
-          (filterRole !== "All" || filterCompany !== "All" || filterIndustry !== "All" || filterSkill !== "All" || 
-           searchQuery || filterLocation !== "All" || filterSource !== "All")
-            ? "bg-blue-50 border-blue-200"
-            : "bg-white border-gray-200"
-        }`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                (filterRole !== "All" || filterCompany !== "All" || filterIndustry !== "All" || filterSkill !== "All" || 
-                 searchQuery || filterLocation !== "All" || filterSource !== "All")
-                  ? "bg-blue-600"
-                  : "bg-gray-600"
-              }`}>
-                <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          <div
+            className="absolute bottom-[-27.5px] left-1/2 z-20 w-[min(1200px,calc(100%-1.5rem))] max-w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-lg border border-[#00000033] bg-white px-3 py-2.5 shadow-[0px_8px_30px_0px_#00000014] sm:px-4"
+          >
+            <div className="flex min-h-[44px] flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:gap-4">
+              <div className="relative min-h-[36px] min-w-0 flex-1">
+                <svg
+                  className="pointer-events-none absolute left-2 top-1/2 h-5 w-5 -translate-y-1/2 text-black/50"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
+                <input
+                  type="text"
+                  placeholder="Search by role, skills, company, or keywords..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-9 w-full rounded-md border border-transparent bg-transparent py-1 pl-9 pr-2 text-[15px] leading-snug text-[#111827] placeholder:text-black/50 focus:outline-none sm:text-[16px]"
+                />
               </div>
-              <div>
-                <p className="text-xs sm:text-sm font-semibold text-gray-900">
-                  {filteredJobs.length} Job{filteredJobs.length !== 1 ? "s" : ""} Available
-                </p>
-                <p className="text-xs text-gray-600">
-                  {(filterRole !== "All" || filterCompany !== "All" || filterIndustry !== "All" || filterSkill !== "All" || 
-                    searchQuery || filterLocation !== "All" || filterSource !== "All")
-                    ? "Matching your selected filters"
-                    : "Browse all available opportunities"}
-                </p>
+              <div className="flex shrink-0 items-center justify-end gap-4 sm:gap-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterRole("All");
+                    setFilterCompany("All");
+                    setFilterIndustry("All");
+                    setFilterSkill("All");
+                    setFilterLocation("All");
+                    setFilterSource("All");
+                    setSearchQuery("");
+                  }}
+                  className="whitespace-nowrap text-[15px] font-medium text-[#111827] sm:text-[16px]"
+                >
+                  Clear Filters
+                </button>
+                <button
+                  type="button"
+                  className="h-[33px] min-w-[120px] shrink-0 rounded-[6px] bg-[#3170A5] px-6 text-[18px] font-medium leading-[22px] text-white sm:w-[133px] sm:text-[20px]"
+                  style={{
+                    backgroundImage: "url('/Container (6).png')",
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                    backgroundRepeat: "no-repeat",
+                  }}
+                >
+                  Search
+                </button>
               </div>
             </div>
           </div>
         </div>
+      </div>
 
-        {error ? (
-          <div className="rounded-md border border-rose-200 bg-rose-50 p-3 sm:p-4 text-rose-700 text-xs sm:text-sm">
-            {error}
-          </div>
-        ) : jobs.length === 0 ? (
-          <div className="rounded-md border border-gray-200 bg-white p-6 sm:p-8 text-center">
-            <p className="text-gray-600 text-xs sm:text-sm">No jobs available at the moment. Please check back later.</p>
-          </div>
-        ) : filteredJobs.length === 0 ? (
-          <div className="rounded-md border border-gray-200 bg-white p-6 sm:p-8 text-center">
-            <p className="text-gray-600 text-xs sm:text-sm">No jobs match your search criteria. Try adjusting your filters.</p>
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredJobs.map((job, index) => (
-              <div
-                key={job.id}
-                className="flex h-full flex-col rounded-xl sm:rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 lg:p-7 transition-all duration-300 hover:border-gray-300 hover:shadow-xl hover-lift animate-fadeIn"
-                style={{ animationDelay: `${index * 0.05}s` }}
-              >
-                <div className="flex-1">
-                  <div className="mb-3 sm:mb-5 flex items-center justify-between gap-2">
-                    <span className={`text-xs font-bold uppercase tracking-wider px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-lg ${
-                      job.source === 'Local' 
-                        ? 'text-emerald-700 bg-emerald-50 border border-emerald-200' 
-                        : 'text-blue-700 bg-blue-50 border border-blue-200'
-                    }`}>
-                      {job.source}
-                    </span>
-                    {jobMatchPercentages[job.id] !== undefined && (
-                      <span className={`text-xs font-bold px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-lg ${
-                        jobMatchPercentages[job.id] >= 75
-                          ? 'text-green-700 bg-green-50 border border-green-200'
-                          : jobMatchPercentages[job.id] >= 50
-                          ? 'text-amber-700 bg-amber-50 border border-amber-200'
-                          : 'text-red-700 bg-red-50 border border-red-200'
-                      }`}>
-                        {Math.round(jobMatchPercentages[job.id])}% Match
-                      </span>
-                    )}
-                  </div>
-                  <h2 className="text-base sm:text-lg lg:text-xl font-bold text-gray-900 mb-2 sm:mb-3 line-clamp-2 leading-tight">
-                    {job.title}
-                  </h2>
-                  <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2">
-                    <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                    <p className="text-gray-800 font-semibold text-xs sm:text-sm truncate">
-                      {job.company || "Company confidential"}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1.5 sm:gap-2 mb-3 sm:mb-5">
-                    <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <p className="text-xs sm:text-sm text-gray-600 truncate">
-                      {job.location || "Location not specified"}
-                    </p>
-                  </div>
-                  {job.description && (
-                    <p className="line-clamp-3 text-xs sm:text-sm text-gray-600 leading-relaxed mb-2 sm:mb-0">
-                      {job.description}
-                    </p>
-                  )}
-                  {jobMatchReasons[job.id]?.length > 0 && (
-                    <div className="mt-3 space-y-1">
-                      {jobMatchReasons[job.id].slice(0, 2).map((reason, reasonIndex) => (
-                        <p key={reasonIndex} className="text-[11px] sm:text-xs text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-md px-2 py-1">
-                          {reason}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </div>
+      <div className="mx-auto max-w-[1440px] pt-20">
+          {isApplicantOrStudent && isAuthenticated && missingMandatoryFields.length > 0 && (
+            <div className="mb-5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-amber-900">
+                  Complete profile fields for apply: {missingMandatoryFields.join(", ")}
+                </p>
                 <button
-                  onClick={() => handleViewDetails(job)}
-                  className="mt-4 sm:mt-6 w-full rounded-lg sm:rounded-xl bg-gray-900 hover:bg-gray-800 px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-semibold text-white transition-all duration-200 shadow-md hover:shadow-lg hover:-translate-y-0.5"
+                  onClick={() => navigate("/build-profile", { state: { mandatoryProfile: true, missingFields: missingMandatoryFields } })}
+                  className="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white"
                 >
-                  View Details
+                  Complete Profile
                 </button>
               </div>
-            ))}
+            </div>
+          )}
+
+          <div className="mb-3 flex items-center justify-between gap-3 px-[58px]">
+            <div className="flex items-start gap-3">
+              <svg className="mt-1 h-6 w-6 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 6h16M7 12h10M10 18h4M4 5v2m0 4v2m0 4v2" />
+              </svg>
+              <div>
+                <h2 className="text-[25px] font-semibold leading-9 text-[#000000]" style={{ fontFamily: "'Instrument Sans', 'Inter', sans-serif" }}>
+                  Search smarter and filter faster
+                </h2>
+                <p className="text-[15px] leading-[22px] text-black/60">Customize your browsing to see only the roles of your interest</p>
+              </div>
+            </div>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="h-[41px] rounded-[6px] border border-[#eadfcb] bg-[#F8E7CF] px-5 text-[15px] font-semibold leading-[21px] text-[#000000] disabled:opacity-50"
+            >
+              {refreshing ? "Refreshing..." : "Refresh Results"}
+            </button>
           </div>
-        )}
-      </div>
+
+          <div className="mb-6 flex flex-nowrap items-center gap-3 overflow-x-auto px-[58px] pb-1">
+            <select value={filterRole} onChange={(e) => setFilterRole(e.target.value)} className="h-[43px] min-w-[120px] rounded-[6px] border border-black bg-[#F6FAFD] px-4 text-[14px] font-medium text-[#000000]">
+              <option value="All">Role</option>
+              {roles.filter((r) => r !== "All").map((role) => <option key={role} value={role}>{role}</option>)}
+            </select>
+            <select value={filterCompany} onChange={(e) => setFilterCompany(e.target.value)} className="h-[43px] min-w-[180px] rounded-[6px] border border-black bg-[#F6FAFD] px-4 text-[14px] font-medium text-[#000000]">
+              <option value="All">Company</option>
+              {companies.filter((c) => c !== "All").map((company) => <option key={company} value={company}>{company}</option>)}
+            </select>
+            <select value={filterIndustry} onChange={(e) => setFilterIndustry(e.target.value)} className="h-[43px] min-w-[130px] rounded-[6px] border border-black bg-[#F6FAFD] px-4 text-[14px] font-medium text-[#000000]">
+              <option value="All">Industry</option>
+              {industries.filter((i) => i !== "All").map((industry) => <option key={industry} value={industry}>{industry}</option>)}
+            </select>
+            <select value={filterSkill} onChange={(e) => setFilterSkill(e.target.value)} className="h-[43px] min-w-[170px] rounded-[6px] border border-black bg-[#F6FAFD] px-4 text-[14px] font-medium text-[#000000]">
+              <option value="All">Skills / Education</option>
+              {skills.filter((s) => s !== "All").slice(0, 60).map((skill) => <option key={skill} value={skill}>{skill}</option>)}
+            </select>
+            <select value={filterLocation} onChange={(e) => setFilterLocation(e.target.value)} className="h-[43px] min-w-[130px] rounded-[6px] border border-black bg-[#F6FAFD] px-4 text-[14px] font-medium text-[#000000]">
+              <option value="All">Location</option>
+              {locations.filter((l) => l !== "All").map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+            </select>
+            <select value={filterSource} onChange={(e) => setFilterSource(e.target.value)} className="h-[43px] min-w-[110px] rounded-[6px] border border-black bg-[#F6FAFD] px-4 text-[14px] font-medium text-[#000000]">
+              <option value="All">Source</option>
+              <option value="Local">Local</option>
+              <option value="External">External</option>
+            </select>
+          </div>
+
+          <div className="mb-5 flex items-center gap-3 px-[58px]">
+            <svg className="h-7 w-7 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 2v2m6-2v2M4 7h16M5 5h14a1 1 0 011 1v15a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1zm3 9l2 2 4-4" />
+            </svg>
+            <p className="text-[25px] font-semibold leading-[30px] text-[#111827]">{filteredJobs.length} Jobs Available</p>
+            <div>
+              <p className="text-[20px] leading-[22px] text-black/75">See available vacancies</p>
+            </div>
+          </div>
+
+          {error ? (
+            <div className="rounded-md border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>
+          ) : jobs.length === 0 ? (
+            <div className="rounded-md border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">
+              No jobs available at the moment. Please check back later.
+            </div>
+          ) : filteredJobs.length === 0 ? (
+            <div className="rounded-md border border-gray-200 bg-white p-8 text-center text-sm text-gray-600">
+              No jobs match your search criteria. Try adjusting your filters.
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-6 px-[58px] md:grid-cols-2 lg:grid-cols-3">
+                {displayedJobs.map((job) => (
+                  <div
+                    key={job.id}
+                    className="flex h-[331px] w-full max-w-[346px] flex-col rounded-[10px] border border-black/20 bg-white p-6 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.12)]"
+                  >
+                    <div className="mb-3 flex items-center justify-end">
+                      <span className={`rounded-[10px] px-3 py-1 text-[15px] font-medium ${job.source === "Local" ? "bg-[#EAF4FF] text-[#3170A5]" : "bg-[#EAFFF6] text-[#18430B]"}`}>
+                        {job.source}
+                      </span>
+                    </div>
+                    <h3 className="line-clamp-1 text-[18px] font-semibold leading-[27px] text-[#0A1905]">{job.title}</h3>
+                    <p className="mt-0.5 line-clamp-1 text-[14px] leading-[21px] text-black/75">{job.company || "Company confidential"}</p>
+                    <p className="mt-0.5 line-clamp-1 text-[14px] leading-[21px] text-black/75">{job.location || "Location not specified"}</p>
+                    <p className="mt-2 line-clamp-3 text-[14px] leading-[22px] text-black/60">
+                      {job.description || "No description available for this position."}
+                    </p>
+                    <button
+                      onClick={() => handleViewDetails(job)}
+                      className="mt-auto h-[35px] self-center rounded-[10px] bg-[#3170A5] px-6 text-[15px] font-semibold text-white hover:bg-[#2f6898]"
+                      style={{ fontFamily: "'Instrument Sans', 'Inter', sans-serif" }}
+                    >
+                      View Details
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {filteredJobs.length > visibleJobsCount && (
+                <div className="my-8 flex items-center justify-center">
+                  <button
+                    onClick={() => setVisibleJobsCount((prev) => prev + 6)}
+                    className="h-[35px] rounded-[10px] bg-[#4B9755] px-10 text-[15px] font-semibold text-white hover:bg-[#3f8849]"
+                    style={{ fontFamily: "'Instrument Sans', 'Inter', sans-serif" }}
+                  >
+                    View More
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
 
       {selectedJob && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4 animate-fadeIn">
@@ -1438,16 +1199,70 @@ export default function JobList() {
                     </div>
                   )}
 
-                  {/* Skills Section - with matching highlights */}
-                  {((jobDetails?.skills && jobDetails.skills.length > 0) || (selectedJob.raw?.skills && selectedJob.raw.skills.length > 0)) && (
+                  {/* Skills Section - differentiated */}
+                  {(((jobDetails?.must_have_skills || selectedJob.raw?.mustHaveSkills || []).length > 0) ||
+                    ((jobDetails?.good_to_have_skills || selectedJob.raw?.goodToHaveSkills || []).length > 0) ||
+                    ((jobDetails?.skills || selectedJob.raw?.skills || []).length > 0)) && (
                     <div className="p-3 sm:p-4 lg:p-5 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg sm:rounded-xl border border-blue-200">
                       <div className="flex items-center gap-1.5 sm:gap-2 mb-3 sm:mb-4">
                         <svg className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                         </svg>
-                        <h3 className="text-base sm:text-lg font-bold text-gray-900">Required Skills</h3>
+                        <h3 className="text-base sm:text-lg font-bold text-gray-900">Skills</h3>
                       </div>
-                      <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                      {((jobDetails?.must_have_skills || selectedJob.raw?.mustHaveSkills || []).length > 0) && (
+                        <div className="mb-3">
+                          <p className="mb-2 text-xs sm:text-sm font-semibold text-blue-900">Must Have</p>
+                          <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                            {(jobDetails?.must_have_skills || selectedJob.raw?.mustHaveSkills || []).map((skill, index) => {
+                              const userSkills = userProfile?.skills?.map(s => s.toLowerCase()) || [];
+                              const isMatching = userSkills.some(userSkill =>
+                                skill.toLowerCase().includes(userSkill.trim()) || userSkill.includes(skill.toLowerCase())
+                              );
+                              return (
+                                <span
+                                  key={`must-${index}`}
+                                  className={`inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-lg text-xs sm:text-sm font-medium shadow-sm hover:shadow-md transition-all ${
+                                    isMatching
+                                      ? 'bg-green-100 border-2 border-green-400 text-green-800 ring-2 ring-green-200'
+                                      : 'bg-white border border-blue-200 text-blue-700'
+                                  }`}
+                                >
+                                  <span className="truncate max-w-[150px] sm:max-w-none">{skill}</span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {((jobDetails?.good_to_have_skills || selectedJob.raw?.goodToHaveSkills || []).length > 0) && (
+                        <div className="mb-1">
+                          <p className="mb-2 text-xs sm:text-sm font-semibold text-emerald-900">Good To Have</p>
+                          <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                            {(jobDetails?.good_to_have_skills || selectedJob.raw?.goodToHaveSkills || []).map((skill, index) => {
+                              const userSkills = userProfile?.skills?.map(s => s.toLowerCase()) || [];
+                              const isMatching = userSkills.some(userSkill =>
+                                skill.toLowerCase().includes(userSkill.trim()) || userSkill.includes(skill.toLowerCase())
+                              );
+                              return (
+                                <span
+                                  key={`good-${index}`}
+                                  className={`inline-flex items-center px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-lg text-xs sm:text-sm font-medium shadow-sm transition-all ${
+                                    isMatching
+                                      ? 'bg-green-100 border border-green-300 text-green-800'
+                                      : 'bg-white border border-emerald-200 text-emerald-700'
+                                  }`}
+                                >
+                                  <span className="truncate max-w-[150px] sm:max-w-none">{skill}</span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {((jobDetails?.must_have_skills || selectedJob.raw?.mustHaveSkills || []).length === 0 &&
+                        (jobDetails?.good_to_have_skills || selectedJob.raw?.goodToHaveSkills || []).length === 0) && (
+                        <div className="flex flex-wrap gap-1.5 sm:gap-2">
                         {((jobDetails?.skills || selectedJob.raw?.skills) || []).map((skill, index) => {
                           // Check if this skill matches user's skills
                           const userSkills = userProfile?.skills?.map(s => s.toLowerCase()) || [];
@@ -1478,7 +1293,8 @@ export default function JobList() {
                             </span>
                           );
                         })}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1518,11 +1334,11 @@ export default function JobList() {
                         })()}
                         
                         {/* Missing Skills */}
-                        {((jobDetails?.skills || selectedJob.raw?.skills) || []).length > 0 && (
+                        {((jobDetails?.must_have_skills || selectedJob.raw?.mustHaveSkills || jobDetails?.skills || selectedJob.raw?.skills) || []).length > 0 && (
                           <div>
                             <p className="text-xs sm:text-sm font-semibold text-gray-700 mb-1.5 sm:mb-2">Skills You Don't Have:</p>
                             <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                              {((jobDetails?.skills || selectedJob.raw?.skills) || [])
+                              {((jobDetails?.must_have_skills || selectedJob.raw?.mustHaveSkills || jobDetails?.skills || selectedJob.raw?.skills) || [])
                                 .filter(skill => {
                                   const userSkills = userProfile?.skills?.map(s => s.toLowerCase()) || [];
                                   return !userSkills.some(userSkill => 
@@ -1541,7 +1357,7 @@ export default function JobList() {
                                     <span className="truncate max-w-[120px] sm:max-w-none">{skill}</span>
                                   </span>
                                 ))}
-                              {((jobDetails?.skills || selectedJob.raw?.skills) || [])
+                              {((jobDetails?.must_have_skills || selectedJob.raw?.mustHaveSkills || jobDetails?.skills || selectedJob.raw?.skills) || [])
                                 .filter(skill => {
                                   const userSkills = userProfile?.skills?.map(s => s.toLowerCase()) || [];
                                   return !userSkills.some(userSkill => 
@@ -1607,6 +1423,24 @@ export default function JobList() {
                       description={jobDetails?.job_description || selectedJob.description || "No description available."}
                     />
                   </div>
+
+                  {(jobDetails?.jd_file_base64 && jobDetails?.jd_file_name) && (
+                    <div className="p-3 sm:p-4 lg:p-5 bg-white rounded-lg sm:rounded-xl border border-gray-200">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h3 className="text-base sm:text-lg font-bold text-gray-900">Job Description File</h3>
+                          <p className="text-xs sm:text-sm text-gray-600 mt-1">{jobDetails.jd_file_name}</p>
+                        </div>
+                        <a
+                          href={`data:${jobDetails.jd_file_type || 'application/octet-stream'};base64,${jobDetails.jd_file_base64}`}
+                          download={jobDetails.jd_file_name}
+                          className="rounded-lg bg-[#3170A5] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2b6494]"
+                        >
+                          Download
+                        </a>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Job Highlights (for external jobs) */}
                   {jobDetails?.job_highlights && (

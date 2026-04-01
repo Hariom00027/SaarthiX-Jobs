@@ -1,120 +1,72 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { logout } from "../api/authApi";
-import { getUserProfile, getSomethingXUserProfile } from "../api/jobApi";
+import { logout as apiLogout } from "../api/authApi";
+import UserTypeSelection from "./auth/UserTypeSelection";
+import ReviewNotifications from "./notifications/ReviewNotifications";
 import { redirectToSomethingX, redirectToProfiling } from "../config/redirectUrls";
-import {
-  getProfileBuilderStyleCompletionPercent,
-  mapSomethingXProfileToJobsShape,
-  mergeJobsProfilesForCompletion,
-} from "../utils/jobsProfileUtils";
-import NotificationCenter from "./NotificationCenter";
-import LogoImage from "./logo_png.png";
+
+const getAuthToken = () =>
+  localStorage.getItem("token") || localStorage.getItem("somethingx_auth_token") || "";
 
 const Navbar = () => {
   const { user, isAuthenticated, clearAuth } = useAuth();
   const location = useLocation();
   const isHomePage = location.pathname === "/";
+  const isStudent =
+    isAuthenticated &&
+    (user?.userType === "STUDENT" || user?.userType === "APPLICANT");
 
+  const goHome = (path, after) => {
+    after?.();
+    redirectToSomethingX(path, getAuthToken(), user);
+  };
+
+  const handleLogout = () => {
+    apiLogout(clearAuth);
+  };
+
+  const [showUserTypeSelection, setShowUserTypeSelection] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef(null);
   const dropdownRef = useRef(null);
+  const mobileMenuRef = useRef(null);
+  const mobileToggleRef = useRef(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [isTablet, setIsTablet] = useState(
     window.innerWidth >= 768 && window.innerWidth < 1024
   );
-  const [jobsProfileCompletion, setJobsProfileCompletion] = useState(0);
+  const [openStudentNav, setOpenStudentNav] = useState(null); // 'career' | 'practice' | 'jobs' | null
+  const studentNavCloseTimer = useRef(null);
+  const studentNavAreaRef = useRef(null);
 
-  // Get SomethingX user info from localStorage
-  const getSomethingXUser = () => {
-    try {
-      const somethingxUserStr = localStorage.getItem('somethingx_auth_user');
-      return somethingxUserStr ? JSON.parse(somethingxUserStr) : null;
-    } catch {
-      return null;
-    }
-  };
+  const [openInstNav, setOpenInstNav] = useState(null); // 'learning' | 'training' | 'placement' | null
+  const instNavCloseTimer = useRef(null);
+  const [openIndustryNav, setOpenIndustryNav] = useState(null); // 'talent' | null
+  const industryNavCloseTimer = useRef(null);
 
-  // Get SomethingX token from localStorage
-  const getSomethingXToken = () => {
-    return localStorage.getItem('somethingx_auth_token') || localStorage.getItem('token');
-  };
+  const showDashboard = true;
 
-  const somethingxUser = getSomethingXUser();
-  const somethingxToken = getSomethingXToken();
-  const displayUser = somethingxUser || user;
-  const isApplicantOrStudent = displayUser?.userType === "APPLICANT" || displayUser?.userType === "STUDENT";
+  const dashboardPath = (() => {
+    const userType = user?.userType;
+    if (userType === "INSTITUTE") return "/institutes/dashboard";
+    if (userType === "MENTOR") return "/mentor/dashboard";
+    return "/dashboard";
+  })();
 
-  useEffect(() => {
-    let isMounted = true;
-    const updateCompletion = async () => {
-      if (!isAuthenticated || !isApplicantOrStudent) {
-        if (isMounted) setJobsProfileCompletion(0);
-        return;
-      }
-      const [jobsRes, homeRes] = await Promise.allSettled([
-        getUserProfile(),
-        getSomethingXUserProfile(),
-      ]);
-      const jobsProfile = jobsRes.status === "fulfilled" ? jobsRes.value : null;
-      const homeRaw = homeRes.status === "fulfilled" ? homeRes.value : null;
-      const mappedHome = mapSomethingXProfileToJobsShape(homeRaw);
-      const effective = mergeJobsProfilesForCompletion(jobsProfile, mappedHome);
-      if (isMounted) {
-        setJobsProfileCompletion(getProfileBuilderStyleCompletionPercent(effective));
-      }
-    };
-
-    updateCompletion();
-    window.addEventListener("profileSaved", updateCompletion);
-    return () => {
-      isMounted = false;
-      window.removeEventListener("profileSaved", updateCompletion);
-    };
-  }, [isAuthenticated, isApplicantOrStudent]);
-
-  const ProfileCompletionIndicator = ({ size = 28, fontSize = 10 }) => {
-    const normalized = Math.max(0, Math.min(100, jobsProfileCompletion));
-    const degrees = normalized * 3.6;
-    return (
-      <span
-        style={{
-          width: `${size}px`,
-          height: `${size}px`,
-          borderRadius: "9999px",
-          background: `conic-gradient(#115FD5 ${degrees}deg, #E5E7EB 0deg)`,
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-          padding: "2px",
-        }}
-      >
-        <span
-          style={{
-            width: "100%",
-            height: "100%",
-            borderRadius: "9999px",
-            background: "#FFFFFF",
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#115FD5",
-            fontWeight: 700,
-            fontSize: `${fontSize}px`,
-            lineHeight: 1,
-          }}
-        >
-          {normalized}%
-        </span>
-      </span>
-    );
-  };
+  // Logo click: when logged in, go to section home for that user type; otherwise go to main home
+  const logoHomePath = (() => {
+    if (!isAuthenticated || !user?.userType) return "/";
+    const userType = user.userType;
+    if (userType === "STUDENT" || userType === "APPLICANT") return "/students";
+    if (userType === "INSTITUTE") return "/institutes";
+    if (userType === "INDUSTRY") return "/industry";
+    return "/";
+  })();
 
   // Handle window resize
   useEffect(() => {
@@ -136,9 +88,41 @@ const Navbar = () => {
   useEffect(() => {
     setIsMobileMenuOpen(false);
     setShowUserMenu(false);
+    setOpenStudentNav(null);
+    setOpenInstNav(null);
+    setOpenIndustryNav(null);
   }, [location.pathname]);
 
-  // Position dropdown and close when clicking outside
+  // Close mobile menu when clicking outside or scrolling
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+
+    const handleClickOrTouch = (e) => {
+      const menuEl = mobileMenuRef.current;
+      const toggleEl = mobileToggleRef.current;
+      const inMenu = menuEl && menuEl.contains(e.target);
+      const inToggle = toggleEl && toggleEl.contains(e.target);
+      if (!inMenu && !inToggle) {
+        setIsMobileMenuOpen(false);
+      }
+    };
+
+    const handleScroll = () => {
+      setIsMobileMenuOpen(false);
+    };
+
+    document.addEventListener("mousedown", handleClickOrTouch);
+    document.addEventListener("touchstart", handleClickOrTouch);
+    window.addEventListener("scroll", handleScroll, true);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOrTouch);
+      document.removeEventListener("touchstart", handleClickOrTouch);
+      window.removeEventListener("scroll", handleScroll, true);
+    };
+  }, [isMobileMenuOpen]);
+
+  // Position dropdown and close when clicking outside (dropdown is portaled to body)
   const updateDropdownPosition = () => {
     if (!userMenuRef.current) return;
     const rect = userMenuRef.current.getBoundingClientRect();
@@ -177,14 +161,90 @@ const Navbar = () => {
     };
   }, [showUserMenu]);
 
-  const handleLogout = () => {
-    logout(clearAuth);
-    setShowUserMenu(false);
+  useEffect(() => {
+    return () => {
+      if (studentNavCloseTimer.current) clearTimeout(studentNavCloseTimer.current);
+      if (instNavCloseTimer.current) clearTimeout(instNavCloseTimer.current);
+      if (industryNavCloseTimer.current) clearTimeout(industryNavCloseTimer.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!openStudentNav) return;
+    const handleOutside = (e) => {
+      const area = studentNavAreaRef.current;
+      if (!area) return;
+      if (!area.contains(e.target)) setOpenStudentNav(null);
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [openStudentNav]);
+
+  const studentAvatarInitials = useMemo(() => {
+    const name = (user?.name || "").trim();
+    if (!name) return "U";
+    const parts = name.split(/\s+/).filter(Boolean);
+    const a = parts[0]?.[0] || "U";
+    const b = parts.length > 1 ? (parts[parts.length - 1]?.[0] || "") : "";
+    return (a + b).toUpperCase();
+  }, [user?.name]);
+
+  const openStudentDropdown = (key) => {
+    // Enable Student dropdowns on desktop + tablet; disable only on mobile drawer UI.
+    if (!isStudent || isMobile) return;
+    if (studentNavCloseTimer.current) clearTimeout(studentNavCloseTimer.current);
+    setOpenStudentNav(key);
   };
 
-  const handleLogoClick = (e) => {
-    e.preventDefault();
-    redirectToSomethingX('', somethingxToken, displayUser);
+  const scheduleCloseStudentDropdown = () => {
+    if (!isStudent || isMobile) return;
+    if (studentNavCloseTimer.current) clearTimeout(studentNavCloseTimer.current);
+    studentNavCloseTimer.current = setTimeout(() => setOpenStudentNav(null), 120);
+  };
+
+  const toggleStudentDropdown = (key) => {
+    if (!isStudent || isMobile) return;
+    if (studentNavCloseTimer.current) clearTimeout(studentNavCloseTimer.current);
+    setOpenStudentNav((prev) => (prev === key ? null : key));
+  };
+
+  const isInstitute = isAuthenticated && user?.userType === "INSTITUTE";
+  const isIndustry = isAuthenticated && user?.userType === "INDUSTRY";
+
+  const openInstDropdown = (key) => {
+    if (!isInstitute || isMobile) return;
+    if (instNavCloseTimer.current) clearTimeout(instNavCloseTimer.current);
+    setOpenInstNav(key);
+  };
+
+  const scheduleCloseInstDropdown = () => {
+    if (!isInstitute || isMobile) return;
+    if (instNavCloseTimer.current) clearTimeout(instNavCloseTimer.current);
+    instNavCloseTimer.current = setTimeout(() => setOpenInstNav(null), 120);
+  };
+
+  const toggleInstDropdown = (key) => {
+    if (!isInstitute || isMobile) return;
+    if (instNavCloseTimer.current) clearTimeout(instNavCloseTimer.current);
+    setOpenInstNav((prev) => (prev === key ? null : key));
+  };
+
+  const openIndustryDropdown = (key) => {
+    if (!isIndustry || isMobile) return;
+    if (industryNavCloseTimer.current) clearTimeout(industryNavCloseTimer.current);
+    setOpenIndustryNav(key);
+  };
+
+  const scheduleCloseIndustryDropdown = () => {
+    if (!isIndustry || isMobile) return;
+    if (industryNavCloseTimer.current) clearTimeout(industryNavCloseTimer.current);
+    industryNavCloseTimer.current = setTimeout(() => setOpenIndustryNav(null), 120);
+  };
+
+  const toggleIndustryDropdown = (key) => {
+    if (!isIndustry || isMobile) return;
+    if (industryNavCloseTimer.current) clearTimeout(industryNavCloseTimer.current);
+    setOpenIndustryNav((prev) => (prev === key ? null : key));
   };
 
   return (
@@ -197,9 +257,6 @@ const Navbar = () => {
           .navbar-mobile-menu {
             display: flex !important;
           }
-          .navbar-logo-text {
-            font-size: 18px !important;
-          }
         }
 
         @media (min-width: 768px) {
@@ -210,6 +267,127 @@ const Navbar = () => {
         .navbar-user-dropdown {
           position: fixed !important;
           z-index: 9999 !important;
+        }
+
+        /* Student navbar (desktop) */
+        .student-nav-link {
+          color: #111827;
+          font-weight: 500;
+          font-size: 14px;
+          line-height: 20px;
+          letter-spacing: -0.01em;
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          padding: 8px 10px;
+          border-radius: 8px;
+          font-family: 'Inter', sans-serif;
+          user-select: none;
+        }
+        .student-nav-link:hover {
+          background: #F3F4F6;
+        }
+        .student-nav-caret {
+          width: 10px;
+          height: 10px;
+          display: inline-block;
+          border-right: 2px solid rgba(17, 24, 39, 0.7);
+          border-bottom: 2px solid rgba(17, 24, 39, 0.7);
+          transform: rotate(45deg);
+          margin-top: -2px;
+        }
+        .student-nav-item {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+        }
+        .student-nav-dropdown {
+          position: absolute;
+          top: calc(100% + 10px);
+          left: 0;
+          min-width: 220px;
+          background: #FFFFFF;
+          border: 1px solid #E5E7EB;
+          border-radius: 12px;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 4px 6px -2px rgba(0, 0, 0, 0.06);
+          padding: 8px;
+          z-index: 2147483647;
+        }
+        .student-nav-dropdown-item {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+          gap: 10px;
+          padding: 10px 12px;
+          border-radius: 10px;
+          text-decoration: none;
+          color: #111827;
+          font-weight: 500;
+          font-size: 14px;
+          line-height: 20px;
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          font-family: 'Inter', sans-serif;
+          text-align: left;
+        }
+        .student-nav-dropdown-item:hover {
+          background: #F3F4F6;
+        }
+        .student-nav-right {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+        }
+        .student-dashboard-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 10px 14px;
+          background: #115FD5;
+          color: #FFFFFF;
+          border: none;
+          border-radius: 8px;
+          font-weight: 600;
+          font-size: 14px;
+          cursor: pointer;
+          font-family: 'Inter', sans-serif;
+          box-shadow: 0 6px 14px rgba(17, 95, 213, 0.25);
+        }
+        .student-user-trigger {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 6px 10px;
+          border-radius: 10px;
+          border: 1px solid #E5E7EB;
+          background: #FFFFFF;
+          cursor: pointer;
+          font-family: 'Inter', sans-serif;
+          color: #111827;
+          font-weight: 500;
+          font-size: 14px;
+        }
+        .student-user-trigger:hover {
+          background: #F9FAFB;
+        }
+        .student-avatar {
+          width: 28px;
+          height: 28px;
+          border-radius: 9999px;
+          background: linear-gradient(135deg, #F59E0B, #F97316);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: #FFFFFF;
+          font-weight: 700;
+          font-size: 12px;
+          flex: 0 0 auto;
         }
       `}</style>
       <nav style={{
@@ -223,11 +401,10 @@ const Navbar = () => {
         borderBottom: '1px solid #F3F4F6',
         boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.05)',
         position: 'relative',
-        zIndex: 1000,
+        zIndex: 100000,
         width: '100%',
         maxWidth: '100%',
-        boxSizing: 'border-box',
-        overflowX: 'hidden'
+        boxSizing: 'border-box'
       }}>
         <div className="navbar-container" style={{
           display: 'flex',
@@ -242,7 +419,8 @@ const Navbar = () => {
         }}>
           {/* Logo */}
           <button
-            onClick={handleLogoClick}
+            type="button"
+            onClick={() => goHome(logoHomePath)}
             style={{
               display: 'flex',
               flexDirection: 'row',
@@ -253,46 +431,27 @@ const Navbar = () => {
               minWidth: 0,
               background: 'none',
               border: 'none',
+              padding: 0,
               cursor: 'pointer',
-              padding: 0
             }}
           >
-            <div style={{
-              display: 'flex',
-              flexDirection: 'row',
-              alignItems: 'flex-end',
-              gap: '2px',
-              textDecoration: 'none',
-              flexShrink: 0,
-              minWidth: 0
-            }}>
-              <img 
-                src={LogoImage} 
-                alt="SaarthiX Logo" 
-                style={{
-                  height: isMobile ? '28px' : '36px',
-                  width: 'auto',
-                  objectFit: 'contain',
-                  display: 'block',
-                  verticalAlign: 'bottom'
-                }}
-              />
-              <span className="navbar-logo-text" style={{
-                fontFamily: "'Times New Roman', serif",
-                fontWeight: 'bold',
-                fontStyle: 'italic',
-                fontSize: isMobile ? '18px' : '22px',
-                lineHeight: '1',
-                letterSpacing: '-0.01em',
-                color: '#0D47A1',
-                paddingBottom: '1px'
-              }}>SaarthiX</span>
-            </div>
+            <img
+              src={`${import.meta.env.BASE_URL}assets/Saarthi logoimg.png`}
+              alt="SaarthiX Logo"
+              style={{
+                height: isMobile ? '35px' : '45px',
+                width: 'auto',
+                objectFit: 'contain',
+                display: 'block',
+                verticalAlign: 'bottom'
+              }}
+            />
           </button>
 
           {/* Center links (desktop) */}
           <div
             className="navbar-desktop-menu"
+            ref={studentNavAreaRef}
             style={{
               display: "flex",
               flex: "1 1 auto",
@@ -306,64 +465,68 @@ const Navbar = () => {
               <>
                 <button
                   type="button"
-                  onClick={() => redirectToSomethingX('/students', somethingxToken, displayUser)}
+                  onClick={() => goHome("/students")}
                   style={{
-                    background: "none",
-                    border: "none",
-                    padding: 0,
-                    cursor: "pointer",
+                    textDecoration: "none",
                     fontWeight: 500,
                     fontSize: "16px",
                     color: "#333333",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
                     fontFamily: "'Inter', sans-serif",
+                    padding: 0,
                   }}
                 >
                   Students
                 </button>
                 <button
                   type="button"
-                  onClick={() => redirectToSomethingX('/institutes', somethingxToken, displayUser)}
+                  onClick={() => goHome("/institutes")}
                   style={{
-                    background: "none",
-                    border: "none",
-                    padding: 0,
-                    cursor: "pointer",
+                    textDecoration: "none",
                     fontWeight: 500,
                     fontSize: "16px",
                     color: "#333333",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
                     fontFamily: "'Inter', sans-serif",
+                    padding: 0,
                   }}
                 >
                   Institutes
                 </button>
                 <button
                   type="button"
-                  onClick={() => redirectToSomethingX('/industry', somethingxToken, displayUser)}
+                  onClick={() => goHome("/industry")}
                   style={{
-                    background: "none",
-                    border: "none",
-                    padding: 0,
-                    cursor: "pointer",
+                    textDecoration: "none",
                     fontWeight: 500,
                     fontSize: "16px",
                     color: "#333333",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
                     fontFamily: "'Inter', sans-serif",
+                    padding: 0,
                   }}
                 >
                   Industry
                 </button>
                 <button
                   type="button"
-                  onClick={() => redirectToSomethingX('/about-us', somethingxToken, displayUser)}
+                  onClick={() => goHome("/about-us")}
                   style={{
-                    background: "none",
-                    border: "none",
-                    padding: 0,
-                    cursor: "pointer",
+                    textDecoration: "none",
                     fontWeight: 500,
                     fontSize: "16px",
                     color: "#333333",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
                     fontFamily: "'Inter', sans-serif",
+                    padding: 0,
                   }}
                 >
                   About Us
@@ -371,81 +534,259 @@ const Navbar = () => {
               </>
             )}
 
-            {isAuthenticated && (user?.userType === "APPLICANT" || displayUser?.userType === "STUDENT") && (
+            {isStudent && (
               <>
+                <div
+                  className="student-nav-item"
+                  onMouseEnter={() => openStudentDropdown("career")}
+                  onMouseLeave={scheduleCloseStudentDropdown}
+                >
+                  <button
+                    type="button"
+                    className="student-nav-link"
+                    aria-haspopup="menu"
+                    aria-expanded={openStudentNav === "career"}
+                    onClick={() => toggleStudentDropdown("career")}
+                  >
+                    Career Tools <span className="student-nav-caret" />
+                  </button>
+                  {openStudentNav === "career" && (
+                    <div
+                      className="student-nav-dropdown"
+                      role="menu"
+                      onMouseEnter={() => openStudentDropdown("career")}
+                      onMouseLeave={scheduleCloseStudentDropdown}
+                    >
+                      <button
+                        type="button"
+                        className="student-nav-dropdown-item"
+                        onClick={() => {
+                          setOpenStudentNav(null);
+                          redirectToProfiling(getAuthToken(), user);
+                        }}
+                      >
+                        Hire me Profile
+                      </button>
+                      <button
+                        type="button"
+                        className="student-nav-dropdown-item"
+                        onClick={() => goHome("/students/resume-builder", () => setOpenStudentNav(null))}
+                      >
+                        Resume Builder
+                      </button>
+                      <button
+                        type="button"
+                        className="student-nav-dropdown-item"
+                        onClick={() => goHome("/students/career-counselling", () => setOpenStudentNav(null))}
+                      >
+                        Career Counselling
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div
+                  className="student-nav-item"
+                  onMouseEnter={() => openStudentDropdown("practice")}
+                  onMouseLeave={scheduleCloseStudentDropdown}
+                >
+                  <button
+                    type="button"
+                    className="student-nav-link"
+                    aria-haspopup="menu"
+                    aria-expanded={openStudentNav === "practice"}
+                    onClick={() => toggleStudentDropdown("practice")}
+                  >
+                    Practice <span className="student-nav-caret" />
+                  </button>
+                  {openStudentNav === "practice" && (
+                    <div
+                      className="student-nav-dropdown"
+                      role="menu"
+                      onMouseEnter={() => openStudentDropdown("practice")}
+                      onMouseLeave={scheduleCloseStudentDropdown}
+                    >
+                      <button
+                        type="button"
+                        className="student-nav-dropdown-item"
+                        onClick={() => goHome("/students/interview-preparation", () => setOpenStudentNav(null))}
+                      >
+                        Interview Preparation
+                      </button>
+                      <button
+                        type="button"
+                        className="student-nav-dropdown-item"
+                        onClick={() => goHome("/students/job-blueprint", () => setOpenStudentNav(null))}
+                      >
+                        Job Blueprint
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div
+                  className="student-nav-item"
+                  onMouseEnter={() => openStudentDropdown("jobs")}
+                  onMouseLeave={scheduleCloseStudentDropdown}
+                >
+                  <button
+                    type="button"
+                    className="student-nav-link"
+                    aria-haspopup="menu"
+                    aria-expanded={openStudentNav === "jobs"}
+                    onClick={() => toggleStudentDropdown("jobs")}
+                  >
+                    Jobs <span className="student-nav-caret" />
+                  </button>
+                  {openStudentNav === "jobs" && (
+                    <div
+                      className="student-nav-dropdown"
+                      role="menu"
+                      onMouseEnter={() => openStudentDropdown("jobs")}
+                      onMouseLeave={scheduleCloseStudentDropdown}
+                    >
+                      <Link
+                        to="/apply-jobs"
+                        className="student-nav-dropdown-item"
+                        onClick={() => setOpenStudentNav(null)}
+                      >
+                        Apply to Jobs
+                      </Link>
+                    </div>
+                  )}
+                </div>
+
                 <button
                   type="button"
-                  onClick={() => redirectToSomethingX('/students/job-blueprint', somethingxToken, displayUser)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    padding: 0,
-                    cursor: "pointer",
-                    fontWeight: 500,
-                    fontSize: "16px",
-                    color: "#333333",
-                    fontFamily: "'Inter', sans-serif",
-                  }}
+                  onClick={() => goHome("/about-us")}
+                  className="student-nav-link"
+                  style={{ padding: "8px 10px" }}
                 >
-                  Job Blueprint
+                  About
                 </button>
+              </>
+            )}
+
+            {isInstitute && (
+              <>
+                {/* Learning dropdown */}
+                <div
+                  className="student-nav-item"
+                  onMouseEnter={() => openInstDropdown("learning")}
+                  onMouseLeave={scheduleCloseInstDropdown}
+                >
+                  <button
+                    type="button"
+                    className="student-nav-link"
+                    aria-haspopup="menu"
+                    aria-expanded={openInstNav === "learning"}
+                    onClick={() => toggleInstDropdown("learning")}
+                  >
+                    Learning <span className="student-nav-caret" />
+                  </button>
+                  {openInstNav === "learning" && (
+                    <div
+                      className="student-nav-dropdown"
+                      role="menu"
+                      onMouseEnter={() => openInstDropdown("learning")}
+                      onMouseLeave={scheduleCloseInstDropdown}
+                    >
+                      <button
+                        type="button"
+                        className="student-nav-dropdown-item"
+                        onClick={() => goHome("/institutes/workshops", () => setOpenInstNav(null))}
+                      >
+                        Workshops
+                      </button>
+                      <button
+                        type="button"
+                        className="student-nav-dropdown-item"
+                        onClick={() => goHome("/institutes/expert-session", () => setOpenInstNav(null))}
+                      >
+                        Expert Session
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Training dropdown */}
+                <div
+                  className="student-nav-item"
+                  onMouseEnter={() => openInstDropdown("training")}
+                  onMouseLeave={scheduleCloseInstDropdown}
+                >
+                  <button
+                    type="button"
+                    className="student-nav-link"
+                    aria-haspopup="menu"
+                    aria-expanded={openInstNav === "training"}
+                    onClick={() => toggleInstDropdown("training")}
+                  >
+                    Training <span className="student-nav-caret" />
+                  </button>
+                  {openInstNav === "training" && (
+                    <div
+                      className="student-nav-dropdown"
+                      role="menu"
+                      onMouseEnter={() => openInstDropdown("training")}
+                      onMouseLeave={scheduleCloseInstDropdown}
+                    >
+                      <button
+                        type="button"
+                        className="student-nav-dropdown-item"
+                        onClick={() => goHome("/institutes/internship-management", () => setOpenInstNav(null))}
+                      >
+                        Student Training
+                      </button>
+                      <button
+                        type="button"
+                        className="student-nav-dropdown-item"
+                        onClick={() => goHome("/institutes/trainings", () => setOpenInstNav(null))}
+                      >
+                        Role Ready Training
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Placement dropdown */}
+                <div
+                  className="student-nav-item"
+                  onMouseEnter={() => openInstDropdown("placement")}
+                  onMouseLeave={scheduleCloseInstDropdown}
+                >
+                  <button
+                    type="button"
+                    className="student-nav-link"
+                    aria-haspopup="menu"
+                    aria-expanded={openInstNav === "placement"}
+                    onClick={() => toggleInstDropdown("placement")}
+                  >
+                    Placement <span className="student-nav-caret" />
+                  </button>
+                  {openInstNav === "placement" && (
+                    <div
+                      className="student-nav-dropdown"
+                      role="menu"
+                      onMouseEnter={() => openInstDropdown("placement")}
+                      onMouseLeave={scheduleCloseInstDropdown}
+                    >
+                      <button
+                        type="button"
+                        className="student-nav-dropdown-item"
+                        onClick={() => goHome("/institutes/placement-access", () => setOpenInstNav(null))}
+                      >
+                        Placement Access
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 <button
                   type="button"
-                  onClick={() => redirectToProfiling(somethingxToken, displayUser)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    padding: 0,
-                    cursor: "pointer",
-                    fontWeight: 500,
-                    fontSize: "16px",
-                    color: "#333333",
-                    fontFamily: "'Inter', sans-serif",
-                  }}
-                >
-                  Profiling
-                </button>
-                <button
-                  type="button"
-                  onClick={() => redirectToSomethingX('/students/resume-builder', somethingxToken, displayUser)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    padding: 0,
-                    cursor: "pointer",
-                    fontWeight: 500,
-                    fontSize: "16px",
-                    color: "#333333",
-                    fontFamily: "'Inter', sans-serif",
-                  }}
-                >
-                  Resume Builder
-                </button>
-                <Link
-                  to="/apply-jobs"
-                  style={{
-                    textDecoration: "none",
-                    fontWeight: 500,
-                    fontSize: "16px",
-                    color: "#115FD5",
-                    fontFamily: "'Inter', sans-serif",
-                  }}
-                >
-                  Apply To Jobs
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => redirectToSomethingX('/about-us', somethingxToken, displayUser)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    padding: 0,
-                    cursor: "pointer",
-                    fontWeight: 500,
-                    fontSize: "16px",
-                    color: "#333333",
-                    fontFamily: "'Inter', sans-serif",
-                  }}
+                  onClick={() => goHome("/about-us")}
+                  className="student-nav-link"
+                  style={{ padding: "8px 10px" }}
                 >
                   About Us
                 </button>
@@ -454,59 +795,84 @@ const Navbar = () => {
 
             {isAuthenticated && user?.userType === "INDUSTRY" && (
               <>
-                <Link
-                  to="/manage-applications"
-                  style={{
-                    textDecoration: "none",
-                    fontWeight: 500,
-                    fontSize: "16px",
-                    color: "#115FD5",
-                    fontFamily: "'Inter', sans-serif",
-                  }}
+                <div
+                  className="student-nav-item"
+                  onMouseEnter={() => openIndustryDropdown("talent")}
+                  onMouseLeave={scheduleCloseIndustryDropdown}
                 >
-                  Post Jobs
-                </Link>
-                <Link
-                  to="/manage-hackathons"
-                  style={{
-                    textDecoration: "none",
-                    fontWeight: 500,
-                    fontSize: "16px",
-                    color: "#115FD5",
-                    fontFamily: "'Inter', sans-serif",
-                  }}
-                >
-                  Post Hackathons
-                </Link>
+                  <button
+                    type="button"
+                    className="student-nav-link"
+                    aria-haspopup="menu"
+                    aria-expanded={openIndustryNav === "talent"}
+                    onClick={() => toggleIndustryDropdown("talent")}
+                  >
+                    Search Talent <span className="student-nav-caret" />
+                  </button>
+                  {openIndustryNav === "talent" && (
+                    <div
+                      className="student-nav-dropdown"
+                      role="menu"
+                      onMouseEnter={() => openIndustryDropdown("talent")}
+                      onMouseLeave={scheduleCloseIndustryDropdown}
+                    >
+                      <Link
+                        to="/manage-applications"
+                        className="student-nav-dropdown-item"
+                        onClick={() => setOpenIndustryNav(null)}
+                      >
+                        Post Job
+                      </Link>
+                      <Link
+                        to="/manage-hackathons"
+                        className="student-nav-dropdown-item"
+                        onClick={() => setOpenIndustryNav(null)}
+                      >
+                        Post Hackathon
+                      </Link>
+                      <Link
+                        to="/student-database"
+                        className="student-nav-dropdown-item"
+                        onClick={() => setOpenIndustryNav(null)}
+                      >
+                        Database Access
+                      </Link>
+                      <button
+                        type="button"
+                        className="student-nav-dropdown-item"
+                        onClick={() => goHome("/industry/ai-interview", () => setOpenIndustryNav(null))}
+                      >
+                        Technical AI interview
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 <button
                   type="button"
-                  onClick={() => redirectToSomethingX('/industry/ai-interview', somethingxToken, displayUser)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    padding: 0,
-                    cursor: "pointer",
-                    fontWeight: 500,
-                    fontSize: "16px",
-                    color: "#333333",
-                    fontFamily: "'Inter', sans-serif",
-                  }}
+                  onClick={() => goHome("/industry/role-ready-freshers")}
+                  className="student-nav-link"
+                  style={{ padding: "8px 10px" }}
                 >
-                  AI Interview
+                  Role Ready Training
                 </button>
+
                 <button
                   type="button"
-                  onClick={() => redirectToSomethingX('/about-us', somethingxToken, displayUser)}
+                  onClick={() => goHome("/industry/expert-session")}
+                  className="student-nav-link"
+                  style={{ padding: "8px 10px" }}
+                >
+                  Expert Session
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => goHome("/about-us")}
                   style={{
-                    background: "none",
-                    border: "none",
-                    padding: 0,
-                    cursor: "pointer",
-                    fontWeight: 500,
-                    fontSize: "16px",
-                    color: "#333333",
-                    fontFamily: "'Inter', sans-serif",
+                    textDecoration: "none"
                   }}
+                  className="student-nav-link"
                 >
                   About Us
                 </button>
@@ -529,67 +895,94 @@ const Navbar = () => {
           >
             {isAuthenticated ? (
               <>
-                {!isMobile && !isTablet && (
+                {showDashboard && !isMobile && (
                   <button
                     type="button"
-                    onClick={() => {
-                      // Determine the correct dashboard path based on user type
-                      const userType = displayUser?.userType;
-                      const dashboardPath = userType === "INSTITUTE" ? "/institutes/dashboard" : "/dashboard";
-                      redirectToSomethingX(dashboardPath, somethingxToken, displayUser);
-                    }}
-                    className="navbar-button-text"
-                    style={{
+                    onClick={() => goHome(dashboardPath)}
+                    className={isStudent ? "student-dashboard-btn" : "navbar-button-text"}
+                    style={isStudent ? undefined : {
                       display: 'flex',
                       justifyContent: 'center',
                       alignItems: 'center',
-                      padding: '10px 20px',
-                      background: '#FFFFFF',
-                      border: '1px solid #115FD5',
-                      borderRadius: '24px',
+                      width: '156px',
+                      height: '36px',
+                      background: '#3170A5',
+                      border: 'none',
+                      borderRadius: '18px',
                       fontWeight: 500,
-                      fontSize: '16px',
-                      color: '#115FD5',
+                      fontSize: '14px',
+                      color: '#FFFFFF',
                       cursor: 'pointer',
                       fontFamily: "'Inter', sans-serif",
-                      whiteSpace: 'nowrap',
-                      textDecoration: 'none'
+                      whiteSpace: 'nowrap'
                     }}
                   >
                     Dashboard
                   </button>
                 )}
 
-                <NotificationCenter />
+                {isHomePage && !isMobile && !isTablet &&
+                  user?.userType !== "STUDENT" &&
+                  user?.userType !== "APPLICANT" &&
+                  user?.userType !== "INSTITUTE" &&
+                  user?.userType !== "INDUSTRY" && (
+                    <button
+                      type="button"
+                      onClick={() => goHome("/login/admin")}
+                      className="navbar-button-text"
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        padding: '10px 20px',
+                        background: '#FFFFFF',
+                        border: '1px solid #115FD5',
+                        borderRadius: '24px',
+                        fontWeight: 500,
+                        fontSize: '16px',
+                        color: '#115FD5',
+                        cursor: 'pointer',
+                        fontFamily: "'Inter', sans-serif",
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      Admin
+                    </button>
+                  )}
 
-                {isApplicantOrStudent && (
-                  <Link
-                    to="/build-profile"
-                    style={{
-                      display: "flex",
-                      justifyContent: "center",
-                      alignItems: "center",
-                      gap: "8px",
-                      padding: "10px 20px",
-                      background: "#FFFFFF",
-                      border: "1px solid #115FD5",
-                      borderRadius: "24px",
-                      fontWeight: 500,
-                      fontSize: isMobile ? "14px" : "16px",
-                      color: "#115FD5",
-                      fontFamily: "'Inter', sans-serif",
-                      whiteSpace: "nowrap",
-                      textDecoration: "none",
-                    }}
-                  >
-                    <ProfileCompletionIndicator size={26} fontSize={9} />
-                    Profile
-                  </Link>
-                )}
+                {isHomePage && !isMobile && !isTablet &&
+                  user?.userType !== "STUDENT" &&
+                  user?.userType !== "APPLICANT" &&
+                  user?.userType !== "INSTITUTE" &&
+                  user?.userType !== "INDUSTRY" && (
+                    <button
+                      type="button"
+                      onClick={() => goHome("/employer/dashboard")}
+                      className="navbar-button-text"
+                      style={{
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        padding: "10px 20px",
+                        background: "#10b981",
+                        border: "none",
+                        borderRadius: "24px",
+                        fontWeight: 500,
+                        fontSize: "16px",
+                        color: "#FFFFFF",
+                        cursor: "pointer",
+                        fontFamily: "'Inter', sans-serif",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Employer
+                    </button>
+                  )}
 
                 <div ref={userMenuRef} style={{ position: "relative", overflow: "visible" }}>
                   <button
                     type="button"
+                    className={isStudent ? "student-user-trigger" : undefined}
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -603,23 +996,49 @@ const Navbar = () => {
                       }
                       setShowUserMenu(next);
                     }}
-                    style={{
+                    style={isStudent ? undefined : {
                       display: "flex",
-                      justifyContent: "center",
+                      justifyContent: "flex-start",
                       alignItems: "center",
-                      padding: isMobile ? "8px 12px" : "10px 20px",
-                      background: "#115FD5",
+                      gap: "8px",
+                      width: "110px",
+                      height: "36px",
+                      padding: "0 8px 0 0",
+                      background: "transparent",
                       border: "none",
-                      borderRadius: "24px",
+                      borderRadius: "0",
                       fontWeight: 500,
-                      fontSize: isMobile ? "14px" : "16px",
-                      color: "#FFFFFF",
+                      fontSize: "14px",
+                      color: "#000000",
                       cursor: "pointer",
                       fontFamily: "'Inter', sans-serif",
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {displayUser?.name?.split(" ")[0] || "User"}
+                    {isStudent ? (
+                      <>
+                        <span className="student-avatar" aria-hidden="true">{studentAvatarInitials}</span>
+                        <span>User</span>
+                        <span className="student-nav-caret" aria-hidden="true" style={{ marginLeft: 2, borderRightColor: "rgba(17, 24, 39, 0.55)", borderBottomColor: "rgba(17, 24, 39, 0.55)" }} />
+                      </>
+                    ) : (
+                      <>
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            width: "38px",
+                            height: "36px",
+                            borderRadius: "9999px",
+                            background: "#D9D9D9",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flex: "0 0 auto",
+                          }}
+                        />
+                        <span>Profile</span>
+                      </>
+                    )}
                   </button>
                   {showUserMenu && createPortal(
                     <div
@@ -639,59 +1058,27 @@ const Navbar = () => {
                         overflow: "hidden",
                       }}
                     >
-                      {isApplicantOrStudent && (
-                        <>
-                          <Link
-                            to="/build-profile"
-                            onClick={() => setShowUserMenu(false)}
-                            style={{
-                              display: "block",
-                              padding: "12px 16px",
-                              color: "#333333",
-                              textDecoration: "none",
-                              fontWeight: 500,
-                              fontSize: "15px",
-                              borderBottom: "1px solid #F3F4F6",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "8px",
-                            }}
-                          >
-                            <ProfileCompletionIndicator size={24} fontSize={8} />
-                            Profile
-                          </Link>
-                        </>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowUserMenu(false);
-                          // Determine the correct dashboard path based on user type
-                          const userType = displayUser?.userType;
-                          const dashboardPath = userType === "INSTITUTE" ? "/institutes/dashboard" : "/dashboard";
-                          redirectToSomethingX(dashboardPath, somethingxToken, displayUser);
-                        }}
+                      <Link
+                        to="/build-profile"
+                        onClick={() => setShowUserMenu(false)}
                         style={{
                           display: "block",
-                          width: "100%",
                           padding: "12px 16px",
-                          background: "none",
-                          border: "none",
                           color: "#333333",
-                          textAlign: "left",
                           textDecoration: "none",
                           fontWeight: 500,
                           fontSize: "15px",
                           borderBottom: "1px solid #F3F4F6",
-                          cursor: "pointer",
-                          fontFamily: "'Inter', sans-serif",
                         }}
                       >
-                        Dashboard
-                      </button>
+                        Profile
+                      </Link>
                       <button
                         type="button"
-                        onClick={handleLogout}
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          handleLogout();
+                        }}
                         style={{
                           display: "block",
                           width: "100%",
@@ -715,9 +1102,54 @@ const Navbar = () => {
               </>
             ) : (
               <>
+                {isHomePage && !isMobile && !isTablet && (
+                  <button
+                    type="button"
+                    onClick={() => goHome("/login/admin")}
+                    style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      padding: "10px 20px",
+                      background: "#FFFFFF",
+                      border: "1px solid #115FD5",
+                      borderRadius: "24px",
+                      fontWeight: 500,
+                      fontSize: "16px",
+                      color: "#115FD5",
+                      cursor: "pointer",
+                      fontFamily: "'Inter', sans-serif",
+                    }}
+                  >
+                    Admin
+                  </button>
+                )}
+                {isHomePage && !isMobile && !isTablet && (
+                  <button
+                    type="button"
+                    onClick={() => goHome("/employer/dashboard")}
+                    style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      padding: "10px 20px",
+                      background: "#10b981",
+                      border: "none",
+                      borderRadius: "24px",
+                      fontWeight: 500,
+                      fontSize: "16px",
+                      color: "#FFFFFF",
+                      cursor: "pointer",
+                      fontFamily: "'Inter', sans-serif",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Employer
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => redirectToSomethingX('', somethingxToken, displayUser)}
+                  onClick={() => setShowUserTypeSelection(true)}
                   style={{
                     display: "flex",
                     justifyContent: "center",
@@ -743,6 +1175,7 @@ const Navbar = () => {
           <button
             className="navbar-mobile-menu"
             type="button"
+            ref={mobileToggleRef}
             onClick={() => setIsMobileMenuOpen((prev) => !prev)}
             aria-label="Toggle menu"
             style={{
@@ -750,92 +1183,130 @@ const Navbar = () => {
               flexDirection: "column",
               justifyContent: "center",
               alignItems: "center",
-              gap: "4px",
+              gap: "3px",
               background: "transparent",
               border: "none",
               cursor: "pointer",
-              padding: "8px",
+              padding: "4px",
+              width: "34px",
+              height: "30px",
               marginLeft: "auto",
             }}
           >
-            <div
-              style={{
-                width: "24px",
-                height: "3px",
-                background: "#115FD5",
-                borderRadius: "2px",
-                transform: isMobileMenuOpen
-                  ? "rotate(45deg) translate(5px, 5px)"
-                  : "none",
-                transition: "all 0.3s ease",
-              }}
-            />
-            <div
-              style={{
-                width: "24px",
-                height: "3px",
-                background: "#115FD5",
-                borderRadius: "2px",
-                opacity: isMobileMenuOpen ? 0 : 1,
-                transition: "all 0.3s ease",
-              }}
-            />
-            <div
-              style={{
-                width: "24px",
-                height: "3px",
-                background: "#115FD5",
-                borderRadius: "2px",
-                transform: isMobileMenuOpen
-                  ? "rotate(-45deg) translate(7px, -6px)"
-                  : "none",
-                transition: "all 0.3s ease",
-              }}
-            />
+            {isMobileMenuOpen ? (
+              <div
+                style={{
+                  position: "relative",
+                  width: "22px",
+                  height: "22px",
+                  borderRadius: "6px",
+                  border: "1.5px solid #115FD5",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    width: "12px",
+                    height: "2px",
+                    background: "#115FD5",
+                    borderRadius: "2px",
+                    transform: "rotate(45deg)",
+                  }}
+                />
+                <div
+                  style={{
+                    position: "absolute",
+                    width: "12px",
+                    height: "2px",
+                    background: "#115FD5",
+                    borderRadius: "2px",
+                    transform: "rotate(-45deg)",
+                  }}
+                />
+              </div>
+            ) : (
+              <>
+                <div
+                  style={{
+                    width: "20px",
+                    height: "2px",
+                    background: "#115FD5",
+                    borderRadius: "2px",
+                    transition: "all 0.2s ease",
+                  }}
+                />
+                <div
+                  style={{
+                    width: "20px",
+                    height: "2px",
+                    background: "#115FD5",
+                    borderRadius: "2px",
+                    transition: "all 0.2s ease",
+                  }}
+                />
+                <div
+                  style={{
+                    width: "20px",
+                    height: "2px",
+                    background: "#115FD5",
+                    borderRadius: "2px",
+                    transition: "all 0.2s ease",
+                  }}
+                />
+              </>
+            )}
           </button>
         </div>
 
         {/* Mobile drawer */}
-        {isMobileMenuOpen && (
-          <div
-            className="navbar-mobile-drawer"
-            style={{
-              position: "fixed",
-              top: isMobile ? "50px" : "54px",
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: "#FFFFFF",
-              zIndex: 999,
-              overflowY: "auto",
-              padding: "24px 16px",
-              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.1)",
-            }}
-          >
+        <div
+          ref={mobileMenuRef}
+          className="navbar-mobile-drawer"
+          style={{
+            position: "fixed",
+            top: isMobile ? "54px" : "58px",
+            right: "8px",
+            left: "auto",
+            bottom: "auto",
+            width: "78vw",
+            maxWidth: "340px",
+            background: "#FFFFFF",
+            zIndex: 999,
+            overflowY: "visible",
+            padding: "10px 14px",
+            boxShadow: "0 10px 25px rgba(15, 23, 42, 0.25)",
+            borderRadius: "12px",
+            transform: isMobileMenuOpen ? "translateX(0)" : "translateX(110%)",
+            opacity: isMobileMenuOpen ? 1 : 0,
+            pointerEvents: isMobileMenuOpen ? "auto" : "none",
+            transition: "transform 0.28s ease-out, opacity 0.28s ease-out",
+          }}
+        >
             <div
               style={{
                 display: "flex",
                 flexDirection: "column",
-                gap: "16px",
+                gap: "4px",
               }}
             >
               {!isAuthenticated && (
                 <>
                   <button
                     type="button"
-                    onClick={() => {
-                      redirectToSomethingX('/students', somethingxToken, displayUser);
-                      setIsMobileMenuOpen(false);
-                    }}
+                    onClick={() => goHome("/students", () => setIsMobileMenuOpen(false))}
                     style={{
-                      padding: "10px 16px",
+                      padding: "6px 10px",
                       borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#333333",
+                      fontSize: "13px",
                       background: "none",
                       border: "none",
-                      textAlign: "left",
-                      color: "#333333",
-                      fontSize: "14px",
                       cursor: "pointer",
+                      textAlign: "left",
                       fontFamily: "'Inter', sans-serif",
                     }}
                   >
@@ -843,19 +1314,17 @@ const Navbar = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      redirectToSomethingX('/institutes', somethingxToken, displayUser);
-                      setIsMobileMenuOpen(false);
-                    }}
+                    onClick={() => goHome("/institutes", () => setIsMobileMenuOpen(false))}
                     style={{
-                      padding: "10px 16px",
+                      padding: "6px 10px",
                       borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#333333",
+                      fontSize: "13px",
                       background: "none",
                       border: "none",
-                      textAlign: "left",
-                      color: "#333333",
-                      fontSize: "14px",
                       cursor: "pointer",
+                      textAlign: "left",
                       fontFamily: "'Inter', sans-serif",
                     }}
                   >
@@ -863,19 +1332,17 @@ const Navbar = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      redirectToSomethingX('/industry', somethingxToken, displayUser);
-                      setIsMobileMenuOpen(false);
-                    }}
+                    onClick={() => goHome("/industry", () => setIsMobileMenuOpen(false))}
                     style={{
-                      padding: "10px 16px",
+                      padding: "6px 10px",
                       borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#333333",
+                      fontSize: "13px",
                       background: "none",
                       border: "none",
-                      textAlign: "left",
-                      color: "#333333",
-                      fontSize: "14px",
                       cursor: "pointer",
+                      textAlign: "left",
                       fontFamily: "'Inter', sans-serif",
                     }}
                   >
@@ -883,19 +1350,53 @@ const Navbar = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      redirectToSomethingX('/about-us', somethingxToken, displayUser);
-                      setIsMobileMenuOpen(false);
-                    }}
+                    onClick={() => goHome("/industry/role-ready-freshers", () => setIsMobileMenuOpen(false))}
                     style={{
-                      padding: "10px 16px",
+                      padding: "6px 10px",
                       borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#333333",
+                      fontSize: "13px",
                       background: "none",
                       border: "none",
-                      textAlign: "left",
-                      color: "#333333",
-                      fontSize: "14px",
                       cursor: "pointer",
+                      textAlign: "left",
+                      fontFamily: "'Inter', sans-serif",
+                    }}
+                  >
+                    Role Ready Training
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => goHome("/industry/expert-session", () => setIsMobileMenuOpen(false))}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#333333",
+                      fontSize: "13px",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontFamily: "'Inter', sans-serif",
+                    }}
+                  >
+                    Expert Session
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => goHome("/about-us", () => setIsMobileMenuOpen(false))}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#333333",
+                      fontSize: "13px",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      textAlign: "left",
                       fontFamily: "'Inter', sans-serif",
                     }}
                   >
@@ -904,23 +1405,25 @@ const Navbar = () => {
                 </>
               )}
 
-              {isAuthenticated && (user?.userType === "APPLICANT" || displayUser?.userType === "STUDENT") && (
+              {isStudent && (
                 <>
+                  <ReviewNotifications variant="menuItem" />
+                  <div style={{ padding: "6px 14px 2px", fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6B7280", fontWeight: 700 }}>
+                    Career Tools
+                  </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      redirectToSomethingX('/students/job-blueprint', somethingxToken, displayUser);
-                      setIsMobileMenuOpen(false);
-                    }}
+                    onClick={() => goHome("/students/job-blueprint", () => setIsMobileMenuOpen(false))}
                     style={{
-                      padding: "10px 16px",
+                      padding: "6px 10px",
                       borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#333333",
+                      fontSize: "13px",
                       background: "none",
                       border: "none",
-                      textAlign: "left",
-                      color: "#333333",
-                      fontSize: "14px",
                       cursor: "pointer",
+                      textAlign: "left",
                       fontFamily: "'Inter', sans-serif",
                     }}
                   >
@@ -928,76 +1431,233 @@ const Navbar = () => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      redirectToProfiling(somethingxToken, displayUser);
-                      setIsMobileMenuOpen(false);
-                    }}
+                    onClick={() => goHome("/students/career-counselling", () => setIsMobileMenuOpen(false))}
                     style={{
-                      padding: "10px 16px",
+                      padding: "8px 14px",
                       borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#333333",
+                      fontSize: "13px",
                       background: "none",
                       border: "none",
-                      textAlign: "left",
-                      color: "#333333",
-                      fontSize: "14px",
                       cursor: "pointer",
+                      textAlign: "left",
                       fontFamily: "'Inter', sans-serif",
                     }}
                   >
-                    Profiling
+                    Career Counselling
+                  </button>
+                  <div style={{ height: 1, background: "#F3F4F6", margin: "6px 0" }} />
+                  <div style={{ padding: "6px 14px 2px", fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6B7280", fontWeight: 700 }}>
+                    Practice
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => goHome("/students/interview-preparation", () => setIsMobileMenuOpen(false))}
+                    style={{
+                      padding: "8px 14px",
+                      borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#333333",
+                      fontSize: "13px",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontFamily: "'Inter', sans-serif",
+                    }}
+                  >
+                    Interview Preparation
                   </button>
                   <button
                     type="button"
+                    onClick={() => goHome("/students/job-blueprint", () => setIsMobileMenuOpen(false))}
+                    style={{
+                      padding: "8px 14px",
+                      borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#333333",
+                      fontSize: "13px",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontFamily: "'Inter', sans-serif",
+                    }}
+                  >
+                    Job Blueprint
+                  </button>
+                  <div style={{ height: 1, background: "#F3F4F6", margin: "6px 0" }} />
+                  <div style={{ padding: "6px 14px 2px", fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6B7280", fontWeight: 700 }}>
+                    Jobs
+                  </div>
+                  <button
+                    type="button"
                     onClick={() => {
-                      redirectToSomethingX('/students/resume-builder', somethingxToken, displayUser);
+                      redirectToProfiling(getAuthToken(), user);
                       setIsMobileMenuOpen(false);
                     }}
                     style={{
-                      padding: "10px 16px",
+                      padding: "6px 10px",
                       borderRadius: "8px",
                       background: "none",
                       border: "none",
                       textAlign: "left",
                       color: "#333333",
-                      fontSize: "14px",
+                      fontSize: "13px",
                       cursor: "pointer",
+                    }}
+                  >
+                    Hire me Profile
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => goHome("/students/resume-builder", () => setIsMobileMenuOpen(false))}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#333333",
+                      fontSize: "13px",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      textAlign: "left",
                       fontFamily: "'Inter', sans-serif",
                     }}
                   >
                     Resume Builder
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => goHome("/students/career-counselling", () => setIsMobileMenuOpen(false))}
+                    style={{
+                      padding: "8px 14px",
+                      borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#333333",
+                      fontSize: "13px",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontFamily: "'Inter', sans-serif",
+                    }}
+                  >
+                    Career Counselling
+                  </button>
+                  <div style={{ height: 1, background: "#F3F4F6", margin: "6px 0" }} />
+                  <div style={{ padding: "6px 14px 2px", fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6B7280", fontWeight: 700 }}>
+                    Practice
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => goHome("/students/interview-preparation", () => setIsMobileMenuOpen(false))}
+                    style={{
+                      padding: "8px 14px",
+                      borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#333333",
+                      fontSize: "13px",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontFamily: "'Inter', sans-serif",
+                    }}
+                  >
+                    Interview Preparation
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => goHome("/students/job-blueprint", () => setIsMobileMenuOpen(false))}
+                    style={{
+                      padding: "8px 14px",
+                      borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#333333",
+                      fontSize: "13px",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontFamily: "'Inter', sans-serif",
+                    }}
+                  >
+                    Job Blueprint
+                  </button>
+                  <div style={{ height: 1, background: "#F3F4F6", margin: "6px 0" }} />
+                  <div style={{ padding: "6px 14px 2px", fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6B7280", fontWeight: 700 }}>
+                    Jobs
+                  </div>
                   <Link
                     to="/apply-jobs"
                     onClick={() => setIsMobileMenuOpen(false)}
                     style={{
-                      padding: "10px 16px",
-                      borderRadius: "8px",
-                      textDecoration: "none",
-                      color: "#115FD5",
-                      fontSize: "14px",
-                      fontFamily: "'Inter', sans-serif",
-                    }}
-                  >
-                    Apply To Jobs
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      redirectToSomethingX('/about-us', somethingxToken, displayUser);
-                      setIsMobileMenuOpen(false);
-                    }}
-                    style={{
-                      padding: "10px 16px",
+                      padding: "6px 10px",
                       borderRadius: "8px",
                       background: "none",
                       border: "none",
                       textAlign: "left",
                       color: "#333333",
-                      fontSize: "14px",
+                      fontSize: "13px",
                       cursor: "pointer",
+                      textDecoration: "none",
+                      display: "block",
                       fontFamily: "'Inter', sans-serif",
                     }}
                   >
+                    Apply to Jobs
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={() => goHome("/about-us", () => setIsMobileMenuOpen(false))}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#333333",
+                      fontSize: "13px",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      textAlign: "left",
+                      fontFamily: "'Inter', sans-serif",
+                    }}
+                  >
+                    About Us
+                  </button>
+                </>
+              )}
+
+              {isInstitute && (
+                <>
+                  {/* Learning group */}
+                  <div style={{ padding: "6px 14px 2px", fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6B7280", fontWeight: 700 }}>Learning</div>
+                  <button type="button" onClick={() => goHome("/institutes/workshops", () => setIsMobileMenuOpen(false))} style={{ padding: "6px 10px 6px 18px", borderRadius: "8px", textDecoration: "none", color: "#333333", fontSize: "13px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "'Inter', sans-serif", width: "100%" }}>
+                    Workshops
+                  </button>
+                  <button type="button" onClick={() => goHome("/institutes/expert-session", () => setIsMobileMenuOpen(false))} style={{ padding: "6px 10px 6px 18px", borderRadius: "8px", textDecoration: "none", color: "#333333", fontSize: "13px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "'Inter', sans-serif", width: "100%" }}>
+                    Expert Session
+                  </button>
+
+                  {/* Training group */}
+                  <div style={{ padding: "6px 14px 2px", fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6B7280", fontWeight: 700, marginTop: "4px" }}>Training</div>
+                  <button type="button" onClick={() => goHome("/institutes/internship-management", () => setIsMobileMenuOpen(false))} style={{ padding: "6px 10px 6px 18px", borderRadius: "8px", textDecoration: "none", color: "#333333", fontSize: "13px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "'Inter', sans-serif", width: "100%" }}>
+                    Student Training
+                  </button>
+                  <button type="button" onClick={() => goHome("/institutes/trainings", () => setIsMobileMenuOpen(false))} style={{ padding: "6px 10px 6px 18px", borderRadius: "8px", textDecoration: "none", color: "#333333", fontSize: "13px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "'Inter', sans-serif", width: "100%" }}>
+                    Role Ready Training
+                  </button>
+
+                  {/* Placement group */}
+                  <div style={{ padding: "6px 14px 2px", fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6B7280", fontWeight: 700, marginTop: "4px" }}>Placement</div>
+                  <button type="button" onClick={() => goHome("/institutes/placement-access", () => setIsMobileMenuOpen(false))} style={{ padding: "6px 10px 6px 18px", borderRadius: "8px", textDecoration: "none", color: "#333333", fontSize: "13px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "'Inter', sans-serif", width: "100%" }}>
+                    Placement Access
+                  </button>
+
+                  <button type="button" onClick={() => goHome("/about-us", () => setIsMobileMenuOpen(false))} style={{ padding: "6px 10px", borderRadius: "8px", textDecoration: "none", color: "#333333", fontSize: "13px", marginTop: "4px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "'Inter', sans-serif", width: "100%" }}>
                     About Us
                   </button>
                 </>
@@ -1009,66 +1669,94 @@ const Navbar = () => {
                     to="/manage-applications"
                     onClick={() => setIsMobileMenuOpen(false)}
                     style={{
-                      padding: "10px 16px",
+                      padding: "6px 10px",
                       borderRadius: "8px",
+                      background: "none",
+                      border: "none",
+                      textAlign: "left",
+                      color: "#333333",
+                      fontSize: "13px",
+                      cursor: "pointer",
                       textDecoration: "none",
-                      color: "#115FD5",
-                      fontSize: "14px",
+                      display: "block",
                       fontFamily: "'Inter', sans-serif",
                     }}
                   >
-                    Post Jobs
+                    Post Job
                   </Link>
                   <Link
                     to="/manage-hackathons"
                     onClick={() => setIsMobileMenuOpen(false)}
                     style={{
-                      padding: "10px 16px",
+                      padding: "6px 10px",
                       borderRadius: "8px",
+                      background: "none",
+                      border: "none",
+                      textAlign: "left",
+                      color: "#333333",
+                      fontSize: "13px",
+                      cursor: "pointer",
                       textDecoration: "none",
-                      color: "#115FD5",
-                      fontSize: "14px",
+                      display: "block",
                       fontFamily: "'Inter', sans-serif",
                     }}
                   >
-                    Post Hackathons
+                    Post Hackathon
+                  </Link>
+                  <Link
+                    to="/student-database"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#333333",
+                      fontSize: "13px",
+                      cursor: "pointer",
+                      border: "none",
+                      background: "none",
+                      textAlign: "left",
+                      width: "100%",
+                      fontFamily: "'Inter', sans-serif",
+                      display: "block",
+                    }}
+                  >
+                    Database Access
                   </Link>
                   <button
                     type="button"
-                    onClick={() => {
-                      redirectToSomethingX('/industry/ai-interview', somethingxToken, displayUser);
-                      setIsMobileMenuOpen(false);
-                    }}
+                    onClick={() => goHome("/industry/ai-interview", () => setIsMobileMenuOpen(false))}
                     style={{
-                      padding: "10px 16px",
+                      padding: "6px 10px",
                       borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#333333",
+                      fontSize: "13px",
                       background: "none",
                       border: "none",
-                      textAlign: "left",
-                      color: "#333333",
-                      fontSize: "14px",
                       cursor: "pointer",
+                      textAlign: "left",
                       fontFamily: "'Inter', sans-serif",
+                      width: "100%",
                     }}
                   >
-                    AI Interview
+                    Technical AI interview
                   </button>
                   <button
                     type="button"
-                    onClick={() => {
-                      redirectToSomethingX('/about-us', somethingxToken, displayUser);
-                      setIsMobileMenuOpen(false);
-                    }}
+                    onClick={() => goHome("/about-us", () => setIsMobileMenuOpen(false))}
                     style={{
-                      padding: "10px 16px",
+                      padding: "6px 10px",
                       borderRadius: "8px",
+                      textDecoration: "none",
+                      color: "#333333",
+                      fontSize: "13px",
                       background: "none",
                       border: "none",
-                      textAlign: "left",
-                      color: "#333333",
-                      fontSize: "14px",
                       cursor: "pointer",
+                      textAlign: "left",
                       fontFamily: "'Inter', sans-serif",
+                      width: "100%",
                     }}
                   >
                     About Us
@@ -1081,71 +1769,65 @@ const Navbar = () => {
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '12px',
-                  marginTop: '16px',
-                  paddingTop: '16px',
+                  gap: '6px',
+                  marginTop: '6px',
+                  paddingTop: '6px',
                   borderTop: '1px solid #F3F4F6'
                 }}
               >
                 {isAuthenticated ? (
                   <>
-                    {isApplicantOrStudent && (
-                      <Link
-                        to="/build-profile"
-                        onClick={() => setIsMobileMenuOpen(false)}
+                    <Link
+                      to="/build-profile"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      style={{
+                      padding: '8px 12px',
+                        borderRadius: '8px',
+                        textDecoration: 'none',
+                        color: '#333333',
+                        fontWeight: '500',
+                      fontSize: '14px'
+                      }}
+                    >
+                      Profile
+                    </Link>
+
+                    {showDashboard && (
+                      <button
+                        type="button"
+                        onClick={() => goHome(dashboardPath, () => setIsMobileMenuOpen(false))}
                         style={{
-                          padding: '12px 16px',
-                          borderRadius: '8px',
-                          textDecoration: 'none',
-                          color: '#333333',
-                          fontWeight: '500',
-                          fontSize: '16px',
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
+                          width: '100%',
+                          padding: '8px 12px',
+                          background: '#FFFFFF',
+                          border: '1px solid #115FD5',
+                          borderRadius: '24px',
+                          fontWeight: 500,
+                          fontSize: '14px',
+                          color: '#115FD5',
+                          cursor: 'pointer',
+                          fontFamily: "'Inter', sans-serif",
+                          marginTop: '4px'
                         }}
                       >
-                        <ProfileCompletionIndicator size={24} fontSize={8} />
-                        Profile
-                      </Link>
+                        Dashboard
+                      </button>
                     )}
 
                     <button
                       type="button"
                       onClick={() => {
+                        handleLogout();
                         setIsMobileMenuOpen(false);
-                        // Determine the correct dashboard path based on user type
-                        const userType = displayUser?.userType;
-                        const dashboardPath = userType === "INSTITUTE" ? "/institutes/dashboard" : "/dashboard";
-                        redirectToSomethingX(dashboardPath, somethingxToken, displayUser);
                       }}
                       style={{
                         width: '100%',
-                        padding: '12px 20px',
-                        background: '#FFFFFF',
-                        border: '1px solid #115FD5',
-                        borderRadius: '24px',
-                        fontWeight: 500,
-                        fontSize: '16px',
-                        color: '#115FD5',
-                        cursor: 'pointer',
-                        fontFamily: "'Inter', sans-serif",
-                        marginTop: '4px'
-                      }}
-                    >
-                      Dashboard
-                    </button>
-
-                    <button
-                      onClick={handleLogout}
-                      style={{
-                        width: '100%',
-                        padding: '12px 20px',
+                        padding: '8px 12px',
                         background: '#ef4444',
                         border: 'none',
                         borderRadius: '24px',
                         fontWeight: 500,
-                        fontSize: '16px',
+                        fontSize: '14px',
                         color: '#FFFFFF',
                         cursor: 'pointer',
                         fontFamily: "'Inter', sans-serif",
@@ -1157,19 +1839,44 @@ const Navbar = () => {
                   </>
                 ) : (
                   <>
+                    {isHomePage &&
+                      user?.userType !== "STUDENT" &&
+                      user?.userType !== "APPLICANT" &&
+                      user?.userType !== "INSTITUTE" &&
+                      user?.userType !== "INDUSTRY" && (
+                        <button
+                          type="button"
+                          onClick={() => goHome("/login/admin", () => setIsMobileMenuOpen(false))}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            background: '#FFFFFF',
+                            border: '1px solid #115FD5',
+                            borderRadius: '24px',
+                            fontWeight: 500,
+                            fontSize: '14px',
+                            color: '#115FD5',
+                            cursor: 'pointer',
+                            fontFamily: "'Inter', sans-serif"
+                          }}
+                        >
+                          Admin
+                        </button>
+                      )}
+
                     <button
                       onClick={() => {
-                        redirectToSomethingX('', somethingxToken, displayUser);
+                        setShowUserTypeSelection(true);
                         setIsMobileMenuOpen(false);
                       }}
                       style={{
                         width: '100%',
-                        padding: '12px 20px',
+                        padding: '8px 12px',
                         background: '#115FD5',
                         border: 'none',
                         borderRadius: '24px',
                         fontWeight: 500,
-                        fontSize: '16px',
+                        fontSize: '14px',
                         color: '#FFFFFF',
                         cursor: 'pointer',
                         fontFamily: "'Inter', sans-serif"
@@ -1177,11 +1884,41 @@ const Navbar = () => {
                     >
                       Get Started
                     </button>
+
+                    {isHomePage &&
+                      user?.userType !== "STUDENT" &&
+                      user?.userType !== "APPLICANT" &&
+                      user?.userType !== "INSTITUTE" &&
+                      user?.userType !== "INDUSTRY" && (
+                        <button
+                          type="button"
+                          onClick={() => goHome("/employer/dashboard", () => setIsMobileMenuOpen(false))}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            background: '#10b981',
+                            border: 'none',
+                            borderRadius: '24px',
+                            fontWeight: 500,
+                            fontSize: '14px',
+                            color: '#FFFFFF',
+                            cursor: 'pointer',
+                            fontFamily: "'Inter', sans-serif"
+                          }}
+                        >
+                          Employer
+                        </button>
+                      )}
                   </>
                 )}
               </div>
             </div>
           </div>
+
+        {showUserTypeSelection && (
+          <UserTypeSelection
+            onClose={() => setShowUserTypeSelection(false)}
+          />
         )}
       </nav>
     </>
@@ -1189,3 +1926,5 @@ const Navbar = () => {
 };
 
 export default Navbar;
+
+

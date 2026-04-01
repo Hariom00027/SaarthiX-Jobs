@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getApplicationResults } from '../api/jobApi';
 import { toast } from 'react-toastify';
-import { Trophy, Award, Medal, Download, Star, CheckCircle, Clock, FileText, Eye } from 'lucide-react';
+import { Trophy, Award, Medal, Download, Star, CheckCircle, Clock, FileText, Eye, X } from 'lucide-react';
 import CertificateTemplate, { downloadCertificate, generateCertificateCode } from './CertificateGenerator';
 import { useAuth } from '../context/AuthContext';
 
@@ -14,6 +14,9 @@ export default function ApplicantResults() {
     const [results, setResults] = useState(null);
     const [showCelebration, setShowCelebration] = useState(false);
     const [downloading, setDownloading] = useState(false);
+    const [previewCertificate, setPreviewCertificate] = useState(null);
+    const [previewingMember, setPreviewingMember] = useState(null);
+    const [downloadingPreviewPdf, setDownloadingPreviewPdf] = useState(false);
 
     useEffect(() => {
         loadResults();
@@ -136,6 +139,21 @@ export default function ApplicantResults() {
     const maxScore = calculateMaxScore();
     const rankBadge = results.finalRank ? getRankBadge(results.finalRank) : null;
     const RankIcon = rankBadge?.icon;
+    const shouldUseTeamName = Boolean(results?.asTeam || (results?.teamName && String(results.teamName).trim()));
+    const rawTeamName = String(results?.teamName || '').trim();
+    const teamMembersLabel = (results?.teamMembers || [])
+        .map((m) => (m?.name ? String(m.name).trim() : ''))
+        .filter(Boolean)
+        .join(', ');
+    const certificateDisplayName = shouldUseTeamName
+        ? rawTeamName.length > 3
+            ? rawTeamName
+            : teamMembersLabel ||
+              String(results?.individualName || '').trim() ||
+              rawTeamName ||
+              'Team'
+        : results?.individualName ||
+          (results?.teamMembers && results.teamMembers.length > 0 ? results.teamMembers[0].name : 'Participant');
 
     const isPublished = Boolean(
         results.certificateUrl ||
@@ -143,66 +161,77 @@ export default function ApplicantResults() {
         (results.teamMembers || []).some(m => m.certificateUrl)
     );
 
+    const getCertificateSigners = () => ({
+        signerLeft: {
+            name: results.certificateSignerLeftName || 'Platform Director',
+            title: results.certificateSignerLeftTitle || 'SaarthiX',
+        },
+        signerRight: {
+            name: results.certificateSignerRightName || 'Event Organizer',
+            title: results.certificateSignerRightTitle || results.company || results.organizer || 'Organizer',
+        },
+    });
+
+    const buildPrimaryCertificateData = () => ({
+        participantName: certificateDisplayName,
+        hackathonTitle: results.hackathonTitle || results.title || 'Hackathon',
+        company: results.company || results.organizer || 'Organizer',
+        rank: results.finalRank,
+        rankTitle: results.rankTitle,
+        certificateType: results.certificateType,
+        isTeam: shouldUseTeamName,
+        teamName: results.teamName,
+        certificateFor: shouldUseTeamName ? 'TEAM' : 'INDIVIDUAL',
+        teamAffiliationLine: null,
+        templateStyle: results.certificateTemplateId || 'template1',
+        logoUrl: results.certificateLogoUrl,
+        platformLogoUrl: results.certificatePlatformLogoUrl,
+        customMessage: results.certificateCustomMessage,
+        ...getCertificateSigners(),
+        signatureLeftUrl: results.certificateSignatureLeftUrl,
+        signatureRightUrl: results.certificateSignatureRightUrl,
+        date: new Date().toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+        }),
+        certificateCode: results.certificateCode || generateCertificateCode(),
+    });
+
+    const buildMemberCertificateData = (member) => {
+        const teamNm = rawTeamName;
+        return {
+            participantName: member.name,
+            hackathonTitle: results.hackathonTitle || results.title || 'Hackathon',
+            company: results.company || results.organizer || 'Organizer',
+            rank: results.finalRank,
+            rankTitle: results.rankTitle,
+            certificateType: results.certificateType,
+            isTeam: false,
+            teamName: results.teamName,
+            certificateFor: 'INDIVIDUAL',
+            teamAffiliationLine: teamNm ? `Member of team "${teamNm}"` : null,
+            templateStyle: results.certificateTemplateId || 'template1',
+            logoUrl: results.certificateLogoUrl,
+            platformLogoUrl: results.certificatePlatformLogoUrl,
+            customMessage: results.certificateCustomMessage,
+            ...getCertificateSigners(),
+            signatureLeftUrl: results.certificateSignatureLeftUrl,
+            signatureRightUrl: results.certificateSignatureRightUrl,
+            date: new Date().toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+            }),
+            certificateCode: generateCertificateCode(),
+        };
+    };
+
     const handleDownloadCertificate = async () => {
         try {
             setDownloading(true);
-            
-            // Determine the correct participant name to use
-            let participantNameForCertificate;
-            
-            if (results.asTeam) {
-                // For team applications, find the current user's team member entry
-                const currentUserEmail = user?.email;
-                const currentTeamMember = results.teamMembers?.find(
-                    member => member.email === currentUserEmail
-                );
-                
-                if (currentTeamMember) {
-                    // Use certificateName if set by industry, otherwise use member's actual name
-                    participantNameForCertificate = currentTeamMember.certificateName || currentTeamMember.name;
-                    console.log('=== [TEAM MEMBER] Using individual name for certificate ===');
-                    console.log('Team member:', currentTeamMember.name);
-                    console.log('Certificate name:', participantNameForCertificate);
-                } else {
-                    // Fallback: If team member not found, use team name
-                    participantNameForCertificate = results.teamName;
-                    console.warn('Current user not found in team members, using team name');
-                }
-            } else {
-                // For individual applications
-                participantNameForCertificate = results.individualName || 
-                    (results.teamMembers && results.teamMembers.length > 0 ? results.teamMembers[0].name : 'Participant');
-            }
-            
-            const certificateData = {
-                participantName: participantNameForCertificate,
-                hackathonTitle: results.hackathonTitle || results.title || 'Hackathon',
-                company: results.company || results.organizer || 'Organizer',
-                rank: results.finalRank,
-                rankTitle: results.rankTitle,
-                certificateType: results.certificateType,
-                isTeam: results.asTeam,
-                teamName: results.teamName,
-                // ONLY use backend data - NO localStorage fallback
-                templateStyle: results.certificateTemplateId || 'template1',
-                logoUrl: results.certificateLogoUrl,
-                platformLogoUrl: results.certificatePlatformLogoUrl,
-                customMessage: results.certificateCustomMessage,
-                signerLeft: null,
-                signerRight: null,
-                signatureLeftUrl: results.certificateSignatureLeftUrl,
-                signatureRightUrl: results.certificateSignatureRightUrl,
-                date: new Date().toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                }),
-                certificateCode: results.certificateCode || generateCertificateCode()
-            };
-
-            console.log('=== [DOWNLOAD] Certificate Data Being Used ===');
-            console.log(certificateData);
-
+            const certificateData = buildPrimaryCertificateData();
+            console.log('=== [DOWNLOAD] Certificate Data Being Used ===', certificateData);
             await downloadCertificate(certificateData);
         } catch (e) {
             console.error('Download certificate failed', e);
@@ -413,19 +442,37 @@ export default function ApplicantResults() {
                 {/* Certificate Download/Preview - regenerated with latest template - ONLY for non-rejected */}
                 {isPublished && results.status !== 'REJECTED' && (
                     <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl shadow-lg p-6 text-white space-y-4">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                             <div>
                                 <h3 className="text-xl font-bold mb-2">Your Certificate is Ready!</h3>
-                                <p className="text-purple-100">Download with the latest published template</p>
+                                <p className="text-purple-100">
+                                    {shouldUseTeamName
+                                        ? 'Primary certificate uses your team name. Members can open their own below.'
+                                        : 'Download with the latest published template'}
+                                </p>
                             </div>
-                            <button
-                                onClick={handleDownloadCertificate}
-                                disabled={downloading}
-                                className="bg-white text-purple-600 px-6 py-3 rounded-lg font-semibold hover:bg-purple-50 transition-colors flex items-center gap-2 disabled:opacity-60"
-                            >
-                                <Download className="w-5 h-5" />
-                                {downloading ? 'Generating...' : 'Download'}
-                            </button>
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setPreviewingMember(null);
+                                        setPreviewCertificate(buildPrimaryCertificateData());
+                                    }}
+                                    className="bg-white/15 text-white border border-white/40 px-5 py-3 rounded-lg font-semibold hover:bg-white/25 transition-colors flex items-center gap-2"
+                                >
+                                    <Eye className="w-5 h-5" />
+                                    Preview
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleDownloadCertificate}
+                                    disabled={downloading}
+                                    className="bg-white text-purple-600 px-6 py-3 rounded-lg font-semibold hover:bg-purple-50 transition-colors flex items-center gap-2 disabled:opacity-60"
+                                >
+                                    <Download className="w-5 h-5" />
+                                    {downloading ? 'Generating...' : 'Download'}
+                                </button>
+                            </div>
                         </div>
                         <div className="bg-white rounded-lg p-4 overflow-hidden">
                             <div style={{ 
@@ -444,34 +491,62 @@ export default function ApplicantResults() {
                                     transform: 'scale(0.95)',
                                     transformOrigin: 'center center'
                                 }}>
-                                    <CertificateTemplate
-                                        participantName={results.asTeam ? results.teamName : (results.individualName || (results.teamMembers && results.teamMembers.length > 0 ? results.teamMembers[0].name : 'Participant'))}
-                                        hackathonTitle={results.hackathonTitle || results.title || 'Hackathon'}
-                                        company={results.company || results.organizer || 'Organizer'}
-                                        rank={results.finalRank}
-                                        rankTitle={results.rankTitle}
-                                        certificateType={results.certificateType}
-                                        isTeam={results.asTeam}
-                                        teamName={results.teamName}
-                                        // ONLY use backend data - NO localStorage fallback
-                                        templateStyle={results.certificateTemplateId || 'template1'}
-                                        logoUrl={results.certificateLogoUrl}
-                                        platformLogoUrl={results.certificatePlatformLogoUrl}
-                                        customMessage={results.certificateCustomMessage}
-                                        signerLeft={null}
-                                        signerRight={null}
-                                        signatureLeftUrl={results.certificateSignatureLeftUrl}
-                                        signatureRightUrl={results.certificateSignatureRightUrl}
-                                        date={new Date().toLocaleDateString('en-US', {
-                                            year: 'numeric',
-                                            month: 'long',
-                                            day: 'numeric'
-                                        })}
-                                        certificateCode={results.certificateCode || generateCertificateCode()}
-                                    />
+                                    <CertificateTemplate {...buildPrimaryCertificateData()} />
                                 </div>
                             </div>
                         </div>
+
+                        {shouldUseTeamName && Array.isArray(results.teamMembers) && results.teamMembers.length > 0 && (
+                            <div className="pt-4 border-t border-white/25">
+                                <h4 className="font-bold text-lg mb-1">Team member certificates</h4>
+                                <p className="text-sm text-purple-100 mb-4">
+                                    Each certificate shows the member’s name and that they belong to this team.
+                                </p>
+                                <div className="grid gap-3 md:grid-cols-2">
+                                    {results.teamMembers.map((member, idx) => (
+                                        <div
+                                            key={member.email || member.name || idx}
+                                            className="flex items-center justify-between gap-3 rounded-xl bg-white/10 px-4 py-3 border border-white/20"
+                                        >
+                                            <div className="min-w-0">
+                                                <p className="font-semibold text-white truncate">{member.name}</p>
+                                                <p className="text-xs text-purple-200 truncate">{member.email}</p>
+                                            </div>
+                                            <div className="flex shrink-0 gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setPreviewingMember(member);
+                                                        setPreviewCertificate(buildMemberCertificateData(member));
+                                                    }}
+                                                    className="p-2 rounded-lg bg-white/20 hover:bg-white/30 text-white"
+                                                    title="Preview certificate"
+                                                >
+                                                    <Eye className="w-5 h-5" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={async () => {
+                                                        try {
+                                                            const t = toast.loading(`Generating certificate for ${member.name}...`);
+                                                            await downloadCertificate(buildMemberCertificateData(member));
+                                                            toast.dismiss(t);
+                                                            toast.success(`Certificate for ${member.name} downloaded`);
+                                                        } catch (e) {
+                                                            toast.error('Could not generate certificate');
+                                                        }
+                                                    }}
+                                                    className="p-2 rounded-lg bg-white/20 hover:bg-white/30 text-white"
+                                                    title="Download PDF"
+                                                >
+                                                    <Download className="w-5 h-5" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -488,6 +563,84 @@ export default function ApplicantResults() {
                                     <p className="text-gray-700">{results.showcaseContent.innovationHighlights}</p>
                                 </div>
                             )}
+                        </div>
+                    </div>
+                )}
+
+                {previewCertificate && (
+                    <div
+                        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+                        onClick={() => {
+                            setPreviewCertificate(null);
+                            setPreviewingMember(null);
+                        }}
+                    >
+                        <div
+                            className="max-h-[95vh] w-full max-w-6xl overflow-y-auto rounded-xl bg-white shadow-2xl"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white p-4">
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-900">
+                                        {previewingMember
+                                            ? `Certificate — ${previewingMember.name}`
+                                            : 'Certificate preview'}
+                                    </h3>
+                                    <p className="mt-1 text-sm text-gray-500">
+                                        {previewingMember
+                                            ? `${previewingMember.role || 'Member'} · ${previewingMember.email}`
+                                            : previewCertificate.teamAffiliationLine ||
+                                              (shouldUseTeamName ? `Team: ${rawTeamName || '—'}` : 'Review before download')}
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={async () => {
+                                            try {
+                                                setDownloadingPreviewPdf(true);
+                                                await downloadCertificate(previewCertificate);
+                                                toast.success('Certificate downloaded');
+                                                setPreviewCertificate(null);
+                                                setPreviewingMember(null);
+                                            } catch (e) {
+                                                toast.error('Could not generate certificate');
+                                            } finally {
+                                                setDownloadingPreviewPdf(false);
+                                            }
+                                        }}
+                                        disabled={downloadingPreviewPdf}
+                                        className="flex items-center gap-2 rounded-lg bg-purple-600 px-5 py-2 font-medium text-white hover:bg-purple-700 disabled:opacity-50"
+                                    >
+                                        <Download className="h-5 w-5" />
+                                        {downloadingPreviewPdf ? 'Generating…' : 'Download PDF'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setPreviewCertificate(null);
+                                            setPreviewingMember(null);
+                                        }}
+                                        className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
+                                        aria-label="Close"
+                                    >
+                                        <X className="h-6 w-6" />
+                                    </button>
+                                </div>
+                            </div>
+                            <div className="bg-gray-50 p-6">
+                                <div className="mx-auto flex min-h-[480px] max-w-[1122px] justify-center rounded-lg bg-white p-4 shadow-lg">
+                                    <div
+                                        style={{
+                                            width: '100%',
+                                            transform: 'scale(0.82)',
+                                            transformOrigin: 'top center',
+                                        }}
+                                    >
+                                        <CertificateTemplate {...previewCertificate} />
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}

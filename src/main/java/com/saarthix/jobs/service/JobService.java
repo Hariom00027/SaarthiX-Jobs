@@ -47,6 +47,12 @@ public class JobService {
             job.setJobMaxSalary(updatedJob.getJobMaxSalary());
             job.setJobSalaryCurrency(updatedJob.getJobSalaryCurrency());
             job.setYearsOfExperience(updatedJob.getYearsOfExperience());
+            job.setMustHaveSkills(updatedJob.getMustHaveSkills());
+            job.setGoodToHaveSkills(updatedJob.getGoodToHaveSkills());
+            job.setJdFileName(updatedJob.getJdFileName());
+            job.setJdFileType(updatedJob.getJdFileType());
+            job.setJdFileBase64(updatedJob.getJdFileBase64());
+            normalizeSkills(job);
             return jobRepository.save(job);
         }).orElseThrow(() -> new RuntimeException("Job not found with id: " + id));
     }
@@ -135,10 +141,7 @@ public class JobService {
             return 0.0;
         }
 
-        List<String> jobSkills = job.getSkills() != null ? 
-            job.getSkills().stream()
-                .map(String::toLowerCase)
-                .collect(Collectors.toList()) : new ArrayList<>();
+        List<String> jobSkills = collectJobSkills(job);
 
         if (jobSkills.isEmpty()) {
             return 50.0; // Partial credit if job doesn't list skills
@@ -224,5 +227,36 @@ public class JobService {
         }
         
         return null;
+    }
+
+    private void normalizeSkills(Job job) {
+        LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        if (job.getMustHaveSkills() != null) {
+            job.getMustHaveSkills().stream().filter(Objects::nonNull).map(String::trim).filter(v -> !v.isEmpty()).forEach(normalized::add);
+        }
+        if (job.getGoodToHaveSkills() != null) {
+            job.getGoodToHaveSkills().stream().filter(Objects::nonNull).map(String::trim).filter(v -> !v.isEmpty()).forEach(normalized::add);
+        }
+        if (job.getSkills() != null) {
+            job.getSkills().stream().filter(Objects::nonNull).map(String::trim).filter(v -> !v.isEmpty()).forEach(normalized::add);
+        }
+        job.setSkills(new ArrayList<>(normalized));
+    }
+
+    private List<String> collectJobSkills(Job job) {
+        LinkedHashSet<String> jobSkills = new LinkedHashSet<>();
+        if (job.getMustHaveSkills() != null) {
+            jobSkills.addAll(job.getMustHaveSkills());
+        }
+        if (job.getGoodToHaveSkills() != null) {
+            jobSkills.addAll(job.getGoodToHaveSkills());
+        }
+        if (job.getSkills() != null) {
+            jobSkills.addAll(job.getSkills());
+        }
+        return jobSkills.stream()
+                .filter(Objects::nonNull)
+                .map(String::toLowerCase)
+                .collect(Collectors.toList());
     }
 }

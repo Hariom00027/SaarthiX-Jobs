@@ -19,9 +19,11 @@ import jakarta.servlet.http.HttpServletRequest;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/jobs")
@@ -107,6 +109,8 @@ public class JobController {
             System.out.println("Employment Type: " + job.getEmploymentType());
             System.out.println("Min Salary: " + job.getJobMinSalary());
             System.out.println("Max Salary: " + job.getJobMaxSalary());
+            System.out.println("Must Have Skills: " + job.getMustHaveSkills());
+            System.out.println("Good To Have Skills: " + job.getGoodToHaveSkills());
             System.out.println("========================");
             
             // Check if user is authenticated via OAuth
@@ -131,6 +135,7 @@ public class JobController {
             if (job.getCreatedAt() == null) {
                 job.setCreatedAt(java.time.LocalDateTime.now());
             }
+            normalizeSkills(job);
             // Ensure active is set
             if (!job.isActive() && job.getId() == null) {
                 job.setActive(true);
@@ -191,6 +196,12 @@ public class JobController {
         job.setJobMaxSalary(updatedJob.getJobMaxSalary());
         job.setJobSalaryCurrency(updatedJob.getJobSalaryCurrency());
         job.setYearsOfExperience(updatedJob.getYearsOfExperience());
+        job.setMustHaveSkills(updatedJob.getMustHaveSkills());
+        job.setGoodToHaveSkills(updatedJob.getGoodToHaveSkills());
+        job.setJdFileName(updatedJob.getJdFileName());
+        job.setJdFileType(updatedJob.getJdFileType());
+        job.setJdFileBase64(updatedJob.getJdFileBase64());
+        normalizeSkills(job);
 
         Job saved = jobRepository.save(job);
 
@@ -214,8 +225,39 @@ public class JobController {
         c.setJobMaxSalary(j.getJobMaxSalary());
         c.setJobSalaryCurrency(j.getJobSalaryCurrency());
         c.setYearsOfExperience(j.getYearsOfExperience());
+        c.setMustHaveSkills(j.getMustHaveSkills() != null ? new ArrayList<>(j.getMustHaveSkills()) : null);
+        c.setGoodToHaveSkills(j.getGoodToHaveSkills() != null ? new ArrayList<>(j.getGoodToHaveSkills()) : null);
+        c.setJdFileName(j.getJdFileName());
+        c.setJdFileType(j.getJdFileType());
+        c.setJdFileBase64(j.getJdFileBase64());
         c.setActive(j.isActive());
         return c;
+    }
+
+    private static void normalizeSkills(Job job) {
+        Set<String> normalized = new LinkedHashSet<>();
+        if (job.getMustHaveSkills() != null) {
+            for (String skill : job.getMustHaveSkills()) {
+                if (skill != null && !skill.trim().isEmpty()) {
+                    normalized.add(skill.trim());
+                }
+            }
+        }
+        if (job.getGoodToHaveSkills() != null) {
+            for (String skill : job.getGoodToHaveSkills()) {
+                if (skill != null && !skill.trim().isEmpty()) {
+                    normalized.add(skill.trim());
+                }
+            }
+        }
+        if (job.getSkills() != null) {
+            for (String skill : job.getSkills()) {
+                if (skill != null && !skill.trim().isEmpty()) {
+                    normalized.add(skill.trim());
+                }
+            }
+        }
+        job.setSkills(new ArrayList<>(normalized));
     }
 
     // ✅ DELETE a job (INDUSTRY users only)

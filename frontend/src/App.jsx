@@ -1,10 +1,9 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
-import Dashboard from './components/Dashboard';
 import JobList from './components/JobList';
 import JobBuilder from './components/JobBuilder';
 import JobTracker from './components/JobTracker';
@@ -29,14 +28,13 @@ function AppShell() {
   const isEmbeddedProfileBuilder =
     searchParams.get('embed') === '1' &&
     (location.pathname === '/build-profile' || location.pathname === '/view-profile');
-  const isStudentDatabaseMarketing = location.pathname === '/student-database';
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {!isEmbeddedProfileBuilder && !isStudentDatabaseMarketing && <Navbar />}
-      {!isEmbeddedProfileBuilder && !isStudentDatabaseMarketing && <DemoViewSwitcher />}
+      {!isEmbeddedProfileBuilder && <Navbar />}
+      {!isEmbeddedProfileBuilder && <DemoViewSwitcher />}
       <Routes>
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={<Navigate to="/apply-jobs" replace />} />
         <Route path="/apply-jobs" element={<JobList />} />
         <Route path="/post-jobs" element={<JobBuilder />} />
         <Route path="/job-tracker" element={<JobTracker />} />

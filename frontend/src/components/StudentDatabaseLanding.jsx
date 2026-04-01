@@ -1,20 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { redirectToSomethingX } from '../config/redirectUrls';
-import { logout } from '../api/authApi';
 import { getAllStudents } from '../api/studentDatabaseApi';
-import LogoImage from './logo_png.png';
 
 /* —— Design tokens (match SaarthiX marketing mockup) —— */
 const BLUE = '#337ab7';
-const NAV_TEXT = '#333333';
 const HEADING = '#1a1a1a';
 const BODY_GREY = '#666666';
-const LOGO_WORD = '#0D47A1';
 const SECTION_BG = '#e8eef4';
 const SECTION_TITLE = '#1a2744';
-const CARD_BORDER = '#dcdee2';
 const LINE_GREY = '#d1d5db';
 
 /* Hero background — public/download (2) 1.png. Stack: white → image → pale tint (Figma) */
@@ -25,7 +17,60 @@ const BSC_ICON_IMG = `${import.meta.env.BASE_URL}atom-laboratory-science-icon%20
 const AGRI_ICON_IMG = `${import.meta.env.BASE_URL}python-logo-png_seeklogo-480570.png`;
 const MBBS_ICON_IMG = `${import.meta.env.BASE_URL}Screenshot%202026-03-27%20145331.png`;
 const HEADING_2_IMG = `${import.meta.env.BASE_URL}Heading%202.png`;
+const LOCATION_FIELD_PIN_IMG = `${import.meta.env.BASE_URL}Container%20(2).png`;
+const LOCATION_FIELD_LABEL_IMG = `${import.meta.env.BASE_URL}Container%20(3).png`;
+const DEGREE_FIELD_LEFT_IMG = `${import.meta.env.BASE_URL}Container%20(4).png`;
 const HERO_BASE_WHITE = '#ffffff';
+const FORM_FIELD_BORDER = '#E2E8F0';
+const FORM_LABEL = '#1E293B';
+const ACCESS_FORM_VARIANTS = new Set([
+  'access-location',
+  'access-degree',
+  'access-specialization',
+  'access-role',
+  'access-college',
+  'access-graduation',
+  'access-experience',
+]);
+
+const GENDER_OPTIONS = ['Male', 'Female', 'Other', 'Prefer not to say'];
+
+function AccessIconBook({ className }) {
+  return (
+    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M4 19.5A2.5 2.5 0 016.5 17H20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function AccessIconBriefcase({ className }) {
+  return (
+    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M9 7V5a2 2 0 012-2h2a2 2 0 012 2v2M4 9h16v10a2 2 0 01-2 2H6a2 2 0 01-2-2V9z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 12h16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function AccessIconBuilding({ className }) {
+  return (
+    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M4 20V8l8-4 8 4v12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9 20v-6h6v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9 10h.01M15 10h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function AccessIconCalendar({ className }) {
+  return (
+    <svg className={className} width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M16 3v4M8 3v4M3 11h18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
 /** Top layer (drawn above image): soft white + brand pale blue so text matches Figma */
 const HERO_COLOR_OVERLAY = `linear-gradient(
   180deg,
@@ -47,7 +92,9 @@ function MultiSelectPopupInput({
   options,
   values,
   onChange,
+  variant = 'default',
 }) {
+  const isAccessRow = ACCESS_FORM_VARIANTS.has(variant);
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
@@ -82,53 +129,179 @@ function MultiSelectPopupInput({
     onChange(values.filter((v) => v !== value));
   };
 
+  const renderAccessLeft = () => {
+    switch (variant) {
+      case 'access-location':
+        return (
+          <div className="flex shrink-0 items-center gap-4">
+            <img
+              src={LOCATION_FIELD_PIN_IMG}
+              alt=""
+              width={18}
+              height={18}
+              className="h-[18px] w-[18px] shrink-0 object-contain"
+              style={{ opacity: 1 }}
+            />
+            <img
+              src={LOCATION_FIELD_LABEL_IMG}
+              alt="Location"
+              width={140}
+              height={17}
+              className="h-[17px] w-[140px] max-w-[140px] shrink-0 object-contain object-left"
+              style={{ opacity: 1 }}
+            />
+          </div>
+        );
+      case 'access-degree':
+        return (
+          <img
+            src={DEGREE_FIELD_LEFT_IMG}
+            alt=""
+            className="h-[18px] max-w-[315px] shrink-0 object-contain object-left"
+            style={{ width: 'auto', maxWidth: '315.38px', opacity: 1 }}
+          />
+        );
+      case 'access-specialization':
+        return (
+          <div className="flex shrink-0 items-center gap-4">
+            <AccessIconBook className="shrink-0 text-[#94A3B8]" />
+            <span className="whitespace-nowrap text-sm font-semibold" style={{ color: FORM_LABEL }}>
+              Specialization
+            </span>
+          </div>
+        );
+      case 'access-role':
+        return (
+          <div className="flex shrink-0 items-center gap-4">
+            <AccessIconBriefcase className="shrink-0 text-[#94A3B8]" />
+            <span className="whitespace-nowrap text-sm font-semibold" style={{ color: FORM_LABEL }}>
+              Role
+            </span>
+          </div>
+        );
+      case 'access-college':
+        return (
+          <div className="flex shrink-0 items-center gap-4">
+            <AccessIconBuilding className="shrink-0 text-[#94A3B8]" />
+            <span className="whitespace-nowrap text-sm font-semibold" style={{ color: FORM_LABEL }}>
+              College
+            </span>
+          </div>
+        );
+      case 'access-graduation':
+        return (
+          <div className="flex shrink-0 items-center gap-4">
+            <AccessIconCalendar className="shrink-0 text-[#94A3B8]" />
+            <span className="whitespace-nowrap text-sm font-semibold" style={{ color: FORM_LABEL }}>
+              Year of Graduation
+            </span>
+          </div>
+        );
+      case 'access-experience':
+        return (
+          <div className="flex shrink-0 items-center gap-4">
+            <AccessIconBriefcase className="shrink-0 text-[#94A3B8]" />
+            <span className="whitespace-nowrap text-sm font-semibold" style={{ color: FORM_LABEL }}>
+              Experience
+            </span>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
-    <div ref={wrapRef} className="relative">
-      {label ? <label className="mb-2 block text-sm font-medium text-gray-700">{label}</label> : null}
+    <div ref={wrapRef} className={`relative w-full ${isAccessRow ? '' : ''}`}>
+      {label && !isAccessRow ? <label className="mb-2 block text-sm font-medium text-gray-700">{label}</label> : null}
       <div
-        className="w-full min-h-[46px] rounded-lg border border-gray-300 bg-white px-2 py-1.5 focus-within:border-[#337ab7] focus-within:ring-2 focus-within:ring-[#337ab7]/20"
+        className={
+          isAccessRow
+            ? 'flex w-full cursor-text items-center overflow-hidden rounded-[4px] focus-within:ring-2 focus-within:ring-[#337ab7]/20'
+            : 'w-full min-h-[46px] rounded-lg border border-gray-300 bg-white px-2 py-1.5 focus-within:border-[#337ab7] focus-within:ring-2 focus-within:ring-[#337ab7]/20'
+        }
+        style={
+          isAccessRow
+            ? {
+                minHeight: '44px',
+                opacity: 1,
+                borderRadius: '4px',
+                border: `1px solid ${FORM_FIELD_BORDER}`,
+                background: '#FFFFFF',
+              }
+            : undefined
+        }
         onClick={() => {
           setOpen(true);
           inputRef.current?.focus();
         }}
       >
-        <div className="flex flex-wrap items-center gap-1.5">
-          {values.map((value) => (
-            <span key={value} className="inline-flex items-center gap-1 rounded-md bg-blue-100 text-blue-800 px-2 py-0.5 text-xs">
-              {value}
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  removeValue(value);
-                }}
-                className="text-blue-700 hover:text-blue-900"
-                aria-label={`Remove ${value}`}
-              >
-                ×
-              </button>
-            </span>
-          ))}
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onFocus={() => setOpen(true)}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              setOpen(true);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && query.trim()) {
-                e.preventDefault();
-                addValue(query);
-              } else if (e.key === 'Backspace' && !query && values.length > 0) {
-                onChange(values.slice(0, -1));
+        <div
+          className={
+            isAccessRow
+              ? 'flex min-h-[44px] w-full flex-nowrap items-center gap-3 px-4 py-3'
+              : 'flex flex-wrap items-center gap-1.5'
+          }
+        >
+          {isAccessRow ? renderAccessLeft() : null}
+          <div
+            className={
+              isAccessRow
+                ? 'flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2 overflow-hidden'
+                : 'contents'
+            }
+          >
+            {values.map((value) => (
+              <span key={value} className="inline-flex items-center gap-1 rounded-md bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+                {value}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeValue(value);
+                  }}
+                  className="text-blue-700 hover:text-blue-900"
+                  aria-label={`Remove ${value}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onFocus={() => setOpen(true)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setOpen(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && query.trim()) {
+                  e.preventDefault();
+                  addValue(query);
+                } else if (e.key === 'Backspace' && !query && values.length > 0) {
+                  onChange(values.slice(0, -1));
+                }
+              }}
+              placeholder={values.length === 0 ? placeholder : ''}
+              className={
+                isAccessRow
+                  ? 'min-w-0 flex-1 border-0 bg-transparent text-right text-sm outline-none placeholder:text-[#94A3B8]'
+                  : 'min-w-[120px] flex-1 border-0 bg-transparent text-sm outline-none'
               }
-            }}
-            placeholder={values.length === 0 ? placeholder : ''}
-            className="flex-1 min-w-[120px] border-0 bg-transparent text-sm outline-none"
-          />
+              style={
+                isAccessRow
+                  ? { height: '18px', lineHeight: '18px', minWidth: '80px', opacity: 1, color: FORM_LABEL }
+                  : undefined
+              }
+            />
+          </div>
+          {isAccessRow ? (
+            <span className="inline-flex shrink-0 text-[#94A3B8]" aria-hidden>
+              <ChevronDown className="h-4 w-4" />
+            </span>
+          ) : null}
         </div>
       </div>
       {open && filteredOptions.length > 0 && (
@@ -152,29 +325,8 @@ function MultiSelectPopupInput({
 function ChevronDown({ className }) {
   return (
     <svg className={className} width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path d="M6 9l6 6 6-6" stroke={NAV_TEXT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
-  );
-}
-
-function NavItem({ label, onClick }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="inline-flex items-center gap-1 border-0 bg-transparent p-0"
-      style={{
-        fontFamily: "'Inter', sans-serif",
-        fontWeight: 500,
-        fontSize: '16px',
-        lineHeight: '24px',
-        color: NAV_TEXT,
-        cursor: 'pointer',
-      }}
-    >
-      {label}
-      <ChevronDown className="shrink-0 opacity-90" />
-    </button>
   );
 }
 
@@ -274,7 +426,7 @@ const categories = [
   { id: 'default-mca', label: 'MCA', Icon: IconMCA, filterKey: 'keyword', filterValue: 'MCA' },
   { id: 'default-bsc', label: 'B.Sc', Icon: IconBSc, filterKey: 'keyword', filterValue: 'B.Sc' },
   { id: 'default-agri', label: 'Python', Icon: IconAgri, filterKey: 'skills', filterValue: 'Python' },
-  { id: 'default-mbbs', label: 'Software Development', Icon: IconMBBS, filterKey: 'roles', filterValue: 'Software Development' },
+  { id: 'default-mbbs', label: 'Software Engineer', Icon: IconMBBS, filterKey: 'roles', filterValue: 'Software Engineer' },
 ];
 
 const shortcutFilterOptions = [
@@ -298,10 +450,7 @@ const HIDDEN_DEFAULT_CARDS_STORAGE_KEY = 'student_database_hidden_default_cards_
  */
 export default function StudentDatabaseLanding({ onEnterDatabase }) {
   const MULTI_VALUE_SEPARATOR = '||';
-  const navigate = useNavigate();
-  const { user, clearAuth } = useAuth();
   const [searchInput, setSearchInput] = useState('');
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [showAccessForm, setShowAccessForm] = useState(false);
   const [accessForm, setAccessForm] = useState({
     location: '',
@@ -339,27 +488,6 @@ export default function StudentDatabaseLanding({ onEnterDatabase }) {
       .map((item) => item.trim())
       .filter(Boolean);
   const fromMultiValues = (arr) => arr.join(MULTI_VALUE_SEPARATOR);
-  const userMenuRef = useRef(null);
-
-  const token = typeof window !== 'undefined' ? localStorage.getItem('somethingx_auth_token') || localStorage.getItem('token') : null;
-  const sxUserStr = typeof window !== 'undefined' ? localStorage.getItem('somethingx_auth_user') : null;
-  let sxUser = null;
-  try {
-    sxUser = sxUserStr ? JSON.parse(sxUserStr) : null;
-  } catch {
-    sxUser = null;
-  }
-  const displayUser = user || sxUser;
-  const displayName = displayUser?.name || displayUser?.email || 'User';
-  const picture = displayUser?.picture || displayUser?.profilePictureUrl || '';
-
-  useEffect(() => {
-    const close = (e) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) setUserMenuOpen(false);
-    };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, []);
 
   useEffect(() => {
     const handleEsc = (event) => {
@@ -516,21 +644,6 @@ export default function StudentDatabaseLanding({ onEnterDatabase }) {
     };
   }, []);
 
-  const goSx = (route) => {
-    redirectToSomethingX(route, token, displayUser);
-  };
-
-  const handleDashboard = () => {
-    const userType = displayUser?.userType;
-    const dashboardPath = userType === 'INSTITUTE' ? '/institutes/dashboard' : '/dashboard';
-    goSx(dashboardPath);
-  };
-
-  const handleLogout = () => {
-    setUserMenuOpen(false);
-    logout(clearAuth);
-  };
-
   const handleSearch = (e) => {
     e.preventDefault();
     onEnterDatabase({ keyword: searchInput.trim() });
@@ -627,100 +740,7 @@ export default function StudentDatabaseLanding({ onEnterDatabase }) {
       className="min-h-screen bg-white antialiased"
       style={{ fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}
     >
-      {/* —— Header —— */}
-      <header
-        className="sticky top-0 z-50 border-b bg-white"
-        style={{ borderBottomColor: '#eeeeee', borderBottomWidth: '1px' }}
-      >
-        <div className="mx-auto flex h-[72px] max-w-[1280px] items-center justify-between gap-4 px-5 lg:px-8">
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            className="flex shrink-0 items-end gap-0.5 border-0 bg-transparent p-0"
-            aria-label="SaarthiX home"
-          >
-            <img src={LogoImage} alt="" className="block h-9 w-auto object-contain" />
-            <span
-              style={{
-                fontFamily: "'Times New Roman', Times, serif",
-                fontWeight: 700,
-                fontStyle: 'italic',
-                fontSize: '22px',
-                lineHeight: 1,
-                color: LOGO_WORD,
-                paddingBottom: '2px',
-              }}
-            >
-              SaarthiX
-            </span>
-          </button>
-
-          <nav
-            className="flex min-w-0 max-w-[42vw] flex-1 justify-start gap-5 overflow-x-auto overflow-y-hidden py-1 [-ms-overflow-style:none] [scrollbar-width:none] sm:max-w-none sm:justify-center md:gap-8 lg:gap-10 [&::-webkit-scrollbar]:hidden"
-            aria-label="Primary"
-          >
-            <NavItem label="Search Talent" onClick={() => goSx('/students')} />
-            <NavItem label="Role Ready Training" onClick={() => goSx('/students/job-blueprint')} />
-            <NavItem label="Expert Session" onClick={() => goSx('/about-us')} />
-            <NavItem label="About Us" onClick={() => goSx('/about-us')} />
-          </nav>
-
-          <div className="flex shrink-0 items-center gap-3 lg:gap-4">
-            <button
-              type="button"
-              onClick={handleDashboard}
-              className="rounded-lg border-0 px-5 py-2.5 text-[16px] font-medium text-white shadow-sm transition hover:brightness-[1.03]"
-              style={{ backgroundColor: BLUE, boxShadow: '0 1px 2px rgba(51, 122, 183, 0.25)' }}
-            >
-              Dashboard
-            </button>
-
-            <div className="relative flex items-center gap-2" ref={userMenuRef}>
-              {picture ? (
-                <img src={picture} alt="" className="h-10 w-10 rounded-full object-cover ring-1 ring-black/5" />
-              ) : (
-                <div
-                  className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white ring-1 ring-black/5"
-                  style={{ backgroundColor: BLUE }}
-                >
-                  {(displayName || 'U').charAt(0).toUpperCase()}
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => setUserMenuOpen((o) => !o)}
-                className="inline-flex items-center gap-1 border-0 bg-transparent p-0"
-                style={{
-                  fontFamily: "'Inter', sans-serif",
-                  fontWeight: 500,
-                  fontSize: '16px',
-                  color: NAV_TEXT,
-                  cursor: 'pointer',
-                }}
-              >
-                User
-                <ChevronDown className="shrink-0" />
-              </button>
-              {userMenuOpen && (
-                <div
-                  className="absolute right-0 top-full z-[60] mt-2 min-w-[160px] rounded-lg border bg-white py-1 shadow-lg"
-                  style={{ borderColor: CARD_BORDER }}
-                >
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    className="w-full px-4 py-2.5 text-left text-sm text-neutral-700 hover:bg-neutral-50"
-                  >
-                    Log out
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* —— Hero: edge-to-edge under header (no top / left / right outer padding) —— */}
+      {/* —— Hero (global Navbar from App.jsx sits above this page) —— */}
       <div
         className="relative w-full overflow-hidden"
         style={{
@@ -789,49 +809,27 @@ export default function StudentDatabaseLanding({ onEnterDatabase }) {
         </div>
       </div>
 
-      <section className="bg-white px-4 pb-[4.5rem] pt-10 sm:pb-24 sm:pt-12 lg:pb-32 lg:pt-14">
+      <section className="bg-white px-4 pb-8 pt-2 sm:pb-12 sm:pt-4 lg:pb-14 lg:pt-5">
         <div className="relative mx-auto max-w-[720px]">
-          <form
-            onSubmit={handleSearch}
-            className="mx-auto flex h-[58px] w-full max-w-[720px] items-stretch overflow-hidden bg-white"
-            style={{
-              opacity: 1,
-              borderRadius: '11px',
-              border: '1px solid #00000014',
-              boxShadow: '0px 12px 32px 0px #0000000D',
-            }}
-          >
-            <span className="flex items-center pl-5 text-[#9ca3af]">
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </span>
-            <input
-              type="search"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search Candidate"
-              className="min-w-0 flex-1 border-0 bg-transparent py-[0.95rem] pl-3 pr-3 text-[15px] outline-none ring-0 placeholder:text-[#9ca3af]"
-              style={{ color: HEADING, fontFamily: "'Inter', system-ui, sans-serif" }}
-            />
+          <div className="flex justify-center">
             <button
-              type="submit"
-              className="m-1 shrink-0 text-[15px] font-semibold text-white transition hover:brightness-[1.02]"
+              type="button"
+              onClick={handleViewMore}
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg px-6 py-2.5 text-[14px] font-semibold text-white transition hover:bg-neutral-900 sm:px-9 sm:py-3 sm:text-[15px]"
               style={{
-                width: '91px',
-                height: '45px',
-                opacity: 1,
-                borderRadius: '9px',
-                background: '#3170A5',
-                border: '1px solid #000000',
+                backgroundColor: '#111111',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.12)',
                 fontFamily: "'Inter', system-ui, sans-serif",
               }}
             >
-              Search
+              Search Candidates
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
             </button>
-          </form>
+          </div>
           <p
-            className="mx-auto mt-4 max-w-[722px] px-1 text-center"
+            className="mx-auto mt-3 max-w-[722px] px-1 text-center"
             style={{
               width: 'min(722px, 100%)',
               minHeight: '32px',
@@ -840,7 +838,7 @@ export default function StudentDatabaseLanding({ onEnterDatabase }) {
               fontWeight: 400,
               fontStyle: 'normal',
               fontSize: 'clamp(14px, 1.8vw, 20px)',
-              lineHeight: '32px',
+              lineHeight: 1.45,
               letterSpacing: '0px',
               textAlign: 'center',
               verticalAlign: 'middle',
@@ -850,9 +848,9 @@ export default function StudentDatabaseLanding({ onEnterDatabase }) {
               wordBreak: 'keep-all',
             }}
           >
-            {'Track\u00A0your\u00A0team\u00A0without\u00A0the\u00A0headache.\u00A0See\u00A0the\u00A0progress.\u00A0Keep\u00A0showing\u00A0up.'}
+            Track your team without the headache. See the progress. Keep showing up.
           </p>
-          <div className="mt-4 flex justify-center">
+          <div className="mt-3 flex justify-center">
             <button
               type="button"
               onClick={() => onEnterDatabase({ shortlisted: 'true' })}
@@ -863,89 +861,91 @@ export default function StudentDatabaseLanding({ onEnterDatabase }) {
           </div>
         </div>
 
-        <div className="relative mx-auto mt-12 max-w-[1100px] sm:mt-14 lg:mt-16">
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-5 md:gap-5">
+        <div className="relative mx-auto mt-4 max-w-[1100px] sm:mt-6 lg:mt-7">
+          <div className="grid grid-cols-1 justify-items-center gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 md:gap-5">
             {visibleDefaultCards.map((card) => (
-              <button
-                key={card.id}
-                type="button"
-                onClick={() => handleCategoryClick(card)}
-                className="group relative flex h-[147px] w-[180px] flex-col items-center justify-start rounded-[6px] bg-white px-3 pt-4 pb-3 transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#337ab7]/40"
-                style={{
-                  opacity: 1,
-                  border: '1px solid #00000024',
-                }}
-              >
-                <span className="absolute right-2 top-2">
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemoveDefaultCard(card.id);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
+              <div key={card.id} className="flex w-full max-w-[180px] flex-col items-center">
+                <button
+                  type="button"
+                  onClick={() => handleCategoryClick(card)}
+                  className="group relative flex h-[147px] w-full flex-col items-center justify-start rounded-[6px] bg-white px-3 pt-4 pb-3 transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#337ab7]/40"
+                  style={{
+                    opacity: 1,
+                    border: '1px solid #00000024',
+                  }}
+                >
+                  <span className="absolute right-2 top-2">
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
                         e.stopPropagation();
                         handleRemoveDefaultCard(card.id);
-                      }
-                    }}
-                    className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-600"
-                    aria-label={`Remove ${card.label}`}
-                    title="Remove card"
-                  >
-                    ×
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleRemoveDefaultCard(card.id);
+                        }
+                      }}
+                      className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-600"
+                      aria-label={`Remove ${card.label}`}
+                      title="Remove card"
+                    >
+                      ×
+                    </span>
                   </span>
-                </span>
-                <div className="mt-1 flex h-[90px] w-[81px] items-center justify-center grayscale">
-                  <card.Icon />
-                </div>
+                  <div className="mt-1 flex h-[90px] w-[81px] items-center justify-center grayscale">
+                    <card.Icon />
+                  </div>
+                </button>
                 <span
                   className="mt-2 text-center text-[15px] font-medium leading-tight"
                   style={{ color: BODY_GREY, fontFamily: "'Inter', system-ui, sans-serif" }}
                 >
                   {card.label}
                 </span>
-              </button>
+              </div>
             ))}
             {customShortcutCards.map((card) => (
-              <button
-                key={card.id}
-                type="button"
-                onClick={() => handleCustomShortcutClick(card)}
-                className="group relative flex h-[147px] w-[180px] flex-col items-center justify-start rounded-[6px] bg-white px-3 pt-4 pb-3 transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#337ab7]/40"
-                style={{
-                  opacity: 1,
-                  border: '1px solid #00000024',
-                }}
-                title={`${card.filterKey}: ${card.filterValue}`}
-              >
-                <span className="absolute right-2 top-2">
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemoveCustomShortcutCard(card.id);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
+              <div key={card.id} className="flex w-full max-w-[180px] flex-col items-center">
+                <button
+                  type="button"
+                  onClick={() => handleCustomShortcutClick(card)}
+                  className="group relative flex h-[147px] w-full flex-col items-center justify-start rounded-[6px] bg-white px-3 pt-4 pb-3 transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#337ab7]/40"
+                  style={{
+                    opacity: 1,
+                    border: '1px solid #00000024',
+                  }}
+                  title={`${card.filterKey}: ${card.filterValue}`}
+                >
+                  <span className="absolute right-2 top-2">
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
                         e.stopPropagation();
                         handleRemoveCustomShortcutCard(card.id);
-                      }
-                    }}
-                    className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-600"
-                    aria-label={`Remove ${card.label}`}
-                    title="Remove card"
-                  >
-                    ×
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleRemoveCustomShortcutCard(card.id);
+                        }
+                      }}
+                      className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-red-100 hover:text-red-600"
+                      aria-label={`Remove ${card.label}`}
+                      title="Remove card"
+                    >
+                      ×
+                    </span>
                   </span>
-                </span>
-                <svg className="mt-1 h-[90px] w-[81px] text-gray-500 group-hover:text-[#337ab7]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                </svg>
+                  <svg className="mt-1 h-[90px] w-[81px] text-gray-500 group-hover:text-[#337ab7]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                </button>
                 <span
                   className="mt-2 text-center text-[15px] font-medium leading-tight"
                   style={{ color: BODY_GREY, fontFamily: "'Inter', system-ui, sans-serif" }}
@@ -955,7 +955,7 @@ export default function StudentDatabaseLanding({ onEnterDatabase }) {
                 <span className="mt-0.5 text-[10px] text-gray-400 uppercase tracking-wide">
                   {card.filterKey}
                 </span>
-              </button>
+              </div>
             ))}
           </div>
           <div className="mt-6 flex justify-center">
@@ -980,23 +980,6 @@ export default function StudentDatabaseLanding({ onEnterDatabase }) {
                 </button>
               )}
             </div>
-          </div>
-          <div className="mt-10 flex justify-center sm:mt-12">
-            <button
-              type="button"
-              onClick={handleViewMore}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg px-9 py-3 text-[15px] font-semibold text-white transition hover:bg-neutral-900"
-              style={{
-                backgroundColor: '#111111',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.12)',
-                fontFamily: "'Inter', system-ui, sans-serif",
-              }}
-            >
-              View More
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
           </div>
         </div>
       </section>
@@ -1080,28 +1063,28 @@ export default function StudentDatabaseLanding({ onEnterDatabase }) {
 
       {/* —— Hiring clarity —— */}
       <section
-        className="mx-auto mt-1 max-w-[1360px] rounded-[8px] border px-4 py-10 sm:py-12"
+        className="mt-0 w-full rounded-[8px] border px-4 py-10 sm:py-12"
         style={{ backgroundColor: SECTION_BG, borderColor: '#d9b4c2' }}
       >
-        <div className="mx-auto max-w-[1000px] text-center">
+        <div className="mx-auto max-w-[1120px] text-center">
           <img
             src={HEADING_2_IMG}
             alt="A Hiring Interface Built for Clarity"
-            className="mx-auto object-contain"
+            className="mx-auto h-auto object-contain"
             style={{
               width: 'min(1344px, 100%)',
-              height: '44px',
+              maxHeight: '44px',
               opacity: 1,
             }}
           />
 
-          <div className="relative mx-auto mt-8 max-w-[880px]">
+          <div className="relative mx-auto mt-8 max-w-[960px]">
             <div
               className="absolute left-[12%] right-[12%] top-[22px] hidden h-px md:block"
               style={{ backgroundColor: '#c8d4df' }}
               aria-hidden
             />
-            <div className="grid gap-10 md:grid-cols-3 md:gap-8">
+            <div className="grid gap-10 md:grid-cols-3 md:gap-10">
               {[
                 {
                   title: 'Define Scope',
@@ -1130,13 +1113,13 @@ export default function StudentDatabaseLanding({ onEnterDatabase }) {
                     <Icon />
                   </div>
                   <h3
-                    className="mt-5 text-[28px] font-bold leading-none"
+                    className="mt-5 text-[24px] font-bold leading-none sm:text-[30px]"
                     style={{ color: SECTION_TITLE, fontFamily: "'Inter', system-ui, sans-serif" }}
                   >
                     {title}
                   </h3>
                   <p
-                    className="mt-1 max-w-[280px] text-[14px] leading-[1.35]"
+                    className="mt-1 max-w-[300px] text-[14px] leading-[1.35] sm:text-[16px]"
                     style={{ color: BODY_GREY, fontFamily: "'Inter', system-ui, sans-serif" }}
                   >
                     {body}
@@ -1154,33 +1137,34 @@ export default function StudentDatabaseLanding({ onEnterDatabase }) {
           onClick={() => setShowAccessForm(false)}
         >
           <div
-            className="w-full max-w-[620px] rounded-2xl bg-white p-6 shadow-2xl sm:p-8"
+            className="w-full max-w-[540px] rounded-2xl bg-white p-6 shadow-2xl sm:p-8"
             onClick={(e) => e.stopPropagation()}
           >
-            <form onSubmit={handleAccessFormSubmit} className="space-y-4">
-              <div className="text-xs text-gray-500">
-                Tip: Choose values from the list; each selection appears as a removable chip.
-              </div>
-              <div className="grid grid-cols-1 gap-3">
+            <form onSubmit={handleAccessFormSubmit} className="space-y-0">
+              <div className="mx-auto flex w-full max-w-[491px] flex-col gap-3">
                 <MultiSelectPopupInput
+                  variant="access-location"
                   placeholder="Select your location"
                   options={formOptions.locations}
                   values={toMultiValues(accessForm.location)}
                   onChange={(next) => handleAccessFormChange('location', fromMultiValues(next))}
                 />
                 <MultiSelectPopupInput
-                  placeholder="Select degree"
+                  variant="access-degree"
+                  placeholder="Select your degree"
                   options={formOptions.degrees}
                   values={toMultiValues(accessForm.degree)}
                   onChange={(next) => handleAccessFormChange('degree', fromMultiValues(next))}
                 />
                 <MultiSelectPopupInput
-                  placeholder="Select specialization"
+                  variant="access-specialization"
+                  placeholder="e.g. Computer Science, Marketing"
                   options={formOptions.specializations}
                   values={toMultiValues(accessForm.specialization)}
                   onChange={(next) => handleAccessFormChange('specialization', fromMultiValues(next))}
                 />
                 <MultiSelectPopupInput
+                  variant="access-role"
                   placeholder="Select role"
                   options={formOptions.roles}
                   values={toMultiValues(accessForm.roles)}
@@ -1188,54 +1172,88 @@ export default function StudentDatabaseLanding({ onEnterDatabase }) {
                 />
               </div>
 
-              <div className="pt-1">
-                <MultiSelectPopupInput
-                  label="Gender"
-                  placeholder="Select gender"
-                  options={formOptions.genders}
-                  values={toMultiValues(accessForm.gender)}
-                  onChange={(next) => handleAccessFormChange('gender', fromMultiValues(next))}
-                />
+              <div className="mx-auto mt-4 w-full max-w-[491px] border-t border-gray-200 pt-4">
+                <p className="mb-3 text-sm font-semibold" style={{ color: FORM_LABEL }}>
+                  Gender
+                </p>
+                <div className="flex flex-wrap gap-x-6 gap-y-2">
+                  {GENDER_OPTIONS.map((opt) => (
+                    <label key={opt} className="inline-flex cursor-pointer items-center gap-2 text-sm" style={{ color: FORM_LABEL }}>
+                      <input
+                        type="radio"
+                        name="access-form-gender"
+                        value={opt}
+                        checked={accessForm.gender === opt}
+                        onChange={() => handleAccessFormChange('gender', opt)}
+                        className="h-4 w-4 border-gray-300 text-[#337ab7] focus:ring-[#337ab7]"
+                      />
+                      {opt}
+                    </label>
+                  ))}
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 border-t border-gray-200 pt-4">
+              <div className="mx-auto mt-4 flex w-full max-w-[491px] flex-col gap-3 border-t border-gray-200 pt-4">
                 <MultiSelectPopupInput
-                  placeholder="Select college name"
+                  variant="access-college"
+                  placeholder="Enter your college name"
                   options={formOptions.colleges}
                   values={toMultiValues(accessForm.college)}
                   onChange={(next) => handleAccessFormChange('college', fromMultiValues(next))}
                 />
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1.2fr_1fr]">
-                  <select
-                    value={accessForm.gradingType}
-                    onChange={(e) => handleAccessFormChange('gradingType', e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#337ab7] focus:ring-2 focus:ring-[#337ab7]/20"
+                <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+                  <span className="shrink-0 text-sm font-semibold sm:min-w-[4.5rem]" style={{ color: FORM_LABEL }}>
+                    Grading
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-stretch">
+                  <div className="relative min-h-[44px] flex-1 rounded-[4px] border sm:min-w-0" style={{ borderColor: FORM_FIELD_BORDER }}>
+                    <select
+                      value={accessForm.gradingType}
+                      onChange={(e) => handleAccessFormChange('gradingType', e.target.value)}
+                      className="h-full min-h-[44px] w-full cursor-pointer appearance-none rounded-[4px] border-0 bg-white px-4 py-3 pr-10 text-sm outline-none focus:ring-2 focus:ring-[#337ab7]/20"
+                      style={{ color: accessForm.gradingType ? FORM_LABEL : '#94A3B8' }}
+                    >
+                      <option value="">Select type</option>
+                      <option value="percentage">Percentage</option>
+                      <option value="cgpa">CGPA</option>
+                    </select>
+                    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8]">
+                      <ChevronDown className="h-4 w-4" />
+                    </span>
+                  </div>
+                  <div
+                    className="relative flex min-h-[44px] min-w-0 flex-1 items-center rounded-[4px] border"
+                    style={{ borderColor: FORM_FIELD_BORDER }}
                   >
-                    <option value="">Grading Type</option>
-                    <option value="percentage">Percentage</option>
-                    <option value="cgpa">CGPA</option>
-                  </select>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={accessForm.gradingValue}
-                    onChange={(e) => handleAccessFormChange('gradingValue', e.target.value)}
-                    placeholder={accessForm.gradingType === 'cgpa' ? '8.5' : '78'}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm outline-none focus:border-[#337ab7] focus:ring-2 focus:ring-[#337ab7]/20"
-                  />
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={accessForm.gradingValue}
+                      onChange={(e) => handleAccessFormChange('gradingValue', e.target.value)}
+                      placeholder={accessForm.gradingType === 'cgpa' ? '8.5' : '78'}
+                      className="min-h-[44px] w-full flex-1 border-0 bg-transparent px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-inset focus:ring-[#337ab7]/20"
+                      style={{ color: FORM_LABEL }}
+                    />
+                    {accessForm.gradingType === 'percentage' || accessForm.gradingType === '' ? (
+                      <span className="pointer-events-none pr-4 text-sm text-[#94A3B8]">%</span>
+                    ) : null}
+                  </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 border-t border-gray-200 pt-4">
+              <div className="mx-auto mt-4 flex w-full max-w-[491px] flex-col gap-3 border-t border-gray-200 pt-4">
                 <MultiSelectPopupInput
+                  variant="access-graduation"
                   placeholder="Select year of graduation"
                   options={formOptions.graduationYears}
                   values={toMultiValues(accessForm.graduationYear)}
                   onChange={(next) => handleAccessFormChange('graduationYear', fromMultiValues(next))}
                 />
                 <MultiSelectPopupInput
+                  variant="access-experience"
                   placeholder="Select experience"
                   options={formOptions.experiences}
                   values={toMultiValues(accessForm.experience)}
@@ -1243,7 +1261,7 @@ export default function StudentDatabaseLanding({ onEnterDatabase }) {
                 />
               </div>
 
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <div className="mx-auto mt-6 flex max-w-[491px] flex-wrap items-center justify-center gap-3 pt-2">
                 <button
                   type="submit"
                   className="rounded-md bg-[#337ab7] px-10 py-2.5 text-sm font-semibold text-white transition hover:brightness-105"
