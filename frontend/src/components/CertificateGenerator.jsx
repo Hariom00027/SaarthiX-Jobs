@@ -17,6 +17,9 @@ export const generateCertificateCode = () => {
     return `${day}/${month}/${year}-${uniqueCode}`;
 };
 
+const FONT_STYLESHEET =
+    'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Great+Vibes&family=Poppins:wght@300;400;600&display=swap';
+
 const ensureCertificateFonts = () => {
     if (typeof document === 'undefined') return;
     const fontLinkId = 'certificate-google-fonts';
@@ -25,9 +28,29 @@ const ensureCertificateFonts = () => {
     const link = document.createElement('link');
     link.id = fontLinkId;
     link.rel = 'stylesheet';
-    link.href =
-        'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Great+Vibes&family=Poppins:wght@300;400;600&display=swap';
+    link.href = FONT_STYLESHEET;
     document.head.appendChild(link);
+};
+
+export const preloadCertificateFonts = async () => {
+    ensureCertificateFonts();
+    await new Promise((r) => setTimeout(r, 80));
+    if (typeof document !== 'undefined' && document.fonts?.load) {
+        try {
+            await Promise.all([
+                document.fonts.load("400 52px 'Great Vibes'"),
+                document.fonts.load("700 68px 'Playfair Display'"),
+                document.fonts.load("400 28px 'Playfair Display'"),
+                document.fonts.load("400 14px 'Poppins'"),
+                document.fonts.load("600 14px 'Poppins'"),
+            ]);
+        } catch {
+            /* ignore */
+        }
+    }
+    if (typeof document !== 'undefined' && document.fonts?.ready) {
+        await document.fonts.ready;
+    }
 };
 
 // Shared helpers
@@ -98,13 +121,20 @@ const CertificateTemplate = ({
     signerLeft = { name: 'Platform Director', title: 'Saarthix' },
     signerRight = { name: 'Event Organizer', title: company || 'Organizer' },
     signatureLeftUrl,
-    signatureRightUrl
+    signatureRightUrl,
+    teamAffiliationLine
 }) => {
     ensureCertificateFonts();
 
     // Resolve context primarily from certificateFor, with isTeam as a backward-compatible fallback
     const resolvedCertificateFor = certificateFor || (isTeam ? 'TEAM' : 'INDIVIDUAL');
-    const displayName = resolvedCertificateFor === 'TEAM' ? teamName : participantName;
+    const trimmedParticipant = String(participantName ?? '').trim();
+    const trimmedTeam = String(teamName ?? '').trim();
+    const displayName =
+        resolvedCertificateFor === 'TEAM'
+            ? trimmedTeam || trimmedParticipant
+            : trimmedParticipant;
+    const affiliation = String(teamAffiliationLine ?? '').trim();
     const getAchievementText = () => {
         // Ensure date is valid - fallback to formatted current date if undefined
         const validDate = date || new Date().toLocaleDateString('en-US', {
@@ -186,13 +216,12 @@ const CertificateTemplate = ({
             <div style={{ width: '100%', height: '100%', background: '#d9e3ec', position: 'relative' }}>
                 <div
                     style={{
-                        width: 1200,
-                        height: 750,
-                        position: 'absolute',
-                        left: '50%',
-                        top: '50%',
-                        transform: 'translate(-50%, -50%) scale(0.935)',
-                        transformOrigin: 'center',
+                        width: '100%',
+                        height: '100%',
+                        position: 'relative',
+                        left: 0,
+                        top: 0,
+                        transform: 'none',
                         background: 'linear-gradient(135deg, #9fb4c7, #b8c9d8)',
                         overflow: 'hidden'
                     }}
@@ -223,12 +252,11 @@ const CertificateTemplate = ({
                         style={{
                             width: 900,
                             height: 600,
-                            background: 'rgba(255,255,255,0.75)',
+                            background: '#ffffff',
                             margin: 'auto',
                             position: 'relative',
                             top: 70,
                             borderRadius: 18,
-                            backdropFilter: 'blur(6px)',
                             boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
                             textAlign: 'center',
                             padding: '22px 70px 40px',
@@ -277,9 +305,14 @@ const CertificateTemplate = ({
                         <div style={{ fontSize: 12, letterSpacing: 2, color: '#444', margin: '15px 0' }}>
                             THE FOLLOWING AWARD IS GIVEN TO
                         </div>
-                        <div style={{ fontFamily: "'Great Vibes', cursive", fontSize: 48, margin: '25px 0', color: '#2e2e2e' }}>
+                        <div style={{ fontFamily: "'Great Vibes', cursive", fontSize: 48, margin: '20px 0 8px', color: '#2e2e2e', minHeight: 56, lineHeight: 1.15 }}>
                             {displayName}
                         </div>
+                        {affiliation ? (
+                            <div style={{ fontSize: 15, color: '#374151', margin: '0 auto 14px', fontFamily: "'Poppins', Arial, sans-serif", fontWeight: 600, lineHeight: 1.35, maxWidth: '85%' }}>
+                                {affiliation}
+                            </div>
+                        ) : null}
                         <div style={{ fontSize: 14, color: '#444', width: '70%', margin: '0 auto', lineHeight: 1.6 }}>
                             {descriptionText}
                         </div>
@@ -319,12 +352,12 @@ const CertificateTemplate = ({
             <div style={{ width: '100%', height: '100%', background: '#e6e6e6', position: 'relative' }}>
                 <div
                     style={{
-                        width: 1100,
-                        height: 720,
-                        position: 'absolute',
-                        left: '50%',
-                        top: '50%',
-                        transform: 'translate(-50%, -50%)',
+                        width: '100%',
+                        height: '100%',
+                        position: 'relative',
+                        left: 0,
+                        top: 0,
+                        transform: 'none',
                         background: 'linear-gradient(135deg, #17b3a3 50%, #6faea6 50%)',
                         display: 'flex',
                         alignItems: 'center',
@@ -386,9 +419,14 @@ const CertificateTemplate = ({
                         <div style={{ fontSize: 13, letterSpacing: 4, color: '#444', marginBottom: 15 }}>
                             This certificate is awarded to :
                         </div>
-                        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 36, color: '#1aa191', marginBottom: 20 }}>
+                        <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 36, color: '#1aa191', marginBottom: affiliation ? 8 : 20, minHeight: 44 }}>
                             {displayName}
                         </div>
+                        {affiliation ? (
+                            <div style={{ fontSize: 14, color: '#334155', marginBottom: 16, fontFamily: "'Poppins', Arial, sans-serif", fontWeight: 600 }}>
+                                {affiliation}
+                            </div>
+                        ) : null}
                         <div style={{ fontSize: 14, color: '#333', lineHeight: 1.7, width: '80%', margin: '0 auto 60px' }}>
                             {descriptionText}
                         </div>
@@ -518,6 +556,7 @@ export const generateCertificatePDF = async (certificateData) => {
         rankTitle,
         certificateType,
         isTeam,
+        certificateFor,
         teamName,
         templateStyle,
         logoUrl,
@@ -526,7 +565,8 @@ export const generateCertificatePDF = async (certificateData) => {
         signerLeft,
         signerRight,
         signatureLeftUrl,
-        signatureRightUrl
+        signatureRightUrl,
+        teamAffiliationLine
     } = certificateData;
 
     const date = certificateData.date || new Date().toLocaleDateString('en-US', {
@@ -548,6 +588,7 @@ export const generateCertificatePDF = async (certificateData) => {
     console.log('platformLogoUrl:', platformLogoUrl);
 
     ensureCertificateFonts();
+    await preloadCertificateFonts();
 
     // Use position:fixed at (0,0) so the element is always at viewport (0,0),
     // regardless of page scroll. html2canvas uses getBoundingClientRect() and the
@@ -587,6 +628,7 @@ export const generateCertificatePDF = async (certificateData) => {
                 rankTitle={rankTitle}
                 certificateType={certificateType}
                 isTeam={isTeam}
+                certificateFor={certificateFor}
                 teamName={teamName}
                 date={date}
                 certificateCode={certificateCode}
@@ -598,9 +640,10 @@ export const generateCertificatePDF = async (certificateData) => {
                 signerRight={signerRight}
                 signatureLeftUrl={signatureLeftUrl}
                 signatureRightUrl={signatureRightUrl}
+                teamAffiliationLine={teamAffiliationLine}
             />
         );
-        setTimeout(resolve, 1500); // Increased wait time for rendering
+        setTimeout(resolve, 1200); // Allow webfonts + layout to settle
     });
 
     // Important: query only inside the hidden PDF render root.
@@ -613,9 +656,8 @@ export const generateCertificatePDF = async (certificateData) => {
         throw new Error('Certificate element not found');
     }
 
-    // Wait for all fonts to load
     console.log('Waiting for fonts to load...');
-    await document.fonts.ready;
+    await preloadCertificateFonts();
     
     // Wait for all images to load
     console.log('Waiting for images to load...');
@@ -662,6 +704,14 @@ export const generateCertificatePDF = async (certificateData) => {
                 ? clonedContainer.querySelector('#certificate-content')
                 : clonedDoc.querySelector('#certificate-content');
             if (clonedElement) {
+                const h = clonedDoc.head || clonedDoc.getElementsByTagName('head')[0];
+                if (h && !clonedDoc.getElementById('certificate-fonts-clone')) {
+                    const fl = clonedDoc.createElement('link');
+                    fl.id = 'certificate-fonts-clone';
+                    fl.rel = 'stylesheet';
+                    fl.href = FONT_STYLESHEET;
+                    h.appendChild(fl);
+                }
                 clonedElement.style.display = 'block';
                 clonedElement.style.visibility = 'visible';
                 clonedElement.style.opacity = '1';
@@ -674,6 +724,8 @@ export const generateCertificatePDF = async (certificateData) => {
                 for (const el of allElements) {
                     el.style.visibility = 'visible';
                     el.style.opacity = '1';
+                    el.style.backdropFilter = 'none';
+                    el.style.webkitBackdropFilter = 'none';
                 }
                 void clonedElement.offsetHeight;
             }
@@ -761,6 +813,144 @@ export const downloadCertificate = async (certificateData) => {
     } catch (error) {
         console.error('Error generating certificate:', error);
         throw error;
+    }
+};
+
+export const downloadCertificateFromElement = async (element, certificateData = {}) => {
+    if (!element) {
+        throw new Error('Certificate preview element not found');
+    }
+    const sourceCertificate = element;
+    const captureRoot =
+        sourceCertificate.id === 'certificate-content'
+            ? sourceCertificate
+            : sourceCertificate.querySelector('#certificate-content') || sourceCertificate;
+
+    ensureCertificateFonts();
+    await preloadCertificateFonts();
+
+    const captureHost = document.createElement('div');
+    captureHost.setAttribute('data-pdf-render', 'true');
+    captureHost.style.position = 'fixed';
+    captureHost.style.left = '0';
+    captureHost.style.top = '0';
+    captureHost.style.width = '1122px';
+    captureHost.style.height = '794px';
+    captureHost.style.zIndex = '-9999';
+    captureHost.style.pointerEvents = 'none';
+    captureHost.style.overflow = 'hidden';
+    captureHost.style.background = '#ffffff';
+    document.body.prepend(captureHost);
+
+    try {
+        const clone = captureRoot.cloneNode(true);
+        clone.style.width = '1122px';
+        clone.style.height = '794px';
+        clone.style.margin = '0';
+        clone.style.transform = 'none';
+        clone.style.position = 'relative';
+        clone.style.left = '0';
+        clone.style.top = '0';
+        clone.style.maxWidth = 'none';
+        clone.style.display = 'block';
+        clone.style.visibility = 'visible';
+        clone.style.opacity = '1';
+        clone.style.overflow = 'hidden';
+        clone.style.boxSizing = 'border-box';
+        captureHost.appendChild(clone);
+
+        await preloadCertificateFonts();
+        const images = clone.getElementsByTagName('img');
+        await Promise.all(
+            Array.from(images).map((img) => {
+                if (img.complete) return Promise.resolve();
+                return new Promise((resolve) => {
+                    img.onload = resolve;
+                    img.onerror = resolve;
+                    setTimeout(resolve, 3000);
+                });
+            })
+        );
+        await new Promise((r) => setTimeout(r, 400));
+
+        const canvas = await html2canvas(clone, {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            backgroundColor: '#ffffff',
+            width: 1122,
+            height: 794,
+            allowTaint: true,
+            foreignObjectRendering: false,
+            imageTimeout: 15000,
+            letterRendering: true,
+            onclone: (clonedDoc) => {
+                const clonedContainer = clonedDoc.querySelector('[data-pdf-render="true"]');
+                const clonedElement = clonedContainer
+                    ? clonedContainer.querySelector('#certificate-content') || clonedContainer.firstElementChild
+                    : null;
+                if (!clonedElement) return;
+                const h = clonedDoc.head || clonedDoc.getElementsByTagName('head')[0];
+                if (h && !clonedDoc.getElementById('certificate-fonts-clone')) {
+                    const fl = clonedDoc.createElement('link');
+                    fl.id = 'certificate-fonts-clone';
+                    fl.rel = 'stylesheet';
+                    fl.href = FONT_STYLESHEET;
+                    h.appendChild(fl);
+                }
+                clonedElement.style.display = 'block';
+                clonedElement.style.visibility = 'visible';
+                clonedElement.style.opacity = '1';
+                clonedElement.style.width = '1122px';
+                clonedElement.style.height = '794px';
+                clonedElement.style.margin = '0';
+                clonedElement.style.overflow = 'hidden';
+                clonedElement.style.boxSizing = 'border-box';
+                const allElements = clonedElement.getElementsByTagName('*');
+                for (const el of allElements) {
+                    el.style.visibility = 'visible';
+                    el.style.opacity = '1';
+                    el.style.backdropFilter = 'none';
+                    el.style.webkitBackdropFilter = 'none';
+                }
+            },
+        });
+
+        const imgData = canvas.toDataURL('image/png', 1.0);
+        const pdf = new jsPDF({
+            orientation: 'landscape',
+            unit: 'mm',
+            format: [297, 210],
+            compress: true
+        });
+
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const aspectRatio = canvas.width / canvas.height;
+
+        let imgWidth = pdfWidth;
+        let imgHeight = pdfWidth / aspectRatio;
+        if (imgHeight > pdfHeight) {
+            imgHeight = pdfHeight;
+            imgWidth = pdfHeight * aspectRatio;
+        }
+
+        const xOffset = (pdfWidth - imgWidth) / 2;
+        const yOffset = (pdfHeight - imgHeight) / 2;
+        pdf.addImage(imgData, 'PNG', xOffset, yOffset, imgWidth, imgHeight, '', 'FAST');
+
+        const safeTitle = (certificateData.hackathonTitle || 'Hackathon').replace(/\s+/g, '_');
+        const safeName = (certificateData.participantName || certificateData.teamName || 'Participant')
+            .replace(/\s+/g, '_')
+            .replace(/[^a-zA-Z0-9_-]/g, '');
+        const fileName = `Saarthix_${safeTitle}_${safeName}_Certificate.pdf`;
+        pdf.save(fileName);
+
+        return true;
+    } finally {
+        if (captureHost.parentNode) {
+            captureHost.parentNode.removeChild(captureHost);
+        }
     }
 };
 

@@ -45,6 +45,11 @@ export default function JobBuilder() {
     industry: '',
     employmentType: '',
     skills: [],
+    mustHaveSkills: [],
+    goodToHaveSkills: [],
+    jdFileName: '',
+    jdFileType: '',
+    jdFileBase64: '',
     yearsOfExperience: '',
     minSalary: '',
     maxSalary: '',
@@ -52,8 +57,10 @@ export default function JobBuilder() {
     active: true
   });
 
-  const [skillsInput, setSkillsInput] = useState('');
-  const [showSkillsSuggestions, setShowSkillsSuggestions] = useState(false);
+  const [mustHaveInput, setMustHaveInput] = useState('');
+  const [goodToHaveInput, setGoodToHaveInput] = useState('');
+  const [showMustHaveSuggestions, setShowMustHaveSuggestions] = useState(false);
+  const [showGoodToHaveSuggestions, setShowGoodToHaveSuggestions] = useState(false);
   const [salaryError, setSalaryError] = useState('');
   const [savedJobId, setSavedJobId] = useState(null); // Track saved draft job ID
   const [jobCreatedAt, setJobCreatedAt] = useState(null); // ISO string from API — 24h edit window
@@ -119,13 +126,19 @@ export default function JobBuilder() {
           industry: job.industry || '',
           employmentType: job.employmentType || '',
           skills: job.skills || [],
+          mustHaveSkills: job.mustHaveSkills || job.skills || [],
+          goodToHaveSkills: job.goodToHaveSkills || [],
+          jdFileName: job.jdFileName || '',
+          jdFileType: job.jdFileType || '',
+          jdFileBase64: job.jdFileBase64 || '',
           yearsOfExperience: job.yearsOfExperience ? job.yearsOfExperience.toString() : '',
           minSalary: job.jobMinSalary ? job.jobMinSalary.toString() : '',
           maxSalary: job.jobMaxSalary ? job.jobMaxSalary.toString() : '',
           jobSalaryCurrency: job.jobSalaryCurrency || 'USD',
           active: job.active !== undefined ? job.active : true
         });
-        setSkillsInput('');
+        setMustHaveInput('');
+        setGoodToHaveInput('');
         // Set savedJobId when loading an existing job
         setSavedJobId(job.id);
         setJobCreatedAt(job.createdAt || null);
@@ -154,9 +167,9 @@ export default function JobBuilder() {
       case 'basic':
         return isFieldFilled('title') && isFieldFilled('company') && isFieldFilled('location');
       case 'details':
-        return isFieldFilled('description') && isFieldFilled('industry') && isFieldFilled('employmentType');
+        return (isFieldFilled('description') || isFieldFilled('jdFileBase64')) && isFieldFilled('industry') && isFieldFilled('employmentType');
       case 'requirements':
-        return isFieldFilled('skills');
+        return isFieldFilled('mustHaveSkills');
       case 'yearsOfExperience':
         return isFieldFilled('yearsOfExperience');
       case 'compensation':
@@ -220,23 +233,69 @@ export default function JobBuilder() {
     }));
   };
 
-  const handleAddSkill = (skill) => {
+  const handleAddSkill = (fieldName, skill) => {
     const trimmedSkill = skill.trim();
-    if (trimmedSkill && !formData.skills.includes(trimmedSkill)) {
+    const currentSkills = formData[fieldName] || [];
+    if (trimmedSkill && !currentSkills.includes(trimmedSkill)) {
       setFormData(prev => ({
         ...prev,
-        skills: [...prev.skills, trimmedSkill]
+        [fieldName]: [...(prev[fieldName] || []), trimmedSkill]
       }));
-      setSkillsInput('');
-      setShowSkillsSuggestions(false);
+      if (fieldName === 'mustHaveSkills') {
+        setMustHaveInput('');
+        setShowMustHaveSuggestions(false);
+      } else {
+        setGoodToHaveInput('');
+        setShowGoodToHaveSuggestions(false);
+      }
     }
   };
 
-  const handleRemoveSkill = (skillToRemove) => {
+  const handleRemoveSkill = (fieldName, skillToRemove) => {
     setFormData(prev => ({
       ...prev,
-      skills: prev.skills.filter(skill => skill !== skillToRemove)
+      [fieldName]: (prev[fieldName] || []).filter(skill => skill !== skillToRemove)
     }));
+  };
+
+  const handleJdFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowedTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Please upload only PDF, DOC, or DOCX files.');
+      e.target.value = '';
+      return;
+    }
+
+    const toBase64 = (inputFile) => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = String(reader.result || '');
+        const base64 = result.includes(',') ? result.split(',')[1] : '';
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(inputFile);
+    });
+
+    try {
+      const base64 = await toBase64(file);
+      setFormData(prev => ({
+        ...prev,
+        jdFileName: file.name,
+        jdFileType: file.type,
+        jdFileBase64: base64,
+      }));
+    } catch (err) {
+      console.error('Error reading JD file:', err);
+      toast.error('Unable to process selected file. Please try again.');
+    }
   };
 
   const handleSave = async (e) => {
@@ -256,6 +315,10 @@ export default function JobBuilder() {
     setSuccess(false);
 
     try {
+      const mergedSkills = Array.from(new Set([
+        ...(formData.mustHaveSkills || []),
+        ...(formData.goodToHaveSkills || []),
+      ]));
       const jobData = {
         title: formData.title || '',
         description: formData.description || '',
@@ -267,7 +330,12 @@ export default function JobBuilder() {
         jobMaxSalary: formData.maxSalary ? parseInt(formData.maxSalary) : null,
         yearsOfExperience: formData.yearsOfExperience ? parseInt(formData.yearsOfExperience) : null,
         jobSalaryCurrency: formData.jobSalaryCurrency || 'USD',
-        skills: formData.skills || [],
+        skills: mergedSkills,
+        mustHaveSkills: formData.mustHaveSkills || [],
+        goodToHaveSkills: formData.goodToHaveSkills || [],
+        jdFileName: formData.jdFileName || '',
+        jdFileType: formData.jdFileType || '',
+        jdFileBase64: formData.jdFileBase64 || '',
         active: false // Save as draft (inactive)
       };
 
@@ -326,9 +394,10 @@ export default function JobBuilder() {
     if (!formData.title) missingFields.push('Job Title');
     if (!formData.company) missingFields.push('Company Name');
     if (!formData.location) missingFields.push('Location');
-    if (!formData.description) missingFields.push('Job Description');
+    if (!formData.description && !formData.jdFileBase64) missingFields.push('Job Description');
     if (!formData.industry) missingFields.push('Industry');
     if (!formData.employmentType) missingFields.push('Employment Type');
+    if (!formData.mustHaveSkills || formData.mustHaveSkills.length === 0) missingFields.push('Must Have Skills');
     if (!formData.yearsOfExperience && formData.yearsOfExperience !== 0) missingFields.push('Years of Experience');
 
     // Validate salary range if both are provided
@@ -357,6 +426,8 @@ export default function JobBuilder() {
         setActiveTab('basic');
       } else if (!formData.description || !formData.industry || !formData.employmentType) {
         setActiveTab('details');
+      } else if (!formData.mustHaveSkills || formData.mustHaveSkills.length === 0) {
+        setActiveTab('requirements');
       } else if (!formData.yearsOfExperience && formData.yearsOfExperience !== 0) {
         setActiveTab('yearsOfExperience');
       }
@@ -368,6 +439,10 @@ export default function JobBuilder() {
     setSuccess(false);
 
     try {
+      const mergedSkills = Array.from(new Set([
+        ...(formData.mustHaveSkills || []),
+        ...(formData.goodToHaveSkills || []),
+      ]));
       const jobData = {
         title: formData.title,
         description: formData.description,
@@ -379,7 +454,12 @@ export default function JobBuilder() {
         jobMaxSalary: formData.maxSalary ? parseInt(formData.maxSalary) : null,
         yearsOfExperience: formData.yearsOfExperience ? parseInt(formData.yearsOfExperience) : null,
         jobSalaryCurrency: formData.jobSalaryCurrency || 'USD',
-        skills: formData.skills || [],
+        skills: mergedSkills,
+        mustHaveSkills: formData.mustHaveSkills || [],
+        goodToHaveSkills: formData.goodToHaveSkills || [],
+        jdFileName: formData.jdFileName || '',
+        jdFileType: formData.jdFileType || '',
+        jdFileBase64: formData.jdFileBase64 || '',
         active: true // Post as active job
       };
 
@@ -584,6 +664,7 @@ export default function JobBuilder() {
                   />
                 </div>
               </div>
+
             </div>
           )}
 
@@ -605,7 +686,7 @@ export default function JobBuilder() {
                   onChange={handleInputChange}
                   placeholder="Describe the job responsibilities, requirements, and benefits..."
                   rows="10"
-                  required
+                  required={!formData.jdFileBase64}
                   onKeyDown={(e) => {
                     // Allow Ctrl+Enter or Cmd+Enter to submit, but regular Enter should create new line
                     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
@@ -615,6 +696,35 @@ export default function JobBuilder() {
                   }}
                   className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-700 placeholder-gray-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100 resize-none"
                 />
+                <p className="mt-2 text-xs text-gray-500">
+                  You can provide either text description or upload JD file below.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Job Description File (PDF/DOC/DOCX)
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  onChange={handleJdFileChange}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-700 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                />
+                {formData.jdFileName && (
+                  <div className="mt-2 flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs">
+                    <span className="text-blue-900">
+                      Uploaded: <span className="font-medium">{formData.jdFileName}</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, jdFileName: '', jdFileType: '', jdFileBase64: '' }))}
+                      className="font-semibold text-blue-700 hover:text-blue-900"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="grid md:grid-cols-2 gap-6">
@@ -671,75 +781,128 @@ export default function JobBuilder() {
                 <p className="text-sm text-gray-500 mt-1">Specify the skills and qualifications needed</p>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Required Skills
-                </label>
-
-                <div className="relative mb-4">
-                  <input
-                    type="text"
-                    value={skillsInput}
-                    onChange={(e) => {
-                      setSkillsInput(e.target.value);
-                      setShowSkillsSuggestions(e.target.value.length > 0);
-                    }}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        if (skillsInput.trim()) {
-                          handleAddSkill(skillsInput);
+              <div className="grid md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Must Have Skills <span className="text-red-400">*</span>
+                  </label>
+                  <div className="relative mb-3">
+                    <input
+                      type="text"
+                      value={mustHaveInput}
+                      onChange={(e) => {
+                        setMustHaveInput(e.target.value);
+                        setShowMustHaveSuggestions(e.target.value.length > 0);
+                      }}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (mustHaveInput.trim()) {
+                            handleAddSkill('mustHaveSkills', mustHaveInput);
+                          }
                         }
-                      }
-                    }}
-                    placeholder="Type a skill and press Enter or select from suggestions"
-                    className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-700 placeholder-gray-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100"
-                  />
-
-                  {showSkillsSuggestions && skillsInput && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                      {COMMON_SKILLS.filter(skill =>
-                        skill.toLowerCase().includes(skillsInput.toLowerCase()) &&
-                        !formData.skills.includes(skill)
-                      ).slice(0, 5).map((skill, index) => (
-                        <button
-                          key={index}
-                          type="button"
-                          onClick={() => handleAddSkill(skill)}
-                          className="w-full text-left px-4 py-2 hover:bg-indigo-50 text-sm text-gray-700 transition-colors"
-                        >
+                      }}
+                      placeholder="Add must-have skills"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-700 placeholder-gray-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                    />
+                    {showMustHaveSuggestions && mustHaveInput && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        {COMMON_SKILLS.filter(skill =>
+                          skill.toLowerCase().includes(mustHaveInput.toLowerCase()) &&
+                          !(formData.mustHaveSkills || []).includes(skill)
+                        ).slice(0, 6).map((skill, index) => (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() => handleAddSkill('mustHaveSkills', skill)}
+                            className="w-full text-left px-4 py-2 hover:bg-indigo-50 text-sm text-gray-700 transition-colors"
+                          >
+                            {skill}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {(formData.mustHaveSkills || []).length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {(formData.mustHaveSkills || []).map((skill, index) => (
+                        <span key={index} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium border border-blue-200">
                           {skill}
-                        </button>
+                          <button type="button" onClick={() => handleRemoveSkill('mustHaveSkills', skill)} className="text-blue-600 hover:text-blue-700 focus:outline-none">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </span>
                       ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-gray-400 text-sm border border-gray-200 rounded-lg bg-gray-50">
+                      Add at least one must-have skill.
                     </div>
                   )}
                 </div>
 
-                {formData.skills.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {formData.skills.map((skill, index) => (
-                      <span
-                        key={index}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium border border-blue-200"
-                      >
-                        {skill}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveSkill(skill)}
-                          className="text-blue-600 hover:text-blue-700 focus:outline-none"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </span>
-                    ))}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Good To Have Skills
+                  </label>
+                  <div className="relative mb-3">
+                    <input
+                      type="text"
+                      value={goodToHaveInput}
+                      onChange={(e) => {
+                        setGoodToHaveInput(e.target.value);
+                        setShowGoodToHaveSuggestions(e.target.value.length > 0);
+                      }}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (goodToHaveInput.trim()) {
+                            handleAddSkill('goodToHaveSkills', goodToHaveInput);
+                          }
+                        }
+                      }}
+                      placeholder="Add good-to-have skills"
+                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-700 placeholder-gray-400 transition-colors focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                    />
+                    {showGoodToHaveSuggestions && goodToHaveInput && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        {COMMON_SKILLS.filter(skill =>
+                          skill.toLowerCase().includes(goodToHaveInput.toLowerCase()) &&
+                          !(formData.goodToHaveSkills || []).includes(skill)
+                        ).slice(0, 6).map((skill, index) => (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() => handleAddSkill('goodToHaveSkills', skill)}
+                            className="w-full text-left px-4 py-2 hover:bg-indigo-50 text-sm text-gray-700 transition-colors"
+                          >
+                            {skill}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-400 text-sm border border-gray-200 rounded-lg bg-gray-50">
-                    No skills added yet. Start typing to add skills.
-                  </div>
-                )}
+                  {(formData.goodToHaveSkills || []).length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {(formData.goodToHaveSkills || []).map((skill, index) => (
+                        <span key={index} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-medium border border-emerald-200">
+                          {skill}
+                          <button type="button" onClick={() => handleRemoveSkill('goodToHaveSkills', skill)} className="text-emerald-600 hover:text-emerald-700 focus:outline-none">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-gray-400 text-sm border border-gray-200 rounded-lg bg-gray-50">
+                      Optional: add good-to-have skills.
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}

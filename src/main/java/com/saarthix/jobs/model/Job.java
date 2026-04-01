@@ -19,11 +19,16 @@ public class Job {
     private String industryId;           // NEW: User ID of the INDUSTRY user who posted
     private String industry;             // Industry type (e.g., Technology, Healthcare, Finance)
     private List<String> skills;         // Skills required for this job
+    private List<String> mustHaveSkills; // Must-have skills for this job
+    private List<String> goodToHaveSkills; // Good-to-have skills for this job
     private String employmentType;       // Employment type (Full-time, Part-time, etc.)
     private Integer jobMinSalary;        // Minimum salary
     private Integer jobMaxSalary;        // Maximum salary
     private String jobSalaryCurrency;    // Salary currency
     private Integer yearsOfExperience;   // Required years of experience for this job
+    private String jdFileName;           // Uploaded JD file name
+    private String jdFileType;           // Uploaded JD MIME type
+    private String jdFileBase64;         // Uploaded JD file base64 contents
     private LocalDateTime createdAt = LocalDateTime.now();
     private boolean active = true;
 
@@ -60,6 +65,12 @@ public class Job {
 
     public List<String> getSkills() { return skills; }
     public void setSkills(List<String> skills) { this.skills = skills; }
+    
+    public List<String> getMustHaveSkills() { return mustHaveSkills; }
+    public void setMustHaveSkills(List<String> mustHaveSkills) { this.mustHaveSkills = mustHaveSkills; }
+    
+    public List<String> getGoodToHaveSkills() { return goodToHaveSkills; }
+    public void setGoodToHaveSkills(List<String> goodToHaveSkills) { this.goodToHaveSkills = goodToHaveSkills; }
 
     public String getEmploymentType() { return employmentType; }
     public void setEmploymentType(String employmentType) { this.employmentType = employmentType; }
@@ -75,4 +86,13 @@ public class Job {
 
     public Integer getYearsOfExperience() { return yearsOfExperience; }
     public void setYearsOfExperience(Integer yearsOfExperience) { this.yearsOfExperience = yearsOfExperience; }
+
+    public String getJdFileName() { return jdFileName; }
+    public void setJdFileName(String jdFileName) { this.jdFileName = jdFileName; }
+
+    public String getJdFileType() { return jdFileType; }
+    public void setJdFileType(String jdFileType) { this.jdFileType = jdFileType; }
+
+    public String getJdFileBase64() { return jdFileBase64; }
+    public void setJdFileBase64(String jdFileBase64) { this.jdFileBase64 = jdFileBase64; }
 }

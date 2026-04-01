@@ -6,6 +6,12 @@ import { toast } from 'react-toastify';
 import { CheckCircle, XCircle, Clock, Upload, FileText, AlertCircle, ChevronRight, Download, Share2, Award, Eye, X, User } from 'lucide-react';
 import { downloadCertificate, shareOnLinkedIn, generateCertificateCode } from './CertificateGenerator';
 import CertificateTemplate from './CertificateGenerator';
+import {
+    parsePhaseFormatLabels,
+    phaseSubmissionRules,
+    fileMatchesAllowedExtensions,
+    describeAllowedFormatsForUi,
+} from '../utils/hackathonSubmissionFormats';
 
 export default function HackathonApplicationDashboard() {
     const { applicationId } = useParams();
@@ -67,33 +73,44 @@ export default function HackathonApplicationDashboard() {
         }
     });
 
+    const buildPrimaryCertificateData = () => {
+        const asTeam = Boolean(application.asTeam);
+        const teamNm = String(application.teamName || '').trim();
+        const indName = String(application.individualName || '').trim();
+        const participantDisplay = asTeam
+            ? teamNm || user?.name || 'Team'
+            : indName || user?.name || 'Participant';
+        return {
+            participantName: participantDisplay,
+            hackathonTitle: hackathon.title,
+            company: hackathon.company,
+            rank: application.finalRank,
+            rankTitle: application.rankTitle,
+            certificateType: application.certificateType,
+            isTeam: asTeam,
+            teamName: application.teamName,
+            certificateFor: asTeam ? 'TEAM' : 'INDIVIDUAL',
+            teamAffiliationLine: null,
+            templateStyle: application.certificateTemplateId || 'template1',
+            logoUrl: application.certificateLogoUrl,
+            platformLogoUrl: application.certificatePlatformLogoUrl,
+            customMessage: application.certificateCustomMessage,
+            ...getCertificateSigners(),
+            signatureLeftUrl: application.certificateSignatureLeftUrl,
+            signatureRightUrl: application.certificateSignatureRightUrl,
+            date: new Date().toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            }),
+            certificateCode: generateCertificateCode()
+        };
+    };
+
     const handleDownloadCertificate = async () => {
         try {
             setDownloadingCertificate(true);
-            const certificateData = {
-                participantName: user?.name || 'Participant',
-                hackathonTitle: hackathon.title,
-                company: hackathon.company,
-                rank: application.finalRank,
-                rankTitle: application.rankTitle,
-                certificateType: application.certificateType,
-                isTeam: application.asTeam,
-                teamName: application.teamName,
-                // ONLY use backend data - NO localStorage fallback
-                templateStyle: application.certificateTemplateId || 'template1',
-                logoUrl: application.certificateLogoUrl,
-                platformLogoUrl: application.certificatePlatformLogoUrl,
-                customMessage: application.certificateCustomMessage,
-                ...getCertificateSigners(),
-                signatureLeftUrl: application.certificateSignatureLeftUrl,
-                signatureRightUrl: application.certificateSignatureRightUrl,
-                date: new Date().toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                }),
-                certificateCode: generateCertificateCode()
-            };
+            const certificateData = buildPrimaryCertificateData();
 
             await downloadCertificate(certificateData);
             toast.success('Certificate downloaded successfully!');
@@ -107,26 +124,7 @@ export default function HackathonApplicationDashboard() {
 
     const handleShareOnLinkedIn = () => {
         try {
-            const certificateData = {
-                participantName: user?.name || 'Participant',
-                hackathonTitle: hackathon.title,
-                company: hackathon.company,
-                rank: application.finalRank,
-                rankTitle: application.rankTitle,
-                certificateType: application.certificateType,
-                isTeam: application.asTeam,
-                teamName: application.teamName,
-                // ONLY use backend data - NO localStorage fallback
-                templateStyle: application.certificateTemplateId || 'template1',
-                logoUrl: application.certificateLogoUrl,
-                platformLogoUrl: application.certificatePlatformLogoUrl,
-                customMessage: application.certificateCustomMessage,
-                ...getCertificateSigners(),
-                signatureLeftUrl: application.certificateSignatureLeftUrl,
-                signatureRightUrl: application.certificateSignatureRightUrl
-            };
-
-            shareOnLinkedIn(certificateData);
+            shareOnLinkedIn(buildPrimaryCertificateData());
         } catch (error) {
             console.error('Error sharing on LinkedIn:', error);
             toast.error('Failed to share on LinkedIn');
@@ -153,20 +151,6 @@ export default function HackathonApplicationDashboard() {
         return `${day.toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${year} (${day}${getSuffix(day)} ${month} ${year})`;
     };
 
-    const getAllowedExtensions = (format) => {
-        if (!format) return '*';
-        const lowerFormat = format.toLowerCase();
-        switch (lowerFormat) {
-            case 'document': return '.pdf,.doc,.docx,.txt';
-            case 'video': return '.mp4,.avi,.mov,.mkv';
-            case 'image': return '.jpg,.jpeg,.png,.gif';
-            case 'code': return '.zip,.rar,.7z,.tar,.gz';
-            case 'presentation': return '.ppt,.pptx,.pdf';
-            case 'link': return '';
-            default: return '*';
-        }
-    };
-
     useEffect(() => {
         loadData();
     }, [applicationId]);
@@ -187,28 +171,20 @@ export default function HackathonApplicationDashboard() {
         }
     };
 
-    const handleFileChange = (e, format) => {
+    const handleFileChange = (e, phase) => {
         const file = e.target.files[0];
-        if (file) {
-            if (file.size > 5 * 1024 * 1024) { // 5MB limit
-                toast.error('File size must be less than 5MB');
-                return;
-            }
-
-            // Validate format
-            if (format && format !== 'any' && format !== 'link') {
-                const allowed = getAllowedExtensions(format).split(',');
-                const ext = '.' + file.name.split('.').pop().toLowerCase();
-
-                // If allowed is *, accept anything. Otherwise check extension.
-                if (allowed[0] !== '*' && !allowed.includes(ext)) {
-                    toast.error(`Invalid file format. Allowed: ${allowed.join(', ')}`);
-                    return;
-                }
-            }
-
-            setSelectedFile(file);
+        if (!file) return;
+        if (file.size > 5 * 1024 * 1024) {
+            toast.error('File size must be less than 5MB');
+            return;
         }
+        const labels = parsePhaseFormatLabels(phase);
+        const { allExtensions } = phaseSubmissionRules(labels);
+        if (allExtensions.length && !fileMatchesAllowedExtensions(file.name, allExtensions)) {
+            toast.error(`Invalid file type. Allowed: ${allExtensions.join(', ')}`);
+            return;
+        }
+        setSelectedFile(file);
     };
 
     const convertFileToBase64 = (file) => {
@@ -220,13 +196,12 @@ export default function HackathonApplicationDashboard() {
         });
     };
 
-    const handleSubmit = async (phaseId, format) => {
+    const handleSubmit = async (phaseId, phase) => {
         try {
-            // STRICT: Check if phase deadline has passed
             if (hackathon && hackathon.phases) {
-                const targetPhase = hackathon.phases.find(p => p.id === phaseId) || 
-                                   (phaseId && hackathon.phases[0]); // Fallback to first phase if ID doesn't match
-                
+                const targetPhase = hackathon.phases.find(p => p.id === phaseId) ||
+                    (phaseId && hackathon.phases[0]);
+
                 if (targetPhase && targetPhase.deadline) {
                     try {
                         const deadline = new Date(targetPhase.deadline);
@@ -243,13 +218,11 @@ export default function HackathonApplicationDashboard() {
                 }
             }
 
-            // Validation
             if (!solutionText.trim()) {
                 toast.error('Please provide a solution description/statement');
                 return;
             }
 
-            // URL validation helper
             const isValidURL = (string) => {
                 try {
                     const url = new URL(string);
@@ -259,35 +232,32 @@ export default function HackathonApplicationDashboard() {
                 }
             };
 
-            // Validate based on format - ALL formats require either file or link
-            if (format === 'link') {
-                // Link format: MUST have a valid URL link
+            const formatLabels = parsePhaseFormatLabels(phase);
+            const rules = phaseSubmissionRules(formatLabels);
+
+            if (!formatLabels.length) {
+                toast.error('This phase has no allowed submission formats. Please contact the organizer.');
+                return;
+            }
+
+            if (rules.needsLink) {
                 if (!submissionLink.trim()) {
-                    toast.error('Please provide a submission link');
+                    toast.error('Please provide a submission link (URL)');
                     return;
                 }
                 if (!isValidURL(submissionLink.trim())) {
                     toast.error('Please enter a valid URL (must start with http:// or https://)');
                     return;
                 }
-            } else if (format === 'code' || format === 'any') {
-                // Code/Any format: Require BOTH file AND valid URL link
+            }
+
+            if (rules.needsFile) {
                 if (!selectedFile) {
-                    toast.error('Please upload a file (zip/code)');
+                    toast.error('Please upload a file matching the allowed format(s)');
                     return;
                 }
-                if (!submissionLink.trim()) {
-                    toast.error('Please provide a GitHub/repository link');
-                    return;
-                }
-                if (!isValidURL(submissionLink.trim())) {
-                    toast.error('Please enter a valid URL for your repository (must start with http:// or https://)');
-                    return;
-                }
-            } else {
-                // Specific formats (document, video, image, presentation): MUST have a file
-                if (!selectedFile) {
-                    toast.error(`Please upload a ${format} file`);
+                if (rules.allExtensions.length && !fileMatchesAllowedExtensions(selectedFile.name, rules.allExtensions)) {
+                    toast.error(`File type not allowed. Allowed: ${rules.allExtensions.join(', ')}`);
                     return;
                 }
             }
@@ -501,29 +471,9 @@ export default function HackathonApplicationDashboard() {
                                     transformOrigin: 'center center'
                                 }}>
                                     <CertificateTemplate
-                                        participantName={user?.name || 'Participant'}
-                                        hackathonTitle={hackathon.title}
-                                        company={hackathon.company}
-                                        rank={application.finalRank}
-                                        rankTitle={application.rankTitle}
-                                        certificateType={application.certificateType}
-                                        isTeam={application.asTeam}
-                                        teamName={application.teamName}
-                                        // ONLY use backend data - NO localStorage fallback
-                                        templateStyle={application.certificateTemplateId || 'template1'}
-                                        logoUrl={application.certificateLogoUrl}
-                                        platformLogoUrl={application.certificatePlatformLogoUrl}
-                                        customMessage={application.certificateCustomMessage}
-                                        signerLeft={null}
-                                        signerRight={null}
+                                        {...buildPrimaryCertificateData()}
                                         signatureLeftUrl={application.certificateSignatureLeftUrl}
                                         signatureRightUrl={application.certificateSignatureRightUrl}
-                                        date={new Date().toLocaleDateString('en-US', {
-                                            year: 'numeric',
-                                            month: 'long',
-                                            day: 'numeric'
-                                        })}
-                                        certificateCode={generateCertificateCode()}
                                     />
                                 </div>
                             </div>
@@ -539,16 +489,20 @@ export default function HackathonApplicationDashboard() {
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {application.teamMembers.map((member, idx) => {
+                                        const teamNm = String(application.teamName || '').trim();
                                         const memberCertificateData = {
-                                            participantName: member.name,  // Individual team member name
+                                            participantName: member.name,
                                             hackathonTitle: hackathon.title,
                                             company: hackathon.company,
                                             rank: application.finalRank,
                                             rankTitle: application.rankTitle,
                                             certificateType: application.certificateType,
-                                            isTeam: false,  // Show as individual for each team member
-                                            teamName: application.teamName,  // Still include team name for reference
-                                            // ONLY use backend data - NO localStorage fallback
+                                            isTeam: false,
+                                            teamName: application.teamName,
+                                            certificateFor: 'INDIVIDUAL',
+                                            teamAffiliationLine: teamNm
+                                                ? `Member of team "${teamNm}"`
+                                                : null,
                                             templateStyle: application.certificateTemplateId || 'template1',
                                             logoUrl: application.certificateLogoUrl,
                                             platformLogoUrl: application.certificatePlatformLogoUrl,
@@ -611,24 +565,7 @@ export default function HackathonApplicationDashboard() {
                         <div className="flex flex-wrap gap-3 justify-center">
                             <button
                                 onClick={() => {
-                                    setPreviewCertificate({
-                                        participantName: user?.name || 'Participant',
-                                        hackathonTitle: hackathon.title,
-                                        company: hackathon.company,
-                                        rank: application.finalRank,
-                                        rankTitle: application.rankTitle,
-                                        certificateType: application.certificateType,
-                                        isTeam: application.asTeam,
-                                        teamName: application.teamName,
-                                        // ONLY use backend data - NO localStorage fallback
-                                        templateStyle: application.certificateTemplateId || 'template1',
-                                        logoUrl: application.certificateLogoUrl,
-                                        platformLogoUrl: application.certificatePlatformLogoUrl,
-                                        customMessage: application.certificateCustomMessage,
-                                        ...getCertificateSigners(),
-                                        signatureLeftUrl: application.certificateSignatureLeftUrl,
-                                        signatureRightUrl: application.certificateSignatureRightUrl
-                                    });
+                                    setPreviewCertificate(buildPrimaryCertificateData());
                                     setPreviewingMember(null);
                                 }}
                                 className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-md hover:shadow-lg"
@@ -729,6 +666,8 @@ export default function HackathonApplicationDashboard() {
                         <div className="space-y-6">
                             {hackathon.phases.map((phase, index) => {
                                 const submission = application.phaseSubmissions?.[phase.id];
+                                const phaseFormatLabels = parsePhaseFormatLabels(phase);
+                                const phaseRules = phaseSubmissionRules(phaseFormatLabels);
                                 const isLocked = activePhaseIndex !== -1 && index > activePhaseIndex;
                                 const isActive = index === activePhaseIndex;
                                 const isCompleted = submission?.status === 'ACCEPTED';
@@ -884,13 +823,13 @@ export default function HackathonApplicationDashboard() {
                                                         ></textarea>
                                                     </div>
 
-                                                    {/* Link Submission - Visible for Link, Code, or Any */}
-                                                    {(phase.uploadFormat === 'link' || phase.uploadFormat === 'code' || phase.uploadFormat === 'any') && (
+                                                    {/* Link field when industry allows link-type formats */}
+                                                    {phaseRules.needsLink && (
                                                         <div className="mb-4">
                                                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                                                 Submission Link
                                                                 <span className="text-xs text-gray-500 ml-2">
-                                                                    {phase.uploadFormat === 'code' ? '(GitHub/GitLab Repository)' : '(Project URL)'}
+                                                                    (URL must start with https://)
                                                                 </span>
                                                             </label>
                                                             <input
@@ -918,13 +857,12 @@ export default function HackathonApplicationDashboard() {
                                                         </div>
                                                     )}
 
-                                                    {/* File Upload - Visible unless format is strictly 'link' */}
-                                                    {phase.uploadFormat !== 'link' && (
+                                                    {phaseRules.needsFile && (
                                                         <div className="mb-4">
                                                             <label className="block text-sm font-medium text-gray-700 mb-1">
                                                                 Upload File
-                                                                <span className="text-xs text-gray-500 ml-2 capitalize">
-                                                                    ({phase.uploadFormat === 'any' ? 'Any Format' : phase.uploadFormat || 'Document'})
+                                                                <span className="text-xs text-gray-500 ml-2">
+                                                                    ({describeAllowedFormatsForUi(phaseFormatLabels)})
                                                                 </span>
                                                             </label>
                                                             <div className="flex items-center justify-center w-full">
@@ -932,15 +870,17 @@ export default function HackathonApplicationDashboard() {
                                                                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                                                                         <Upload className="w-8 h-8 mb-3 text-gray-400" />
                                                                         <p className="mb-2 text-sm text-gray-500"><span className="font-semibold">Click to upload</span> or drag and drop</p>
-                                                                        <p className="text-xs text-gray-500">
-                                                                            Allowed: {getAllowedExtensions(phase.uploadFormat).replace(/\./g, ' ').toUpperCase()}
+                                                                        <p className="text-xs text-gray-500 text-center px-2">
+                                                                            {phaseRules.allExtensions.length
+                                                                                ? `Allowed types: ${phaseRules.allExtensions.join(', ')}`
+                                                                                : 'No file types configured'}
                                                                         </p>
                                                                     </div>
                                                                     <input
                                                                         type="file"
                                                                         className="hidden"
-                                                                        onChange={(e) => handleFileChange(e, phase.uploadFormat)}
-                                                                        accept={getAllowedExtensions(phase.uploadFormat)}
+                                                                        onChange={(e) => handleFileChange(e, phase)}
+                                                                        accept={phaseRules.acceptAttr === '*' ? undefined : phaseRules.acceptAttr}
                                                                     />
                                                                 </label>
                                                             </div>
@@ -968,13 +908,13 @@ export default function HackathonApplicationDashboard() {
                                                         </div>
                                                     ) : (
                                                         <button
-                                                            onClick={() => handleSubmit(phase.id, phase.uploadFormat)}
+                                                            onClick={() => handleSubmit(phase.id, phase)}
                                                             disabled={
                                                                 submitting ||
                                                                 !solutionText.trim() ||
-                                                                (phase.uploadFormat === 'link' && (!submissionLink.trim() || !isValidDomain(submissionLink))) ||
-                                                                ((phase.uploadFormat === 'code' || phase.uploadFormat === 'any') && (!selectedFile || !submissionLink.trim() || !isValidDomain(submissionLink))) ||
-                                                                (phase.uploadFormat !== 'link' && phase.uploadFormat !== 'code' && phase.uploadFormat !== 'any' && !selectedFile)
+                                                                !phaseFormatLabels.length ||
+                                                                (phaseRules.needsLink && (!submissionLink.trim() || !isValidDomain(submissionLink))) ||
+                                                                (phaseRules.needsFile && !selectedFile)
                                                             }
                                                             className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                                         >
@@ -1049,7 +989,11 @@ export default function HackathonApplicationDashboard() {
                                     {previewingMember ? `Certificate Preview - ${previewingMember.name}` : 'Certificate Preview'}
                                 </h3>
                                 <p className="text-sm text-gray-500 mt-1">
-                                    {previewingMember ? `${previewingMember.role} • ${previewingMember.email}` : 'Review your certificate before downloading'}
+                                    {previewingMember
+                                        ? `${previewingMember.role} • ${previewingMember.email}`
+                                        : previewCertificate?.teamAffiliationLine
+                                            ? previewCertificate.teamAffiliationLine
+                                            : 'Review your certificate before downloading'}
                                 </p>
                             </div>
                             <div className="flex items-center gap-3">
@@ -1107,7 +1051,8 @@ export default function HackathonApplicationDashboard() {
                                         certificateType={previewCertificate.certificateType}
                                         isTeam={previewCertificate.isTeam}
                                         teamName={previewCertificate.teamName}
-                                        // ONLY use backend data from previewCertificate - NO fallbacks
+                                        certificateFor={previewCertificate.certificateFor}
+                                        teamAffiliationLine={previewCertificate.teamAffiliationLine}
                                         templateStyle={previewCertificate.templateStyle}
                                         logoUrl={previewCertificate.logoUrl}
                                         platformLogoUrl={previewCertificate.platformLogoUrl}

@@ -600,18 +600,24 @@ export default function IndustryHackathonDashboard() {
                                                                         <div>
                                                                             <label className="block text-xs font-bold text-gray-600 mb-1">Score (0-100)</label>
                                                                             <input
-                                                                                type="number"
-                                                                                min="0" max="100"
+                                                                                type="text"
+                                                                                inputMode="numeric"
+                                                                                pattern="[0-9]*"
+                                                                                autoComplete="off"
+                                                                                placeholder="0–100"
                                                                                 value={reviewScore}
                                                                                 onChange={(e) => {
-                                                                                    const value = e.target.value;
-                                                                                    const numValue = parseInt(value);
-                                                                                    if (value === '' || (numValue >= 0 && numValue <= 100)) {
-                                                                                        setReviewScore(value);
-                                                                                    } else if (numValue > 100) {
-                                                                                        toast.warning('Score cannot exceed 100');
-                                                                                        setReviewScore('100');
+                                                                                    const digits = e.target.value.replace(/\D/g, '').slice(0, 3);
+                                                                                    if (digits === '') {
+                                                                                        setReviewScore('');
+                                                                                        return;
                                                                                     }
+                                                                                    const n = parseInt(digits, 10);
+                                                                                    if (n > 100) {
+                                                                                        setReviewScore('100');
+                                                                                        return;
+                                                                                    }
+                                                                                    setReviewScore(digits);
                                                                                 }}
                                                                                 className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-purple-500"
                                                                             />

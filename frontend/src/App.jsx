@@ -1,10 +1,9 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
-import Dashboard from './components/Dashboard';
 import JobList from './components/JobList';
 import JobBuilder from './components/JobBuilder';
 import JobTracker from './components/JobTracker';
@@ -20,6 +19,7 @@ import IndustryHackathonDashboard from './components/IndustryHackathonDashboard'
 import IndustryHackathonResults from './components/IndustryHackathonResults';
 import IndustryCertificatePublishPage from './components/IndustryCertificatePublishPage';
 import StudentDatabase from './components/StudentDatabase';
+import StudentDatabaseIntro from './components/StudentDatabaseIntro';
 import DemoViewSwitcher from './components/DemoViewSwitcher';
 
 function AppShell() {
@@ -34,7 +34,7 @@ function AppShell() {
       {!isEmbeddedProfileBuilder && <Navbar />}
       {!isEmbeddedProfileBuilder && <DemoViewSwitcher />}
       <Routes>
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={<Navigate to="/apply-jobs" replace />} />
         <Route path="/apply-jobs" element={<JobList />} />
         <Route path="/post-jobs" element={<JobBuilder />} />
         <Route path="/job-tracker" element={<JobTracker />} />
@@ -51,7 +51,8 @@ function AppShell() {
         <Route path="/industry/hackathon/:hackathonId/dashboard" element={<IndustryHackathonDashboard />} />
         <Route path="/industry/hackathon/:hackathonId/results" element={<IndustryHackathonResults />} />
         <Route path="/industry/hackathon/:hackathonId/publish-certificates" element={<IndustryCertificatePublishPage />} />
-        <Route path="/student-database" element={<StudentDatabase />} />
+        <Route path="/student-database" element={<StudentDatabaseIntro />} />
+        <Route path="/student-database/browse" element={<StudentDatabase />} />
       </Routes>
       <ToastContainer
         position="top-right"

@@ -182,6 +182,13 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
   }, [useProfileData, userProfile, user]);
 
   const canApplyUsingProfile = Boolean(userProfile) && missingMandatoryFields.length === 0;
+  const showMissingOnly = useProfileData && Boolean(userProfile);
+  const needsResume = !showMissingOnly || missingMandatoryFields.includes('Resume');
+  const needsLinkedIn = !showMissingOnly || missingMandatoryFields.includes('LinkedIn');
+  const needsCoverLetter = !showMissingOnly || missingMandatoryFields.includes('Cover letter');
+  const needsPhone = !showMissingOnly || missingMandatoryFields.includes('Phone number');
+  const needsAvailability = !showMissingOnly || missingMandatoryFields.includes('Availability');
+  const needsExperience = !showMissingOnly || missingMandatoryFields.includes('Years of experience');
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -263,32 +270,32 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
       return;
     }
 
-    if (!formData.phoneNumber.trim()) {
+    if (needsPhone && !formData.phoneNumber.trim()) {
       setError('Phone number is required');
       return;
     }
 
-    if (!resume) {
+    if (needsResume && !resume) {
       setError('Please upload your resume or use your saved profile resume');
       return;
     }
 
-    if (!formData.linkedInUrl.trim()) {
+    if (needsLinkedIn && !formData.linkedInUrl.trim()) {
       setError('LinkedIn URL is required');
       return;
     }
 
-    if (!formData.coverLetter.trim()) {
+    if (needsCoverLetter && !formData.coverLetter.trim()) {
       setError('Cover letter is required');
       return;
     }
 
-    if (!formData.availability.trim()) {
+    if (needsAvailability && !formData.availability.trim()) {
       setError('Availability is required');
       return;
     }
 
-    if (!formData.experience.trim()) {
+    if (needsExperience && !formData.experience.trim()) {
       setError('Years of experience is required');
       return;
     }
@@ -429,11 +436,13 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
       setError('Profile not found. Please create your profile first.');
       return;
     }
-    if (!canApplyUsingProfile) {
-      setError(`Complete profile fields for quick apply: ${missingMandatoryFields.join(', ')}`);
-      return;
-    }
     setUseProfileData(true);
+    if (!canApplyUsingProfile) {
+      toast.info(`Fill only missing fields: ${missingMandatoryFields.join(', ')}`, {
+        position: "top-right",
+        autoClose: 3500,
+      });
+    }
   };
 
   const formatFileSize = (bytes) => {
@@ -530,10 +539,11 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
           {/* Personal Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
-              Personal Information
+              {showMissingOnly ? 'Missing Information' : 'Personal Information'}
             </h3>
             
             <div className="grid md:grid-cols-2 gap-4">
+              {!showMissingOnly && (
               <div>
                 <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
                   Full Name <span className="text-red-500">*</span>
@@ -549,7 +559,9 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
                   placeholder="John Doe"
                 />
               </div>
+              )}
 
+              {needsPhone && (
               <div>
                 <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 mb-1">
                   Phone Number <span className="text-red-500">*</span>
@@ -565,9 +577,11 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
                   placeholder="+1 (555) 123-4567"
                 />
               </div>
+              )}
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">
+              {needsLinkedIn && (
               <div>
                 <label htmlFor="linkedInUrl" className="block text-sm font-medium text-gray-700 mb-1">
                   LinkedIn Profile <span className="text-red-500">*</span>
@@ -583,7 +597,9 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
                   placeholder="https://linkedin.com/in/yourprofile"
                 />
               </div>
+              )}
 
+              {!showMissingOnly && (
               <div>
                 <label htmlFor="portfolioUrl" className="block text-sm font-medium text-gray-700 mb-1">
                   Portfolio/Website (Optional)
@@ -598,9 +614,11 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
                   placeholder="https://yourportfolio.com"
                 />
               </div>
+              )}
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">
+              {needsExperience && (
               <div>
                 <label htmlFor="experience" className="block text-sm font-medium text-gray-700 mb-1">
                   Years of Experience <span className="text-red-500">*</span>
@@ -616,7 +634,9 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
                   placeholder="e.g., 3-5 years"
                 />
               </div>
+              )}
 
+              {needsAvailability && (
               <div>
                 <label htmlFor="availability" className="block text-sm font-medium text-gray-700 mb-1">
                   Availability <span className="text-red-500">*</span>
@@ -636,10 +656,12 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
                   <option value="2+ months notice">2+ months notice</option>
                 </select>
               </div>
+              )}
             </div>
           </div>
 
           {/* Resume Upload */}
+          {needsResume && (
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
               Resume <span className="text-red-500">*</span>
@@ -717,8 +739,10 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
               </div>
             )}
           </div>
+          )}
 
           {/* Cover Letter */}
+          {needsCoverLetter && (
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-900 border-b border-gray-200 pb-2">
               Cover Letter <span className="text-red-500">*</span>
@@ -734,6 +758,7 @@ export default function JobApplicationForm({ job, onClose, onSuccess }) {
               placeholder="Tell us why you're interested in this position and what makes you a great fit..."
             />
           </div>
+          )}
 
           {/* Submit Buttons */}
           <div className="flex gap-4 pt-4 border-t border-gray-200">

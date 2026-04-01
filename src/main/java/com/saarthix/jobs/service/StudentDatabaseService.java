@@ -453,8 +453,7 @@ public class StudentDatabaseService {
         // Always visible fields
         dto.setStudentId(profile.getId() != null ? profile.getId() : "");
         dto.setFullName(profile.getFullName());
-        // Gender field - UserProfile doesn't have this field, so set to null
-        dto.setGender(null);
+        dto.setGender(resolveGender(profile));
         dto.setProfilePictureBase64(profile.getProfilePictureBase64());
         dto.setSkills(profile.getSkills());
         dto.setExperience(profile.getExperience());
@@ -656,6 +655,45 @@ public class StudentDatabaseService {
     private void logActivity(String industryEmail, String industryId, String studentEmail, String studentId, String actionType) {
         ActivityLog log = new ActivityLog(industryEmail, industryId, studentEmail, studentId, actionType);
         activityLogRepository.save(log);
+    }
+
+    /**
+     * Resolve gender from profile, then user account, then deterministic fallback for legacy dummy records.
+     */
+    private String resolveGender(UserProfile profile) {
+        if (profile == null) {
+            return "Prefer not to say";
+        }
+
+        if (profile.getGender() != null && !profile.getGender().trim().isEmpty()) {
+            return profile.getGender().trim();
+        }
+
+        try {
+            String email = profile.getApplicantEmail() != null ? profile.getApplicantEmail() : profile.getEmail();
+            if (email != null && !email.trim().isEmpty()) {
+                Optional<User> userOpt = userRepository.findByEmail(email.trim());
+                if (userOpt.isPresent()) {
+                    String userGender = userOpt.get().getGender();
+                    if (userGender != null && !userGender.trim().isEmpty()) {
+                        return userGender.trim();
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // Keep graceful fallback for missing/legacy records.
+        }
+
+        String seed = profile.getId() != null && !profile.getId().isEmpty()
+                ? profile.getId()
+                : (profile.getApplicantEmail() != null ? profile.getApplicantEmail() : profile.getFullName());
+        if (seed == null || seed.isEmpty()) {
+            return "Prefer not to say";
+        }
+
+        String[] fallback = {"Male", "Female", "Other"};
+        int idx = Math.abs(seed.hashCode()) % fallback.length;
+        return fallback[idx];
     }
     
     /**

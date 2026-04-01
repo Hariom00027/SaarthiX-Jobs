@@ -18,6 +18,7 @@ public class UserProfile {
     private String fullName;
     private String phoneNumber;
     private String email;  // Additional email if different
+    private String gender;
     
     // Profile Picture
     private String profilePictureFileName;
@@ -91,6 +92,9 @@ public class UserProfile {
 
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
+
+    public String getGender() { return gender; }
+    public void setGender(String gender) { this.gender = gender; }
 
     public String getProfilePictureFileName() { return profilePictureFileName; }
     public void setProfilePictureFileName(String profilePictureFileName) { this.profilePictureFileName = profilePictureFileName; }

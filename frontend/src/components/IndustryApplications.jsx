@@ -7,6 +7,9 @@ import { getMyPostedJobs, getApplicationsByJobId, updateApplicationStatusByIndus
 export default function IndustryApplications() {
   const navigate = useNavigate();
   const location = useLocation();
+  const teamIcon = `${import.meta.env.BASE_URL}business-team-icon%201.png`;
+  const editIcon = `${import.meta.env.BASE_URL}edit-icon%201.png`;
+  const deleteIcon = `${import.meta.env.BASE_URL}hospital-trash-can-icon%201.png`;
   const { isAuthenticated, isIndustry, loading: authLoading } = useAuth();
   const [jobs, setJobs] = useState([]);
   const [selectedJob, setSelectedJob] = useState(null);
@@ -29,6 +32,7 @@ export default function IndustryApplications() {
   const [companyFilter, setCompanyFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
   const [applicationSearchQuery, setApplicationSearchQuery] = useState('');
+  const normalize = (value) => (value || '').toString().trim().toLowerCase();
 
   // Status options with descriptions
   const statusOptions = [
@@ -106,8 +110,16 @@ export default function IndustryApplications() {
         const countData = counts.find((c) => c.jobId === job.id);
         return { ...job, applicationCount: countData?.count || 0 };
       });
-
-      setJobs(jobsWithCounts);
+      const parseJobCreatedAt = (job) => {
+        const dateVal = job?.createdAt;
+        if (Array.isArray(dateVal)) {
+          const [y, m, d, hh = 0, mm = 0, ss = 0] = dateVal;
+          return new Date(y, (m || 1) - 1, d || 1, hh, mm, ss).getTime();
+        }
+        const ts = dateVal ? new Date(dateVal).getTime() : 0;
+        return Number.isNaN(ts) ? 0 : ts;
+      };
+      setJobs(jobsWithCounts.sort((a, b) => parseJobCreatedAt(b) - parseJobCreatedAt(a)));
     } catch (err) {
       console.error('Error loading jobs:', err);
       let errorMessage = 'Failed to load your posted jobs';
@@ -361,22 +373,24 @@ export default function IndustryApplications() {
   const filteredJobs = jobs.filter(job => {
     // Search filter
     const matchesSearch = !jobSearchQuery || (() => {
-      const query = jobSearchQuery.toLowerCase();
+      const query = normalize(jobSearchQuery);
       return (
-        job.title?.toLowerCase().includes(query) ||
-        job.company?.toLowerCase().includes(query) ||
-        job.location?.toLowerCase().includes(query)
+        normalize(job.title).includes(query) ||
+        normalize(job.company).includes(query) ||
+        normalize(job.location).includes(query)
       );
     })();
     
     // Role filter
-    const matchesRole = roleFilter === 'All' || job.title === roleFilter;
+    const matchesRole = roleFilter === 'All' || normalize(job.title) === normalize(roleFilter);
     
     // Company filter
-    const matchesCompany = companyFilter === 'All' || job.company === companyFilter;
+    const matchesCompany = companyFilter === 'All' || normalize(job.company) === normalize(companyFilter);
     
     return matchesSearch && matchesRole && matchesCompany;
   });
+
+  const hasActiveJobFilters = Boolean(jobSearchQuery) || roleFilter !== 'All' || companyFilter !== 'All';
 
   // Filter applications based on search and status
   const filteredApplications = applications.filter(app => {
@@ -414,20 +428,20 @@ export default function IndustryApplications() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl">
+    <div className="min-h-screen bg-white py-6 px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto w-full max-w-[1280px]">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-indigo-50 rounded-xl flex items-center justify-center border border-indigo-200">
-                <svg className="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="flex h-[62px] w-[62px] items-center justify-center rounded-[10px] border border-black bg-white">
+                <svg className="w-8 h-8 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
               <div>
-                <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-2 tracking-tight">Manage Applications</h1>
-                <p className="text-gray-600 text-base">Review and manage applications for your posted jobs</p>
+                <h1 className="text-[36px] font-bold leading-[44px] tracking-[-0.5px] text-[#0F1724]">Manage Job Listings &amp; Applications</h1>
+                <p className="text-[16px] text-black/75">Review and manage applications for your posted jobs</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -458,12 +472,9 @@ export default function IndustryApplications() {
             </button> */}
             <button
               onClick={() => navigate('/post-jobs')}
-              className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-lg transition-colors text-sm shadow-md hover:shadow-lg flex items-center gap-2"
+              className="h-[39px] whitespace-nowrap rounded-[10px] bg-[#3170A5] px-5 text-[20px] font-medium text-white"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Post New Job
+              Post a New Job
             </button>
             </div>
           </div>
@@ -494,9 +505,10 @@ export default function IndustryApplications() {
           <div className="space-y-6">
             {/* Search and Filter Bar */}
             {jobs.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                <div className="flex flex-col md:flex-row gap-4">
-                  <div className="flex-1 relative">
+              <>
+              <div className="rounded-[8px] border border-black/50 bg-white px-4 py-[10px] shadow-[0px_8px_30px_rgba(0,0,0,0.08)]">
+                <div className="flex items-center gap-4">
+                  <div className="relative flex-1">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -504,46 +516,67 @@ export default function IndustryApplications() {
                     </div>
                     <input
                       type="text"
-                      placeholder="Search jobs by title, company, or location..."
+                      placeholder="Search by role, skills, company, or keywords..."
                       value={jobSearchQuery}
                       onChange={(e) => setJobSearchQuery(e.target.value)}
-                      className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 placeholder-gray-400 focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                      className="w-full border-none bg-transparent pl-10 pr-2 py-1 text-[16px] text-black/80 placeholder:text-black/50 focus:outline-none"
                     />
                   </div>
-                  {uniqueRoles.length > 0 && (
-                    <div className="md:w-64">
-                      <select
-                        value={roleFilter}
-                        onChange={(e) => setRoleFilter(e.target.value)}
-                        className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100"
-                      >
-                        <option value="All">All Roles</option>
-                        {uniqueRoles.map((role) => (
-                          <option key={role} value={role}>
-                            {role}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  {uniqueCompanies.length > 0 && (
-                    <div className="md:w-64">
-                      <select
-                        value={companyFilter}
-                        onChange={(e) => setCompanyFilter(e.target.value)}
-                        className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100"
-                      >
-                        <option value="All">All Companies</option>
-                        {uniqueCompanies.map((company) => (
-                          <option key={company} value={company}>
-                            {company}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
                 </div>
               </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
+                <div className="flex items-center gap-3">
+                  <svg className="h-4 w-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7h16M4 12h10M4 17h16M18 10l2 2 2-2" />
+                  </svg>
+                  <select
+                    value={roleFilter}
+                    onChange={(e) => setRoleFilter(e.target.value)}
+                    className="h-[31px] rounded-[6px] border border-black bg-[#F6FAFD] px-4 text-[14px] font-medium text-black"
+                  >
+                    <option value="All">Role</option>
+                    {uniqueRoles.map((role) => (
+                      <option key={role} value={role}>
+                        {role}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={companyFilter}
+                    onChange={(e) => setCompanyFilter(e.target.value)}
+                    className="h-[31px] rounded-[6px] border border-black bg-[#F6FAFD] px-4 text-[14px] font-medium text-black"
+                  >
+                    <option value="All">Company</option>
+                    {uniqueCompanies.map((company) => (
+                      <option key={company} value={company}>
+                        {company}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  onClick={loadJobs}
+                  className="h-[41px] rounded-[6px] bg-[#F8E7CF] px-5 text-[15px] font-semibold text-black"
+                >
+                  Refresh Results
+                </button>
+              </div>
+              {hasActiveJobFilters && (
+                <div className="pt-2">
+                  <button
+                    onClick={() => {
+                      setJobSearchQuery('');
+                      setRoleFilter('All');
+                      setCompanyFilter('All');
+                    }}
+                    className="rounded-[6px] border border-black/30 bg-white px-4 py-2 text-[13px] font-medium text-black hover:bg-black/5"
+                  >
+                    Clear Filters
+                  </button>
+                </div>
+              )}
+              </>
             )}
 
             {/* Jobs Grid */}
@@ -564,70 +597,90 @@ export default function IndustryApplications() {
                 <p className="text-gray-600 text-base">No jobs match your search criteria</p>
               </div>
             ) : (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid justify-items-start gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {filteredJobs.map((job) => (
                   <div
                     key={job.id}
-                    className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-lg transition-all duration-200 cursor-pointer group"
+                    className="h-[298px] w-[346px] rounded-[10px] border border-black/20 bg-white p-5 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.25)] transition-all duration-200 cursor-pointer group"
                     onClick={() => handleJobSelect(job)}
                   >
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <h3 className="font-bold text-lg text-gray-900 mb-1 line-clamp-2 group-hover:text-indigo-600 transition-colors">
-                          {job.title}
-                        </h3>
-                        <p className="text-sm text-gray-600 mb-1">{job.company}</p>
-                        <p className="text-xs text-gray-500">{job.location}</p>
-                      </div>
+                    <div className="mb-3 flex items-center justify-end">
                       {job.active ? (
-                        <span className="px-2 py-1 bg-green-50 text-green-700 rounded-lg text-xs font-semibold border border-green-200">
+                        <span className="rounded-[10px] bg-[#EAFFF4] px-3 py-[6px] text-[15px] font-medium text-[#09530F]">
                           Active
                         </span>
                       ) : (
-                        <span className="px-2 py-1 bg-gray-50 text-gray-700 rounded-lg text-xs font-semibold border border-gray-200">
-                          Draft
+                        <span className="rounded-[10px] bg-[#EAF4FF] px-3 py-[6px] text-[15px] font-medium text-[#3170A5]">
+                          Inactive
                         </span>
                       )}
                     </div>
+
+                    <h3 className="mb-2 line-clamp-1 text-[18px] font-semibold leading-[27px] text-[#0A1905]">
+                      {job.title}
+                    </h3>
+                    <div className="space-y-0.5 text-[14px] leading-[21px] text-black/75">
+                      <p>Location: {job.location || "Remote"}</p>
+                      <p>Company: {job.company || "Saarthix Partner"}</p>
+                      <p>Posted: 2 days ago</p>
+                      <p>Status: {job.active ? "Active" : "Inactive"}</p>
+                      <p>Applications: {job.applicationCount !== undefined ? job.applicationCount : 0}</p>
+                    </div>
                     
-                    <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                      <div className="flex items-center gap-2">
-                        <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                        <span className="text-sm font-semibold text-gray-900">
+                    <div className="mt-4 flex items-center justify-between border-t border-black/50 pt-3">
+                      <div className="flex items-center gap-1">
+                        <img src={teamIcon} alt="Applications" className="h-[27px] w-[50px] object-contain" />
+                        <span className="text-[15px] font-medium text-black">
                           {job.applicationCount !== undefined ? job.applicationCount : '...'} Application{job.applicationCount !== 1 ? 's' : ''}
                         </span>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex items-center gap-0.5">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             handleEditJob(job);
                           }}
-                          className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                          className="rounded p-0.5 hover:bg-indigo-50 transition-colors"
                           title="Edit Job"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
+                          <img src={editIcon} alt="Edit job" className="h-[18px] w-[19px] object-contain" />
                         </button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             handleDeleteClick(job);
                           }}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          className="rounded p-0.5 hover:bg-red-50 transition-colors"
                           title="Delete Job"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
+                          <img src={deleteIcon} alt="Delete job" className="h-[20px] w-[15px] object-contain" />
                         </button>
                       </div>
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {!selectedJob && (
+              <div className="mt-10 rounded-none bg-[#F3F7FF] py-8 px-4">
+                <h2 className="text-center text-[35px] font-semibold text-[#0F1724]">How It Works</h2>
+                <div className="mx-auto mt-10 grid max-w-[990px] gap-6 md:grid-cols-4">
+                  {[
+                    { n: "1", t: "Post a Job", d: "Add role details and requirements." },
+                    { n: "2", t: "Get Applications", d: "Receive candidate applications instantly." },
+                    { n: "3", t: "Shortlist Candidates", d: "Review and pick the best profiles." },
+                    { n: "4", t: "Connect & Hire", d: "Reach out and move forward with hiring." },
+                  ].map((step) => (
+                    <div key={step.n} className="relative rounded-[6px] border border-black/10 bg-[#F7FBFF] p-6 shadow-[0px_4px_4px_rgba(0,0,0,0.25)]">
+                      <div className="absolute -top-6 left-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#3170A5] text-[20px] font-bold text-white">
+                        {step.n}
+                      </div>
+                      <h3 className="mt-2 text-[18px] font-semibold text-[#0F1724]">{step.t}</h3>
+                      <p className="mt-3 text-[15px] leading-[22px] text-black/50">{step.d}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
