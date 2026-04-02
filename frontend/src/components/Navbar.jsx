@@ -636,7 +636,7 @@ const Navbar = () => {
                     aria-expanded={openStudentNav === "jobs"}
                     onClick={() => toggleStudentDropdown("jobs")}
                   >
-                    Jobs <span className="student-nav-caret" />
+                    Jobs and Hackathons <span className="student-nav-caret" />
                   </button>
                   {openStudentNav === "jobs" && (
                     <div
@@ -650,7 +650,7 @@ const Navbar = () => {
                         className="student-nav-dropdown-item"
                         onClick={() => setOpenStudentNav(null)}
                       >
-                        Apply to Jobs
+                        Apply to Jobs and Hackathons
                       </Link>
                     </div>
                   )}
@@ -1489,7 +1489,7 @@ const Navbar = () => {
                   </button>
                   <div style={{ height: 1, background: "#F3F4F6", margin: "6px 0" }} />
                   <div style={{ padding: "6px 14px 2px", fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6B7280", fontWeight: 700 }}>
-                    Jobs
+                    Jobs and Hackathons
                   </div>
                   <button
                     type="button"
@@ -1588,7 +1588,7 @@ const Navbar = () => {
                   </button>
                   <div style={{ height: 1, background: "#F3F4F6", margin: "6px 0" }} />
                   <div style={{ padding: "6px 14px 2px", fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6B7280", fontWeight: 700 }}>
-                    Jobs
+                    Jobs and Hackathons
                   </div>
                   <Link
                     to="/apply-jobs"
@@ -1607,7 +1607,7 @@ const Navbar = () => {
                       fontFamily: "'Inter', sans-serif",
                     }}
                   >
-                    Apply to Jobs
+                    Apply to Jobs and Hackathons
                   </Link>
 
                   <button

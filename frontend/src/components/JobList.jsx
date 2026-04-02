@@ -879,11 +879,11 @@ export default function JobList() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 gap-6 px-[58px] md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 justify-items-center gap-6 px-[58px] md:grid-cols-2 lg:grid-cols-3">
                 {displayedJobs.map((job) => (
                   <div
                     key={job.id}
-                    className="flex h-[331px] w-full max-w-[346px] flex-col rounded-[10px] border border-black/20 bg-white p-6 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.12)]"
+                    className="mx-auto flex h-[331px] w-full max-w-[346px] flex-col rounded-[10px] border border-black/20 bg-white p-6 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.12)]"
                   >
                     <div className="mb-3 flex items-center justify-end">
                       <span className={`rounded-[10px] px-3 py-1 text-[15px] font-medium ${job.source === "Local" ? "bg-[#EAF4FF] text-[#3170A5]" : "bg-[#EAFFF6] text-[#18430B]"}`}>

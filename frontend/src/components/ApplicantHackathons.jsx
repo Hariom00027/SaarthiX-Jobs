@@ -499,7 +499,6 @@ export default function ApplicantHackathons() {
 
   const totalHackathonsCount = allHackathons.length;
   const attendedHackathonsCount = myApplications.length;
-  const featuredHackathon = filteredHackathons[0] || allHackathons[0] || null;
   const userDisplayName = user?.name || user?.fullName || 'Applicant';
   const userAvatar =
     user?.profilePicture ||
@@ -508,14 +507,6 @@ export default function ApplicantHackathons() {
     user?.image ||
     null;
   const userInitial = String(userDisplayName).trim().charAt(0).toUpperCase() || 'A';
-  const featuredTeamSizeText = featuredHackathon?.teamSize
-    ? `1 - ${featuredHackathon.teamSize} Members`
-    : 'N/A';
-  const featuredDomainText =
-    featuredHackathon?.domain ||
-    featuredHackathon?.mode ||
-    featuredHackathon?.category ||
-    'N/A';
 
   if (authLoading || loading) {
     return (
@@ -559,23 +550,17 @@ export default function ApplicantHackathons() {
           </div>
           <div className="w-full max-w-[438px] rounded-[10px] border border-black/50 bg-[#A69E9E] p-4">
             <p className="font-['Instrument_Sans'] text-[30px] font-semibold italic leading-[37px] text-white">{totalHackathonsCount}+ Hackathons in India</p>
-            <div className="mt-2 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="flex h-[50px] w-[50px] items-center justify-center overflow-hidden rounded-full bg-black/20 text-white">
-                  {userAvatar ? (
-                    <img src={userAvatar} alt={userDisplayName} className="h-full w-full object-cover" />
-                  ) : (
-                    <span className="text-lg font-semibold">{userInitial}</span>
-                  )}
-                </div>
-                <div>
-                  <p className="font-['Instrument_Sans'] text-[20px] font-medium text-white">{userDisplayName}</p>
-                  <p className="font-['Instrument_Sans'] text-[11px] font-medium text-white">{attendedHackathonsCount} Hackathon Attended</p>
-                </div>
+            <div className="mt-2 flex items-center gap-2">
+              <div className="flex h-[50px] w-[50px] items-center justify-center overflow-hidden rounded-full bg-black/20 text-white">
+                {userAvatar ? (
+                  <img src={userAvatar} alt={userDisplayName} className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-lg font-semibold">{userInitial}</span>
+                )}
               </div>
-              <div className="text-right font-['Instrument_Sans'] text-[15px] italic text-white">
-                <p>Team Size : {featuredTeamSizeText}</p>
-                <p>Domain : {featuredDomainText}</p>
+              <div>
+                <p className="font-['Instrument_Sans'] text-[20px] font-medium text-white">{userDisplayName}</p>
+                <p className="font-['Instrument_Sans'] text-[11px] font-medium text-white">{attendedHackathonsCount} Hackathon Attended</p>
               </div>
             </div>
           </div>
