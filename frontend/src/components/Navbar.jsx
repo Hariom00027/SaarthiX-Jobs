@@ -11,7 +11,7 @@ const getAuthToken = () =>
   localStorage.getItem("token") || localStorage.getItem("somethingx_auth_token") || "";
 
 const Navbar = () => {
-  const { user, isAuthenticated, clearAuth } = useAuth();
+  const { user, isAuthenticated, clearAuth, updateAuth } = useAuth();
   const location = useLocation();
   const isHomePage = location.pathname === "/";
   const isStudent =
@@ -34,6 +34,7 @@ const Navbar = () => {
   const dropdownRef = useRef(null);
   const mobileMenuRef = useRef(null);
   const mobileToggleRef = useRef(null);
+  const industryLogoInputRef = useRef(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -48,6 +49,7 @@ const Navbar = () => {
   const instNavCloseTimer = useRef(null);
   const [openIndustryNav, setOpenIndustryNav] = useState(null); // 'talent' | null
   const industryNavCloseTimer = useRef(null);
+  const [industryLogoSrc, setIndustryLogoSrc] = useState("");
 
   const showDashboard = true;
 
@@ -210,6 +212,68 @@ const Navbar = () => {
 
   const isInstitute = isAuthenticated && user?.userType === "INSTITUTE";
   const isIndustry = isAuthenticated && user?.userType === "INDUSTRY";
+  const isInstituteOrIndustry = isInstitute || isIndustry;
+
+  const openProfilePage = (after) => {
+    after?.();
+    if (isInstituteOrIndustry) {
+      redirectToSomethingX("/edit-your-details", getAuthToken(), user);
+      return;
+    }
+    window.location.href = "/build-profile";
+  };
+  const industryLogoStorageKey = useMemo(() => {
+    const identity = user?.email || user?.id || "default";
+    return `jobs_industry_logo_${identity}`;
+  }, [user?.email, user?.id]);
+
+  useEffect(() => {
+    if (!isIndustry) {
+      setIndustryLogoSrc("");
+      return;
+    }
+    const storedLogo = localStorage.getItem(industryLogoStorageKey) || "";
+    setIndustryLogoSrc(storedLogo);
+  }, [isIndustry, industryLogoStorageKey]);
+
+  const industryAvatarSrc =
+    industryLogoSrc ||
+    user?.picture ||
+    user?.profilePicture ||
+    user?.avatar ||
+    "";
+
+  const handleIndustryLogoUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type?.startsWith("image/")) {
+      window.alert("Please upload a valid image file.");
+      event.target.value = "";
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      window.alert("Image size should be less than 5MB.");
+      event.target.value = "";
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const logoData = typeof reader.result === "string" ? reader.result : "";
+      if (!logoData) return;
+      setIndustryLogoSrc(logoData);
+      localStorage.setItem(industryLogoStorageKey, logoData);
+      if (updateAuth && user) {
+        updateAuth({
+          ...user,
+          picture: logoData,
+          authenticated: true,
+        });
+      }
+      setShowUserMenu(false);
+    };
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  };
 
   const openInstDropdown = (key) => {
     if (!isInstitute || isMobile) return;
@@ -636,7 +700,7 @@ const Navbar = () => {
                     aria-expanded={openStudentNav === "jobs"}
                     onClick={() => toggleStudentDropdown("jobs")}
                   >
-                    Jobs <span className="student-nav-caret" />
+                    Jobs and Hackathons <span className="student-nav-caret" />
                   </button>
                   {openStudentNav === "jobs" && (
                     <div
@@ -650,7 +714,7 @@ const Navbar = () => {
                         className="student-nav-dropdown-item"
                         onClick={() => setOpenStudentNav(null)}
                       >
-                        Apply to Jobs
+                        Apply to Jobs and Hackathons
                       </Link>
                     </div>
                   )}
@@ -1023,19 +1087,35 @@ const Navbar = () => {
                       </>
                     ) : (
                       <>
-                        <span
-                          aria-hidden="true"
-                          style={{
-                            width: "38px",
-                            height: "36px",
-                            borderRadius: "9999px",
-                            background: "#D9D9D9",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            flex: "0 0 auto",
-                          }}
-                        />
+                        {isIndustry && industryAvatarSrc ? (
+                          <img
+                            src={industryAvatarSrc}
+                            alt={user?.name || "Industry logo"}
+                            style={{
+                              width: "38px",
+                              height: "36px",
+                              borderRadius: "9999px",
+                              objectFit: "cover",
+                              border: "1px solid #D1D5DB",
+                              display: "inline-flex",
+                              flex: "0 0 auto",
+                            }}
+                          />
+                        ) : (
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              width: "38px",
+                              height: "36px",
+                              borderRadius: "9999px",
+                              background: "#D9D9D9",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flex: "0 0 auto",
+                            }}
+                          />
+                        )}
                         <span>Profile</span>
                       </>
                     )}
@@ -1058,21 +1138,60 @@ const Navbar = () => {
                         overflow: "hidden",
                       }}
                     >
-                      <Link
-                        to="/build-profile"
-                        onClick={() => setShowUserMenu(false)}
+                      <button
+                        type="button"
+                        onClick={() => openProfilePage(() => setShowUserMenu(false))}
                         style={{
                           display: "block",
+                          width: "100%",
                           padding: "12px 16px",
                           color: "#333333",
                           textDecoration: "none",
                           fontWeight: 500,
                           fontSize: "15px",
                           borderBottom: "1px solid #F3F4F6",
+                          background: "none",
+                          borderLeft: "none",
+                          borderRight: "none",
+                          borderTop: "none",
+                          textAlign: "left",
+                          cursor: "pointer",
+                          fontFamily: "'Inter', sans-serif",
                         }}
                       >
                         Profile
-                      </Link>
+                      </button>
+                      {isIndustry && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => industryLogoInputRef.current?.click()}
+                            style={{
+                              display: "block",
+                              width: "100%",
+                              padding: "12px 16px",
+                              background: "none",
+                              border: "none",
+                              borderBottom: "1px solid #F3F4F6",
+                              color: "#333333",
+                              textAlign: "left",
+                              fontWeight: 500,
+                              fontSize: "15px",
+                              cursor: "pointer",
+                              fontFamily: "'Inter', sans-serif",
+                            }}
+                          >
+                            Upload Industry Logo
+                          </button>
+                          <input
+                            ref={industryLogoInputRef}
+                            type="file"
+                            accept="image/*"
+                            onChange={handleIndustryLogoUpload}
+                            style={{ display: "none" }}
+                          />
+                        </>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -1489,7 +1608,7 @@ const Navbar = () => {
                   </button>
                   <div style={{ height: 1, background: "#F3F4F6", margin: "6px 0" }} />
                   <div style={{ padding: "6px 14px 2px", fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6B7280", fontWeight: 700 }}>
-                    Jobs
+                    Jobs and Hackathons
                   </div>
                   <button
                     type="button"
@@ -1588,7 +1707,7 @@ const Navbar = () => {
                   </button>
                   <div style={{ height: 1, background: "#F3F4F6", margin: "6px 0" }} />
                   <div style={{ padding: "6px 14px 2px", fontSize: "11px", letterSpacing: "0.08em", textTransform: "uppercase", color: "#6B7280", fontWeight: 700 }}>
-                    Jobs
+                    Jobs and Hackathons
                   </div>
                   <Link
                     to="/apply-jobs"
@@ -1607,7 +1726,7 @@ const Navbar = () => {
                       fontFamily: "'Inter', sans-serif",
                     }}
                   >
-                    Apply to Jobs
+                    Apply to Jobs and Hackathons
                   </Link>
 
                   <button
@@ -1777,20 +1896,26 @@ const Navbar = () => {
               >
                 {isAuthenticated ? (
                   <>
-                    <Link
-                      to="/build-profile"
-                      onClick={() => setIsMobileMenuOpen(false)}
+                    <button
+                      type="button"
+                      onClick={() => openProfilePage(() => setIsMobileMenuOpen(false))}
                       style={{
-                      padding: '8px 12px',
+                        width: "100%",
+                        padding: '8px 12px',
                         borderRadius: '8px',
                         textDecoration: 'none',
                         color: '#333333',
                         fontWeight: '500',
-                      fontSize: '14px'
+                        fontSize: '14px',
+                        background: "none",
+                        border: "none",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        fontFamily: "'Inter', sans-serif",
                       }}
                     >
                       Profile
-                    </Link>
+                    </button>
 
                     {showDashboard && (
                       <button

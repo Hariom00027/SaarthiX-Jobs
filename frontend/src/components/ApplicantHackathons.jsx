@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useAuth } from '../context/AuthContext';
 import { getAllHackathons, getMyHackathonApplications, applyForHackathon } from '../api/jobApi';
@@ -7,11 +7,11 @@ import { parsePhaseFormatLabels, describeAllowedFormatsForUi } from '../utils/ha
 
 export default function ApplicantHackathons() {
   const navigate = useNavigate();
-  const hackathonIcon = `${import.meta.env.BASE_URL}Container%20(2).png`;
+  const location = useLocation();
+  const hackathonHeroImage = `${import.meta.env.BASE_URL}Golden%20trophy%20with%20glowing%20data%20graph.png`;
   const prizeIcon = `${import.meta.env.BASE_URL}prize-icon%201.png`;
   const externalLinkIcon = `${import.meta.env.BASE_URL}Container%20(7).png`;
   const { isAuthenticated, loading: authLoading, isApplicantOrStudent, user } = useAuth();
-  const [activeTab, setActiveTab] = useState('browse'); // 'browse' or 'my-applications'
   const [allHackathons, setAllHackathons] = useState([]);
   const [myApplications, setMyApplications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -381,7 +381,6 @@ export default function ApplicantHackathons() {
 
       resetForm();
       await loadHackathons();
-      setActiveTab('my-applications');
     } catch (err) {
       console.error('Error submitting application:', err);
       console.error('Error response status:', err.response?.status);
@@ -497,26 +496,6 @@ export default function ApplicantHackathons() {
     setFilterMode('');
   };
 
-  const totalHackathonsCount = allHackathons.length;
-  const attendedHackathonsCount = myApplications.length;
-  const featuredHackathon = filteredHackathons[0] || allHackathons[0] || null;
-  const userDisplayName = user?.name || user?.fullName || 'Applicant';
-  const userAvatar =
-    user?.profilePicture ||
-    user?.avatar ||
-    user?.photo ||
-    user?.image ||
-    null;
-  const userInitial = String(userDisplayName).trim().charAt(0).toUpperCase() || 'A';
-  const featuredTeamSizeText = featuredHackathon?.teamSize
-    ? `1 - ${featuredHackathon.teamSize} Members`
-    : 'N/A';
-  const featuredDomainText =
-    featuredHackathon?.domain ||
-    featuredHackathon?.mode ||
-    featuredHackathon?.category ||
-    'N/A';
-
   if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 via-white to-gray-50">
@@ -532,55 +511,137 @@ export default function ApplicantHackathons() {
     return null;
   }
 
+  const navInactiveClass =
+    'h-[39px] rounded-[6px] border border-white/30 bg-white/10 px-[18px] py-[10px] text-[14px] font-medium leading-[17px] text-white no-underline backdrop-blur-sm transition-colors hover:bg-white/15';
+  const navActiveClass =
+    'h-[39px] rounded-[6px] border border-[#F5D2BC] bg-[#F5D2BC] px-[18px] py-[10px] text-[14px] font-semibold leading-[17px] text-[#1a140e] no-underline shadow-[0_4px_20px_rgba(245,210,188,0.35)]';
+
   return (
-    <div className="min-h-screen bg-[#ffffff] px-4 py-5 sm:px-6 lg:px-8">
-      <div className="mx-auto w-full max-w-[1440px]">
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => navigate('/apply-jobs')}
-            className="h-[39px] rounded-[6px] border border-black bg-white px-[18px] text-[14px] font-medium text-black"
-          >
-            Apply for Jobs
-          </button>
-          <button className="h-[39px] rounded-[6px] bg-black px-[18px] text-[14px] font-medium text-white shadow-[0_1px_2px_rgba(37,99,235,0.2)]">
-            Hackathons
-          </button>
-        </div>
+    <div className="min-h-screen bg-[#ffffff] px-0 py-3 sm:px-0 lg:px-0">
+      <div className="w-full max-w-none">
+        <section
+          className="relative min-h-[400px] overflow-visible border border-[#d5dde8] md:min-h-[460px] lg:min-h-[480px]"
+          style={{
+            width: '100%',
+            maxWidth: '100%',
+            borderRadius: '10px',
+            marginTop: '8px',
+            backgroundColor: '#0f1724',
+            backgroundImage: `
+              radial-gradient(ellipse 90% 60% at 15% 35%, rgba(245, 210, 188, 0.14) 0%, transparent 55%),
+              radial-gradient(ellipse 70% 50% at 92% 18%, rgba(49, 112, 165, 0.5) 0%, transparent 50%),
+              radial-gradient(ellipse 50% 40% at 70% 85%, rgba(49, 112, 165, 0.22) 0%, transparent 45%),
+              linear-gradient(168deg, #0b1220 0%, #152433 38%, #1a3550 72%, #0f2840 100%)
+            `,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+          }}
+        >
+          <div
+            className="pointer-events-none absolute inset-0 rounded-[10px] opacity-[0.06]"
+            style={{
+              backgroundImage:
+                'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
+              backgroundSize: '28px 28px',
+            }}
+            aria-hidden
+          />
 
-        <div className="mb-3 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="flex h-[64px] w-[64px] items-center justify-center rounded-[16px] border border-black/40 bg-white shadow-sm">
-              <img src={hackathonIcon} alt="Hackathon" className="h-[34px] w-[34px] object-contain" />
+          <div className="relative mx-auto max-w-[1440px] px-4 pb-10 pt-6 sm:px-8 sm:pt-7 md:px-12 md:pb-12 lg:px-14 xl:px-16">
+            <div className="mb-6 flex flex-wrap gap-3 sm:mb-7 md:mb-8">
+              <Link
+                to="/apply-jobs"
+                className={
+                  location.pathname === '/apply-jobs' ? navActiveClass : navInactiveClass
+                }
+              >
+                Apply for Jobs
+              </Link>
+              <Link
+                to="/browse-hackathons"
+                className={
+                  location.pathname === '/browse-hackathons' ? navActiveClass : navInactiveClass
+                }
+              >
+                Hackathons
+              </Link>
+              <Link
+                to="/job-tracker"
+                className={
+                  location.pathname === '/job-tracker' ? navActiveClass : navInactiveClass
+                }
+              >
+                My Applications
+              </Link>
             </div>
-            <div>
-              <h1 className="text-[36px] font-bold leading-[44px] tracking-[-0.5px] text-[#0F1724]">Hackathons</h1>
-              <p className="text-[16px] text-black/75">Uncover top-tier hackathons, build your team, and accelerate your career</p>
-            </div>
-          </div>
-          <div className="w-full max-w-[438px] rounded-[10px] border border-black/50 bg-[#A69E9E] p-4">
-            <p className="font-['Instrument_Sans'] text-[30px] font-semibold italic leading-[37px] text-white">{totalHackathonsCount}+ Hackathons in India</p>
-            <div className="mt-2 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="flex h-[50px] w-[50px] items-center justify-center overflow-hidden rounded-full bg-black/20 text-white">
-                  {userAvatar ? (
-                    <img src={userAvatar} alt={userDisplayName} className="h-full w-full object-cover" />
-                  ) : (
-                    <span className="text-lg font-semibold">{userInitial}</span>
-                  )}
-                </div>
-                <div>
-                  <p className="font-['Instrument_Sans'] text-[20px] font-medium text-white">{userDisplayName}</p>
-                  <p className="font-['Instrument_Sans'] text-[11px] font-medium text-white">{attendedHackathonsCount} Hackathon Attended</p>
+
+            <div className="grid grid-cols-1 items-center gap-6 md:grid-cols-2 md:items-start md:gap-6 lg:gap-8">
+              <div className="min-w-0">
+                <p
+                  className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#F5D2BC]/95"
+                  style={{ fontFamily: "'Instrument Sans', 'Inter', sans-serif" }}
+                >
+                  Build · Compete · Ship
+                </p>
+                <h1
+                  className="text-[clamp(2.1rem,5vw,3.95rem)] font-bold leading-[1.08] tracking-[-1.2px] text-transparent"
+                  style={{
+                    fontFamily: "'Instrument Sans', 'Inter', sans-serif",
+                    background: 'linear-gradient(185deg, #F5D2BC 8%, #FFF4EB 42%, #c5d9ec 100%)',
+                    WebkitBackgroundClip: 'text',
+                    backgroundClip: 'text',
+                  }}
+                >
+                  Your next
+                  <br />
+                  hackathon win
+                  <br />
+                  starts here.
+                </h1>
+                <p
+                  className="mt-5 max-w-[560px] text-[clamp(0.95rem,1.9vw,1.25rem)] font-medium leading-[1.45]"
+                  style={{
+                    fontFamily: "'Instrument Sans', 'Inter', sans-serif",
+                    color: '#FFF4EB',
+                  }}
+                >
+                  Discover challenges from leading companies, rally your crew or go solo, submit phases on time, and follow every application from your tracker.
+                </p>
+                <div className="mt-7 flex flex-wrap gap-2 sm:mt-8">
+                  <span className="rounded-full border border-white/20 bg-white/[0.08] px-3.5 py-1.5 text-[12px] font-semibold text-white/90">
+                    Live events · Deadlines
+                  </span>
+                  <span className="rounded-full border border-white/20 bg-white/[0.08] px-3.5 py-1.5 text-[12px] font-semibold text-white/90">
+                    Team or solo
+                  </span>
+                  <span className="rounded-full border border-[#F5D2BC]/35 bg-[#F5D2BC]/12 px-3.5 py-1.5 text-[12px] font-semibold text-[#F5D2BC]">
+                    Prizes · Problem statements
+                  </span>
                 </div>
               </div>
-              <div className="text-right font-['Instrument_Sans'] text-[15px] italic text-white">
-                <p>Team Size : {featuredTeamSizeText}</p>
-                <p>Domain : {featuredDomainText}</p>
+
+              <div className="relative flex min-h-[240px] items-start justify-center pt-1 sm:min-h-[260px] md:min-h-[300px] md:justify-end md:pr-0 md:pt-0 lg:min-h-[320px]">
+                <div
+                  className="pointer-events-none absolute left-[40%] top-[52%] -z-10 h-[min(100%,380px)] w-[min(100%,520px)] -translate-x-1/2 -translate-y-1/2 opacity-[0.5] blur-[56px] md:left-[38%] md:top-[50%] md:h-[420px] md:w-[580px] lg:left-[34%] lg:top-[48%] lg:w-[640px]"
+                  style={{
+                    background:
+                      'radial-gradient(ellipse at center, rgba(245, 210, 188, 0.45) 0%, rgba(212, 175, 55, 0.22) 32%, rgba(49, 112, 165, 0.14) 52%, transparent 72%)',
+                  }}
+                  aria-hidden
+                />
+                <img
+                  src={hackathonHeroImage}
+                  alt="Golden trophy with a glowing data graph — compete and grow"
+                  className="relative z-0 mt-2 h-auto w-full max-w-[min(520px,96vw)] -translate-x-3 translate-y-1 object-contain object-center drop-shadow-[0_20px_56px_rgba(0,0,0,0.5)] sm:mt-3 sm:max-w-[min(580px,92vw)] sm:-translate-x-4 sm:translate-y-1.5 md:max-w-[min(640px,58vw)] md:-translate-x-8 md:translate-y-2 lg:max-w-[min(700px,52vw)] lg:-translate-x-12 lg:translate-y-2.5 xl:max-w-[min(760px,48vw)] lg:object-left"
+                />
               </div>
             </div>
           </div>
-        </div>
+        </section>
+      </div>
 
+      <div className="mx-auto w-full max-w-[1440px] px-4 pb-8 pt-8 sm:px-6 sm:pt-10 lg:px-8">
         {error && (
           <div className="mb-6 rounded-xl bg-red-50 border border-red-200 p-5 text-red-700 text-sm font-medium">
             <div className="flex items-start gap-3">
@@ -601,40 +662,8 @@ export default function ApplicantHackathons() {
           </div>
         )}
 
-        <div className="mb-5 flex overflow-hidden rounded-[6px] border border-black/10 bg-white">
-          <div className="flex w-full">
-            <button
-              onClick={() => {
-                setActiveTab('browse');
-                clearBrowseFilters();
-              }}
-              className={`flex h-[54px] flex-1 items-center justify-center gap-2 border ${
-                activeTab === 'browse'
-                  ? 'border-b-[3px] border-[#3170A5] text-[#3170A5]'
-                  : 'border-black/50 text-black/75'
-              }`}
-            >
-              <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-              Find Your Hackathon
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('my-applications');
-                clearBrowseFilters();
-              }}
-              className={`flex h-[54px] flex-1 items-center justify-center gap-2 border ${
-                activeTab === 'my-applications'
-                  ? 'border-b-[3px] border-[#3170A5] text-[#3170A5]'
-                  : 'border-black/50 text-black/75'
-              }`}
-            >
-              <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              My Applications
-            </button>
-          </div>
-        </div>
-
-        {activeTab === 'browse' && allHackathons.length > 0 && (
+        <div id="hackathon-filters" className="scroll-mt-6 md:scroll-mt-8">
+        {allHackathons.length > 0 && (
           <div className="mb-5 rounded-[10px] border border-black/50 bg-white px-4 py-4 shadow-sm">
             <p className="mb-3 text-[13px] font-medium text-black/60">Filter hackathons using the dropdowns below.</p>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 xl:items-end">
@@ -720,9 +749,9 @@ export default function ApplicantHackathons() {
             </div>
           </div>
         )}
+        </div>
 
-        {activeTab === 'browse' && (
-          <>
+        <>
             {filteredHackathons.length === 0 ? (
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
                 <div className="text-5xl mb-4">{allHackathons.length === 0 ? '📭' : '🔍'}</div>
@@ -816,82 +845,7 @@ export default function ApplicantHackathons() {
                 </div>
               </>
             )}
-          </>
-        )}
-
-        {/* My Applications Tab */}
-        {activeTab === 'my-applications' && (
-          <>
-            {myApplications.length === 0 ? (
-              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
-                <div className="text-5xl mb-4">📋</div>
-                <h3 className="font-bold text-xl text-gray-900 mb-2">No Applications Yet</h3>
-                <p className="text-gray-600 text-base mb-6">Start by applying to hackathons</p>
-                <button
-                  onClick={() => setActiveTab('browse')}
-                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors text-sm shadow-md hover:shadow-lg"
-                >
-                  Browse Hackathons
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-                {myApplications.map((application) => {
-                  const hackathon = allHackathons.find(h => h.id === application.hackathonId);
-                  return (
-                    <div
-                      key={application.id}
-                      className="rounded-[10px] border border-black/30 bg-white p-6 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.12)]"
-                    >
-                      <div className="mb-4">
-                        <h3 className="mb-1 text-[22px] font-semibold text-[#0F1724]">
-                          {hackathon?.title || 'Unknown Hackathon'}
-                        </h3>
-                        <p className="mb-2 text-[14px] text-black/75">{hackathon?.company || 'N/A'}</p>
-                        <span className="inline-flex items-center rounded-lg border border-green-200 bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
-                          ✓ Applied
-                        </span>
-                      </div>
-
-                      <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 p-3">
-                        <p className="mb-1 text-xs text-gray-600">Application Type</p>
-                        <p className="text-sm font-semibold text-gray-900">
-                          {application.asTeam ? `Team: ${application.teamName}` : 'Individual'}
-                        </p>
-                        {application.asTeam && (
-                          <p className="text-xs text-gray-600 mt-1">Team Size: {application.teamSize}</p>
-                        )}
-                      </div>
-
-                      <div className="mb-4">
-                        <button
-                          onClick={() => navigate(`/hackathon-application/${application.id}`)}
-                          className="w-full rounded-lg bg-[#3170A5] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2b6494]"
-                        >
-                          View Application Dashboard
-                        </button>
-                      </div>
-
-                      <div className="flex items-center justify-between text-xs text-gray-500">
-                        <span>Applied on {new Date(application.appliedAt).toLocaleDateString()}</span>
-                        {hackathon?.submissionUrl && (
-                          <a
-                            href={hackathon.submissionUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 hover:text-blue-700 font-semibold"
-                          >
-                            Open link →
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        )}
+        </>
 
         {showDetailsModal && detailsHackathon && (
           <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm p-4 py-6 overflow-y-auto">
