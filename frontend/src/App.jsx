@@ -22,6 +22,23 @@ import StudentDatabase from './components/StudentDatabase';
 import StudentDatabaseIntro from './components/StudentDatabaseIntro';
 import DemoViewSwitcher from './components/DemoViewSwitcher';
 import { useAuth } from './context/AuthContext';
+import { redirectToSomethingX } from './config/redirectUrls';
+
+function BuildProfileRouteGuard() {
+  const { user } = useAuth();
+
+  React.useEffect(() => {
+    if (user?.userType === 'INDUSTRY' || user?.userType === 'INSTITUTE') {
+      redirectToSomethingX('/edit-your-details');
+    }
+  }, [user]);
+
+  if (user?.userType === 'INDUSTRY' || user?.userType === 'INSTITUTE') {
+    return null;
+  }
+
+  return <ProfileBuilder />;
+}
 
 function AppShell() {
   const location = useLocation();
@@ -47,8 +64,8 @@ function AppShell() {
         <Route path="/post-jobs" element={<JobBuilder />} />
         <Route path="/job-tracker" element={<JobTracker />} />
         <Route path="/edit-profile" element={<EditProfile />} />
-        <Route path="/build-profile" element={<ProfileBuilder />} />
-        <Route path="/view-profile" element={<ProfileBuilder />} />
+        <Route path="/build-profile" element={<BuildProfileRouteGuard />} />
+        <Route path="/view-profile" element={<BuildProfileRouteGuard />} />
         <Route path="/manage-applications" element={<IndustryApplications />} />
         <Route path="/manage-hackathons" element={<IndustryHackathons />} />
         <Route path="/create-hackathon" element={<HackathonForm />} />

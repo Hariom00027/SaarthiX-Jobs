@@ -212,6 +212,16 @@ const Navbar = () => {
 
   const isInstitute = isAuthenticated && user?.userType === "INSTITUTE";
   const isIndustry = isAuthenticated && user?.userType === "INDUSTRY";
+  const isInstituteOrIndustry = isInstitute || isIndustry;
+
+  const openProfilePage = (after) => {
+    after?.();
+    if (isInstituteOrIndustry) {
+      redirectToSomethingX("/edit-your-details", getAuthToken(), user);
+      return;
+    }
+    window.location.href = "/build-profile";
+  };
   const industryLogoStorageKey = useMemo(() => {
     const identity = user?.email || user?.id || "default";
     return `jobs_industry_logo_${identity}`;
@@ -1128,21 +1138,29 @@ const Navbar = () => {
                         overflow: "hidden",
                       }}
                     >
-                      <Link
-                        to="/build-profile"
-                        onClick={() => setShowUserMenu(false)}
+                      <button
+                        type="button"
+                        onClick={() => openProfilePage(() => setShowUserMenu(false))}
                         style={{
                           display: "block",
+                          width: "100%",
                           padding: "12px 16px",
                           color: "#333333",
                           textDecoration: "none",
                           fontWeight: 500,
                           fontSize: "15px",
                           borderBottom: "1px solid #F3F4F6",
+                          background: "none",
+                          borderLeft: "none",
+                          borderRight: "none",
+                          borderTop: "none",
+                          textAlign: "left",
+                          cursor: "pointer",
+                          fontFamily: "'Inter', sans-serif",
                         }}
                       >
                         Profile
-                      </Link>
+                      </button>
                       {isIndustry && (
                         <>
                           <button
@@ -1878,20 +1896,26 @@ const Navbar = () => {
               >
                 {isAuthenticated ? (
                   <>
-                    <Link
-                      to="/build-profile"
-                      onClick={() => setIsMobileMenuOpen(false)}
+                    <button
+                      type="button"
+                      onClick={() => openProfilePage(() => setIsMobileMenuOpen(false))}
                       style={{
-                      padding: '8px 12px',
+                        width: "100%",
+                        padding: '8px 12px',
                         borderRadius: '8px',
                         textDecoration: 'none',
                         color: '#333333',
                         fontWeight: '500',
-                      fontSize: '14px'
+                        fontSize: '14px',
+                        background: "none",
+                        border: "none",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        fontFamily: "'Inter', sans-serif",
                       }}
                     >
                       Profile
-                    </Link>
+                    </button>
 
                     {showDashboard && (
                       <button
