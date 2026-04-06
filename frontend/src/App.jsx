@@ -21,9 +21,11 @@ import IndustryCertificatePublishPage from './components/IndustryCertificatePubl
 import StudentDatabase from './components/StudentDatabase';
 import StudentDatabaseIntro from './components/StudentDatabaseIntro';
 import DemoViewSwitcher from './components/DemoViewSwitcher';
+import { useAuth } from './context/AuthContext';
 
 function AppShell() {
   const location = useLocation();
+  const { isIndustry } = useAuth();
   const searchParams = new URLSearchParams(location.search || '');
   const isEmbeddedProfileBuilder =
     searchParams.get('embed') === '1' &&
@@ -34,8 +36,14 @@ function AppShell() {
       {!isEmbeddedProfileBuilder && <Navbar />}
       {!isEmbeddedProfileBuilder && <DemoViewSwitcher />}
       <Routes>
-        <Route path="/" element={<Navigate to="/apply-jobs" replace />} />
-        <Route path="/apply-jobs" element={<JobList />} />
+        <Route
+          path="/"
+          element={<Navigate to={isIndustry ? "/manage-applications" : "/apply-jobs"} replace />}
+        />
+        <Route
+          path="/apply-jobs"
+          element={isIndustry ? <Navigate to="/manage-applications" replace /> : <JobList />}
+        />
         <Route path="/post-jobs" element={<JobBuilder />} />
         <Route path="/job-tracker" element={<JobTracker />} />
         <Route path="/edit-profile" element={<EditProfile />} />

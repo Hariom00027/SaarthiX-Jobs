@@ -597,11 +597,11 @@ export default function IndustryApplications() {
                 <p className="text-gray-600 text-base">No jobs match your search criteria</p>
               </div>
             ) : (
-              <div className="grid justify-items-start gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid grid-cols-1 justify-items-center gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {filteredJobs.map((job) => (
                   <div
                     key={job.id}
-                    className="h-[298px] w-[346px] rounded-[10px] border border-black/20 bg-white p-5 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.25)] transition-all duration-200 cursor-pointer group"
+                    className="mx-auto h-[298px] w-full max-w-[346px] rounded-[10px] border border-black/20 bg-white p-5 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.25)] transition-all duration-200 cursor-pointer group"
                     onClick={() => handleJobSelect(job)}
                   >
                     <div className="mb-3 flex items-center justify-end">

@@ -652,146 +652,195 @@ export default function JobList() {
     filterSource !== "All" ||
     Boolean(searchQuery);
 
+  const scrollToJobFilters = () => {
+    document.getElementById("job-list-filters")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
+  const jobsNavInactiveClass =
+    "h-[39px] rounded-[6px] border border-white/30 bg-white/10 px-[18px] py-[10px] text-[14px] font-medium leading-[17px] text-white no-underline backdrop-blur-sm transition-colors hover:bg-white/15";
+  const jobsNavActiveClass =
+    "h-[39px] rounded-[6px] border border-[#F5D2BC] bg-[#F5D2BC] px-[18px] py-[10px] text-[14px] font-semibold leading-[17px] text-[#1a140e] no-underline shadow-[0_4px_20px_rgba(245,210,188,0.35)]";
+
   return (
     <div className="min-h-screen bg-[#ffffff] px-0 py-3 sm:px-0 lg:px-0">
       <div className="w-full max-w-none">
-        <div
-          className="relative min-h-[420px] overflow-visible border border-[#d5dde8] md:min-h-[450px]"
+        <section
+          className="relative min-h-[400px] overflow-visible border border-[#d5dde8] md:min-h-[456px]"
           style={{
             width: "100%",
             maxWidth: "100%",
             borderRadius: "10px",
             marginTop: "8px",
-            backgroundColor: "#3170A5",
-            backgroundImage:
-              "linear-gradient(rgba(49, 112, 165, 0.82), rgba(49, 112, 165, 0.82)), url('/Group.png')",
+            backgroundColor: "#143a56",
+            backgroundImage: `
+              radial-gradient(ellipse 90% 58% at 12% 30%, rgba(245, 210, 188, 0.2) 0%, transparent 54%),
+              radial-gradient(ellipse 72% 48% at 92% 16%, rgba(186, 230, 253, 0.18) 0%, transparent 50%),
+              radial-gradient(ellipse 52% 44% at 70% 88%, rgba(49, 112, 165, 0.5) 0%, transparent 48%),
+              linear-gradient(165deg, rgba(10, 32, 52, 0.97) 0%, rgba(30, 88, 130, 0.9) 42%, rgba(49, 112, 165, 0.82) 72%, rgba(15, 45, 72, 0.95) 100%),
+              url('/Group.png')
+            `,
             backgroundSize: "cover",
             backgroundPosition: "center",
             backgroundRepeat: "no-repeat",
           }}
         >
-          <div className="relative mx-auto max-w-[1440px] px-4 pb-14 pt-10 sm:px-8 md:px-12 lg:px-16 xl:px-20">
-            <div className="mb-6 flex flex-wrap gap-3">
+          <div
+            className="pointer-events-none absolute inset-0 rounded-[10px] opacity-[0.07]"
+            style={{
+              backgroundImage:
+                "linear-gradient(rgba(255,255,255,0.55) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.55) 1px, transparent 1px)",
+              backgroundSize: "28px 28px",
+            }}
+            aria-hidden
+          />
+
+          <div className="relative mx-auto max-w-[1440px] px-4 pb-24 pt-8 sm:px-8 md:px-12 lg:px-14 xl:px-16">
+            <div className="mb-8 flex flex-wrap gap-3">
               <Link
                 to="/apply-jobs"
-                className={`h-[39px] rounded-[6px] border px-[18px] py-[10px] text-[14px] font-medium leading-[17px] no-underline ${
-                  location.pathname === "/apply-jobs"
-                    ? "border-black bg-black text-white"
-                    : "border-[#d1d5db] bg-white text-[#111827]"
-                }`}
+                className={
+                  location.pathname === "/apply-jobs" ? jobsNavActiveClass : jobsNavInactiveClass
+                }
               >
                 Apply for Jobs
               </Link>
               <Link
                 to="/browse-hackathons"
-                className={`h-[39px] rounded-[6px] border px-[18px] py-[10px] text-[14px] font-medium leading-[17px] no-underline ${
-                  location.pathname === "/browse-hackathons"
-                    ? "border-black bg-black text-white"
-                    : "border-[#d1d5db] bg-white text-[#111827]"
-                }`}
+                className={
+                  location.pathname === "/browse-hackathons" ? jobsNavActiveClass : jobsNavInactiveClass
+                }
               >
                 Hackathons
               </Link>
               <Link
                 to="/job-tracker"
-                className={`h-[39px] rounded-[6px] border px-[18px] py-[10px] text-[14px] font-medium leading-[17px] no-underline ${
-                  location.pathname === "/job-tracker"
-                    ? "border-black bg-black text-white"
-                    : "border-[#d1d5db] bg-white text-[#111827]"
-                }`}
+                className={
+                  location.pathname === "/job-tracker" ? jobsNavActiveClass : jobsNavInactiveClass
+                }
               >
                 My Applications
               </Link>
             </div>
 
-            <div className="grid grid-cols-1 items-center gap-6 md:grid-cols-2 md:gap-8 lg:gap-10">
-              <div className="min-w-0 pt-1">
+            <div className="grid grid-cols-1 items-center gap-10 md:grid-cols-2 md:gap-8 lg:gap-12">
+              <div className="min-w-0">
+                <p
+                  className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#F5D2BC]/95"
+                  style={{ fontFamily: "'Instrument Sans', 'Inter', sans-serif" }}
+                >
+                  Discover · Apply · Grow
+                </p>
                 <h1
-                  className="text-[clamp(2.25rem,5vw,4.25rem)] font-bold leading-[0.96] tracking-[-1.5px] text-transparent"
+                  className="text-[clamp(2.1rem,5vw,4rem)] font-bold leading-[1.02] tracking-[-1.2px] text-transparent"
                   style={{
                     fontFamily: "'Instrument Sans', 'Inter', sans-serif",
-                    background: "linear-gradient(180deg, #DDB9AD 6.06%, #EDEBEB 100%)",
+                    background: "linear-gradient(185deg, #F5D2BC 6%, #FFF4EB 38%, #d4e4f4 100%)",
                     WebkitBackgroundClip: "text",
                     backgroundClip: "text",
                   }}
                 >
                   Less searching,
                   <br />
-                  More applying
+                  more applying
                 </h1>
                 <p
-                  className="mt-[14px] max-w-[820px] text-[clamp(1rem,2.2vw,1.5625rem)] font-medium leading-[1.28] text-[#ffffff]"
+                  className="mt-[14px] max-w-[560px] text-[clamp(0.95rem,1.9vw,1.25rem)] font-medium leading-[1.45] text-white/88"
                   style={{ fontFamily: "'Instrument Sans', 'Inter', sans-serif" }}
                 >
-                  A gateway to your roles from Saarthix and leading partner companies.
+                  Curated roles from SaarthiX and partner companies—search once, filter fast, and track every application from your dashboard.
                 </p>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <span className="rounded-full border border-white/20 bg-white/[0.08] px-3.5 py-1.5 text-[12px] font-semibold text-white/90">
+                    SaarthiX + partners
+                  </span>
+                  <span className="rounded-full border border-white/20 bg-white/[0.08] px-3.5 py-1.5 text-[12px] font-semibold text-white/90">
+                    Profile match hints
+                  </span>
+                  <span className="rounded-full border border-[#F5D2BC]/35 bg-[#F5D2BC]/12 px-3.5 py-1.5 text-[12px] font-semibold text-[#F5D2BC]">
+                    Remote · Hybrid · On-site
+                  </span>
+                </div>
               </div>
-              <div className="flex justify-center md:justify-end md:pr-2 lg:pr-6">
-                <img
-                  src={heroSilhouette}
-                  alt=""
-                  className="pointer-events-none h-auto max-h-[200px] w-auto max-w-[min(298px,88vw)] object-contain object-bottom md:max-h-[260px] lg:max-h-[280px] lg:-translate-y-2"
+
+              <div className="relative flex min-h-[220px] justify-center md:justify-end md:pr-2 lg:min-h-[260px] lg:pr-4">
+                <div className="absolute right-[6%] top-[4%] hidden h-12 w-12 rounded-2xl border border-white/15 bg-white/5 backdrop-blur-md sm:block" aria-hidden />
+                <div className="absolute bottom-[10%] left-[2%] h-10 w-10 rounded-full border border-[#F5D2BC]/30 bg-[#F5D2BC]/10 sm:h-11 sm:w-11" aria-hidden />
+                <div
+                  className="absolute left-1/2 top-1/2 -z-10 h-[200px] w-[240px] -translate-x-1/2 -translate-y-1/2 rounded-[45%] opacity-50 blur-3xl md:left-auto md:right-8 md:translate-x-0"
+                  style={{
+                    background:
+                      "radial-gradient(circle, rgba(245, 210, 188, 0.35) 0%, rgba(49, 112, 165, 0.25) 50%, transparent 72%)",
+                  }}
+                  aria-hidden
                 />
+                <div className="relative flex w-full max-w-[320px] items-end justify-center md:justify-end">
+                  <div className="relative w-full rounded-[28px] border border-white/25 bg-gradient-to-br from-white/[0.14] to-white/[0.04] px-6 pb-2 pt-8 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur-md">
+                    <div className="flex justify-center md:justify-end">
+                      <img
+                        src={heroSilhouette}
+                        alt=""
+                        className="pointer-events-none h-auto max-h-[200px] w-auto max-w-[min(280px,85vw)] object-contain object-bottom md:max-h-[248px] lg:max-h-[268px]"
+                      />
+                    </div>
+                    <div className="mt-2 flex items-center justify-center gap-2 pb-3 text-[11px] font-medium text-white/50">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#4ade80]" aria-hidden />
+                      New roles added regularly
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          <div
-            className="absolute bottom-[-27.5px] left-1/2 z-20 w-[min(1200px,calc(100%-1.5rem))] max-w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-lg border border-[#00000033] bg-white px-3 py-2.5 shadow-[0px_8px_30px_0px_#00000014] sm:px-4"
-          >
+          <div className="absolute bottom-[-26px] left-1/2 z-20 w-[min(1200px,calc(100%-1.5rem))] max-w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-lg border border-[#00000022] bg-white px-3 py-3 shadow-[0px_10px_40px_rgba(0,0,0,0.12)] sm:px-5">
             <div className="flex min-h-[44px] flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:gap-4">
-              <div className="relative min-h-[36px] min-w-0 flex-1">
-                <svg
-                  className="pointer-events-none absolute left-2 top-1/2 h-5 w-5 -translate-y-1/2 text-black/50"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <input
-                  type="text"
-                  placeholder="Search by role, skills, company, or keywords..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-9 w-full rounded-md border border-transparent bg-transparent py-1 pl-9 pr-2 text-[15px] leading-snug text-[#111827] placeholder:text-black/50 focus:outline-none sm:text-[16px]"
-                />
+                <div className="relative min-h-[40px] min-w-0 flex-1">
+                  <svg
+                    className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-black/45"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.7} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Search by role, skills, company, or keywords..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="h-10 w-full rounded-lg border border-black/[0.08] bg-[#f8fafc] py-2 pl-10 pr-3 text-[15px] leading-snug text-[#111827] placeholder:text-black/45 focus:border-[#3170A5] focus:outline-none focus:ring-1 focus:ring-[#3170A5]/30 sm:text-[16px]"
+                  />
+                </div>
+                <div className="flex shrink-0 items-center justify-end gap-3 sm:gap-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFilterRole("All");
+                      setFilterCompany("All");
+                      setFilterIndustry("All");
+                      setFilterSkill("All");
+                      setFilterLocation("All");
+                      setFilterSource("All");
+                      setSearchQuery("");
+                    }}
+                    className="whitespace-nowrap text-[14px] font-semibold text-[#111827] sm:text-[15px]"
+                  >
+                    Clear filters
+                  </button>
+                  <button
+                    type="button"
+                    onClick={scrollToJobFilters}
+                    className="h-[38px] min-w-[120px] shrink-0 rounded-[6px] bg-[#3170A5] px-6 text-[16px] font-semibold leading-snug text-white shadow-sm transition-colors hover:bg-[#2b6494] sm:w-[132px] sm:text-[17px]"
+                  >
+                    Search
+                  </button>
+                </div>
               </div>
-              <div className="flex shrink-0 items-center justify-end gap-4 sm:gap-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFilterRole("All");
-                    setFilterCompany("All");
-                    setFilterIndustry("All");
-                    setFilterSkill("All");
-                    setFilterLocation("All");
-                    setFilterSource("All");
-                    setSearchQuery("");
-                  }}
-                  className="whitespace-nowrap text-[15px] font-medium text-[#111827] sm:text-[16px]"
-                >
-                  Clear Filters
-                </button>
-                <button
-                  type="button"
-                  className="h-[33px] min-w-[120px] shrink-0 rounded-[6px] bg-[#3170A5] px-6 text-[18px] font-medium leading-[22px] text-white sm:w-[133px] sm:text-[20px]"
-                  style={{
-                    backgroundImage: "url('/Container (6).png')",
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
-                    backgroundRepeat: "no-repeat",
-                  }}
-                >
-                  Search
-                </button>
-              </div>
-            </div>
           </div>
-        </div>
+        </section>
       </div>
 
-      <div className="mx-auto max-w-[1440px] pt-20">
+      <div className="mx-auto max-w-[1440px] scroll-mt-8 pt-[5.5rem] sm:pt-24">
           {isApplicantOrStudent && isAuthenticated && missingMandatoryFields.length > 0 && (
             <div className="mb-5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -808,7 +857,7 @@ export default function JobList() {
             </div>
           )}
 
-          <div className="mb-3 flex items-center justify-between gap-3 px-[58px]">
+          <div id="job-list-filters" className="mb-3 flex scroll-mt-28 items-center justify-between gap-3 px-[58px]">
             <div className="flex items-start gap-3">
               <svg className="mt-1 h-6 w-6 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 6h16M7 12h10M10 18h4M4 5v2m0 4v2m0 4v2" />
