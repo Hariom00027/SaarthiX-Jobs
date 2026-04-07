@@ -182,14 +182,72 @@ const Navbar = () => {
     return () => document.removeEventListener("mousedown", handleOutside);
   }, [openStudentNav]);
 
-  const studentAvatarInitials = useMemo(() => {
-    const name = (user?.name || "").trim();
-    if (!name) return "U";
-    const parts = name.split(/\s+/).filter(Boolean);
+  const userAvatarInitials = useMemo(() => {
+    const first = (user?.firstName || user?.firstname || user?.first_name || "").trim();
+    const last = (user?.lastName || user?.lastname || user?.last_name || "").trim();
+    const oauthCombined = `${user?.given_name || ""} ${user?.family_name || ""}`.trim();
+
+    let cachedName = "";
+    try {
+      const cached = JSON.parse(localStorage.getItem("somethingx_auth_user") || "{}");
+      cachedName = (cached?.name || cached?.fullName || "").trim();
+    } catch {
+      cachedName = "";
+    }
+
+    let tokenName = "";
+    try {
+      const token = localStorage.getItem("token") || localStorage.getItem("somethingx_auth_token");
+      if (token && token.split(".").length >= 2) {
+        const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+        const decoded = JSON.parse(atob(payload.padEnd(Math.ceil(payload.length / 4) * 4, "=")));
+        tokenName = (decoded?.name || `${decoded?.given_name || ""} ${decoded?.family_name || ""}`).trim();
+      }
+    } catch {
+      tokenName = "";
+    }
+
+    const directInitials = `${first?.[0] || ""}${last?.[0] || ""}`.toUpperCase();
+    if (directInitials) return directInitials;
+
+    const preferredName =
+      [cachedName, oauthCombined, tokenName, user?.name, user?.fullName]
+        .map((val) => (val || "").toString().trim())
+        .find((val) => val && val.toLowerCase() !== "user") || "";
+
+    if (!preferredName) return "U";
+    const parts = preferredName.split(/\s+/).filter(Boolean);
     const a = parts[0]?.[0] || "U";
     const b = parts.length > 1 ? (parts[parts.length - 1]?.[0] || "") : "";
     return (a + b).toUpperCase();
-  }, [user?.name]);
+  }, [user]);
+
+  const userDisplayName = useMemo(() => {
+    const first = (user?.firstName || user?.firstname || "").trim();
+    const last = (user?.lastName || user?.lastname || "").trim();
+    const combined = `${first} ${last}`.trim();
+    const oauthCombined = `${user?.given_name || ""} ${user?.family_name || ""}`.trim();
+    const candidates = [
+      combined,
+      oauthCombined,
+      user?.name,
+      user?.fullName,
+      user?.preferred_username,
+      user?.username,
+      user?.email?.split("@")?.[0],
+    ]
+      .map((val) => (val || "").toString().trim())
+      .filter(Boolean)
+      .filter((val) => val.toLowerCase() !== "user");
+
+    if (candidates.length === 0) return "User";
+    return candidates[0];
+  }, [user]);
+
+  const userDisplayNameShort = useMemo(() => {
+    const firstToken = (userDisplayName || "").trim().split(/\s+/)[0];
+    return firstToken || "User";
+  }, [userDisplayName]);
 
   const openStudentDropdown = (key) => {
     // Enable Student dropdowns on desktop + tablet; disable only on mobile drawer UI.
@@ -220,7 +278,7 @@ const Navbar = () => {
       redirectToSomethingX("/edit-your-details", getAuthToken(), user);
       return;
     }
-    window.location.href = "/build-profile";
+    redirectToSomethingX("/profile-builder", getAuthToken(), user);
   };
   const industryLogoStorageKey = useMemo(() => {
     const identity = user?.email || user?.id || "default";
@@ -413,7 +471,7 @@ const Navbar = () => {
           align-items: center;
           justify-content: center;
           padding: 10px 14px;
-          background: #115FD5;
+          background-color: rgb(49 112 165);
           color: #FFFFFF;
           border: none;
           border-radius: 8px;
@@ -421,7 +479,7 @@ const Navbar = () => {
           font-size: 14px;
           cursor: pointer;
           font-family: 'Inter', sans-serif;
-          box-shadow: 0 6px 14px rgba(17, 95, 213, 0.25);
+          box-shadow: 0 6px 14px rgba(49, 112, 165, 0.25);
         }
         .student-user-trigger {
           display: inline-flex;
@@ -970,7 +1028,7 @@ const Navbar = () => {
                       alignItems: 'center',
                       width: '156px',
                       height: '36px',
-                      background: '#3170A5',
+                      backgroundColor: 'rgb(49 112 165)',
                       border: 'none',
                       borderRadius: '18px',
                       fontWeight: 500,
@@ -1081,7 +1139,7 @@ const Navbar = () => {
                   >
                     {isStudent ? (
                       <>
-                        <span className="student-avatar" aria-hidden="true">{studentAvatarInitials}</span>
+                        <span className="student-avatar" aria-hidden="true">{userAvatarInitials}</span>
                         <span>User</span>
                         <span className="student-nav-caret" aria-hidden="true" style={{ marginLeft: 2, borderRightColor: "rgba(17, 24, 39, 0.55)", borderBottomColor: "rgba(17, 24, 39, 0.55)" }} />
                       </>
@@ -1113,10 +1171,15 @@ const Navbar = () => {
                               alignItems: "center",
                               justifyContent: "center",
                               flex: "0 0 auto",
+                              color: "#111827",
+                              fontWeight: 700,
+                              fontSize: "13px",
                             }}
-                          />
+                          >
+                            {userAvatarInitials}
+                          </span>
                         )}
-                        <span>Profile</span>
+                        <span>{userDisplayNameShort}</span>
                       </>
                     )}
                   </button>
@@ -1924,12 +1987,12 @@ const Navbar = () => {
                         style={{
                           width: '100%',
                           padding: '8px 12px',
-                          background: '#FFFFFF',
-                          border: '1px solid #115FD5',
+                          backgroundColor: 'rgb(49 112 165)',
+                          border: 'none',
                           borderRadius: '24px',
                           fontWeight: 500,
                           fontSize: '14px',
-                          color: '#115FD5',
+                          color: '#FFFFFF',
                           cursor: 'pointer',
                           fontFamily: "'Inter', sans-serif",
                           marginTop: '4px'

@@ -9,12 +9,82 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const cacheSomethingXAuth = (token, authUser) => {
+    const existingUser = readCachedSomethingXUser();
+    const mergedUser = { ...existingUser, ...(authUser || {}) };
     if (token) {
       localStorage.setItem('somethingx_auth_token', token);
     }
-    if (authUser) {
-      localStorage.setItem('somethingx_auth_user', JSON.stringify(authUser));
+    if (authUser || existingUser) {
+      localStorage.setItem('somethingx_auth_user', JSON.stringify(mergedUser));
     }
+  };
+
+  const readCachedSomethingXUser = () => {
+    try {
+      const raw = localStorage.getItem('somethingx_auth_user');
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const resolveDisplayName = (authData = {}) => {
+    const cached = readCachedSomethingXUser();
+    const tokenClaims = readJwtClaims();
+    const candidateFromNames = `${authData?.given_name || ''} ${authData?.family_name || ''}`.trim();
+    const candidateFromCachedNames = `${cached?.given_name || ''} ${cached?.family_name || ''}`.trim();
+    const candidateFromTokenNames = `${tokenClaims?.given_name || ''} ${tokenClaims?.family_name || ''}`.trim();
+    const candidates = [
+      cached?.name,
+      tokenClaims?.name,
+      authData?.name,
+      authData?.fullName,
+      cached?.fullName,
+      candidateFromNames,
+      candidateFromCachedNames,
+      candidateFromTokenNames,
+      authData?.preferred_username,
+      authData?.username,
+      tokenClaims?.preferred_username,
+      tokenClaims?.nickname,
+      cached?.preferred_username,
+      cached?.username,
+      authData?.email?.split('@')?.[0],
+      tokenClaims?.email?.split('@')?.[0],
+      cached?.email?.split('@')?.[0],
+    ]
+      .map((value) => (value || '').toString().trim())
+      .filter(Boolean)
+      .filter((value) => value.toLowerCase() !== 'user');
+
+    if (candidates.length === 0) return 'User';
+
+    // Prefer fuller human names (contains a space) over handles like "m2".
+    const withSpace = candidates.find((value) => value.includes(' '));
+    return withSpace || candidates[0];
+  };
+
+  const readJwtClaims = () => {
+    try {
+      const token = localStorage.getItem('token') || localStorage.getItem('somethingx_auth_token');
+      if (!token || token.split('.').length < 2) return {};
+      const payload = token.split('.')[1];
+      const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+      const decoded = atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '='));
+      return JSON.parse(decoded);
+    } catch {
+      return {};
+    }
+  };
+
+  const normalizeAuthData = (authData = {}) => {
+    const cached = readCachedSomethingXUser();
+    return {
+      ...authData,
+      name: resolveDisplayName(authData),
+      email: authData?.email || cached?.email || '',
+      userType: authData?.userType || cached?.userType || 'APPLICANT',
+    };
   };
 
   // Load auth state from JWT token
@@ -22,9 +92,15 @@ export const AuthProvider = ({ children }) => {
     try {
       const authData = await checkAuth();
       if (authData.authenticated) {
-        setUser(authData);
+        const normalized = normalizeAuthData(authData);
+        setUser(normalized);
         setIsAuthenticated(true);
-        console.log('[AuthContext] User authenticated with role:', authData.userType);
+        cacheSomethingXAuth(localStorage.getItem('token'), {
+          email: normalized.email || '',
+          name: normalized.name || '',
+          userType: normalized.userType || 'APPLICANT',
+        });
+        console.log('[AuthContext] User authenticated with role:', normalized.userType);
       } else {
         setUser(null);
         setIsAuthenticated(false);
@@ -116,10 +192,7 @@ export const AuthProvider = ({ children }) => {
 
   const updateAuth = (authData) => {
     if (authData.authenticated) {
-      const normalized = {
-        ...authData,
-        userType: authData.userType || 'APPLICANT',
-      };
+      const normalized = normalizeAuthData(authData);
       setUser(normalized);
       setIsAuthenticated(true);
       cacheSomethingXAuth(localStorage.getItem('token'), {
