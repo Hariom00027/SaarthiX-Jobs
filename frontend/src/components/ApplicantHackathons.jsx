@@ -517,7 +517,7 @@ export default function ApplicantHackathons() {
     'h-[39px] rounded-[6px] border border-[#F5D2BC] bg-[#F5D2BC] px-[18px] py-[10px] text-[14px] font-semibold leading-[17px] text-[#1a140e] no-underline shadow-[0_4px_20px_rgba(245,210,188,0.35)]';
 
   return (
-    <div className="min-h-screen bg-[#ffffff] px-0 py-3 sm:px-0 lg:px-0">
+    <div className="min-h-screen bg-[#ffffff] px-0 pb-3 pt-0 sm:px-0 lg:px-0">
       <div className="w-full max-w-none">
         <section
           className="relative min-h-[400px] overflow-visible border border-[#d5dde8] md:min-h-[460px] lg:min-h-[480px]"
@@ -525,7 +525,6 @@ export default function ApplicantHackathons() {
             width: '100%',
             maxWidth: '100%',
             borderRadius: '10px',
-            marginTop: '8px',
             backgroundColor: '#0f1724',
             backgroundImage: `
               radial-gradient(ellipse 90% 60% at 15% 35%, rgba(245, 210, 188, 0.14) 0%, transparent 55%),

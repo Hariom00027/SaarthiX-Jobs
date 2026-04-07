@@ -662,7 +662,7 @@ export default function JobList() {
     "h-[39px] rounded-[6px] border border-[#F5D2BC] bg-[#F5D2BC] px-[18px] py-[10px] text-[14px] font-semibold leading-[17px] text-[#1a140e] no-underline shadow-[0_4px_20px_rgba(245,210,188,0.35)]";
 
   return (
-    <div className="min-h-screen bg-[#ffffff] px-0 py-3 sm:px-0 lg:px-0">
+    <div className="min-h-screen bg-[#ffffff] px-0 pb-3 pt-0 sm:px-0 lg:px-0">
       <div className="w-full max-w-none">
         <section
           className="relative min-h-[400px] overflow-visible border border-[#d5dde8] md:min-h-[456px]"
@@ -670,7 +670,6 @@ export default function JobList() {
             width: "100%",
             maxWidth: "100%",
             borderRadius: "10px",
-            marginTop: "8px",
             backgroundColor: "#143a56",
             backgroundImage: `
               radial-gradient(ellipse 90% 58% at 12% 30%, rgba(245, 210, 188, 0.2) 0%, transparent 54%),
