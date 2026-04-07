@@ -74,7 +74,9 @@ export default function JobList() {
   const [userProfile, setUserProfile] = useState(null);
   const [missingMandatoryFields, setMissingMandatoryFields] = useState([]);
   const [appliedLocalJobIds, setAppliedLocalJobIds] = useState(new Set());
+  const [loadingExternal, setLoadingExternal] = useState(false);
   const reviewJobOpenedRef = useRef(null);
+  const externalFetchGenerationRef = useRef(0);
 
   const { isAuthenticated, isIndustry, isApplicant, isApplicantOrStudent, user } = useAuth();
   const normalizeLower = (value) => (value || "").toString().trim().toLowerCase();
@@ -218,25 +220,19 @@ export default function JobList() {
     }
   };
 
-  // Define loadJobs outside useEffect so it can be called manually
+  // Define loadJobs outside useEffect so it can be called manually.
+  // Local jobs load first so the page is not blocked on the slow jsearch API.
   const loadJobs = async () => {
+    const fetchGeneration = ++externalFetchGenerationRef.current;
+    if (!refreshing) setLoading(true);
+    setError(null);
+    setLoadingExternal(false);
+
+    let localJobs = [];
     try {
-      if (!refreshing) setLoading(true);
-      setError(null);
-
-      const [localResult, externalResult] = await Promise.allSettled([
-        apiClient.get('/jobs'),
-        fetchJobs("software developer in India"),
-      ]);
-
-      const localData =
-        localResult.status === "fulfilled" ? localResult.value.data : [];
-      const externalJobs =
-        externalResult.status === "fulfilled" ? externalResult.value : [];
-      console.log(localData, externalJobs);
-
-      const localJobs = (Array.isArray(localData) ? localData : []).map(
-        (job, idx) => ({
+      const localRes = await apiClient.get("/jobs");
+      const localData = localRes.data;
+      localJobs = (Array.isArray(localData) ? localData : []).map((job, idx) => ({
         id:
           job.id ??
           job._id ??
@@ -258,18 +254,35 @@ export default function JobList() {
           createdAt: job.createdAt,
         },
       }));
+    } catch (localErr) {
+      console.warn("Failed to load local jobs:", localErr);
+    }
 
-      // Helper function to extract industry from job title
+    const parseTime = (item) => {
+      const dateVal = item?.raw?.createdAt || item?.raw?.job_posted_at_datetime_utc;
+      const ts = dateVal ? new Date(dateVal).getTime() : 0;
+      return Number.isNaN(ts) ? 0 : ts;
+    };
+
+    setJobs([...localJobs].sort((a, b) => parseTime(b) - parseTime(a)));
+    setLoading(false);
+    setRefreshing(false);
+
+    setLoadingExternal(true);
+    try {
+      const externalJobs = await fetchJobs("software developer in India");
+      if (fetchGeneration !== externalFetchGenerationRef.current) return;
+
       const extractIndustryFromTitle = (title) => {
         if (!title) return "General";
         const titleLower = title.toLowerCase();
-        if (titleLower.includes('software') || titleLower.includes('developer') || titleLower.includes('tech')) return 'Technology';
-        if (titleLower.includes('nurse') || titleLower.includes('medical') || titleLower.includes('healthcare')) return 'Healthcare';
-        if (titleLower.includes('finance') || titleLower.includes('accountant') || titleLower.includes('bank')) return 'Finance';
-        if (titleLower.includes('teacher') || titleLower.includes('education') || titleLower.includes('instructor')) return 'Education';
-        if (titleLower.includes('marketing') || titleLower.includes('sales')) return 'Marketing & Sales';
-        if (titleLower.includes('engineer') && !titleLower.includes('software')) return 'Engineering';
-        return 'General';
+        if (titleLower.includes("software") || titleLower.includes("developer") || titleLower.includes("tech")) return "Technology";
+        if (titleLower.includes("nurse") || titleLower.includes("medical") || titleLower.includes("healthcare")) return "Healthcare";
+        if (titleLower.includes("finance") || titleLower.includes("accountant") || titleLower.includes("bank")) return "Finance";
+        if (titleLower.includes("teacher") || titleLower.includes("education") || titleLower.includes("instructor")) return "Education";
+        if (titleLower.includes("marketing") || titleLower.includes("sales")) return "Marketing & Sales";
+        if (titleLower.includes("engineer") && !titleLower.includes("software")) return "Engineering";
+        return "General";
       };
 
       const rapidJobs = (Array.isArray(externalJobs) ? externalJobs : []).map((job) => ({
@@ -282,31 +295,18 @@ export default function JobList() {
         source: "External",
         raw: job,
       }));
-      const parseTime = (item) => {
-        const dateVal = item?.raw?.createdAt || item?.raw?.job_posted_at_datetime_utc;
-        const ts = dateVal ? new Date(dateVal).getTime() : 0;
-        return Number.isNaN(ts) ? 0 : ts;
-      };
-      setJobs([...localJobs, ...rapidJobs].sort((a, b) => parseTime(b) - parseTime(a)));
 
-      if (
-        localResult.status === "rejected" &&
-        externalResult.status === "fulfilled"
-      ) {
-        console.warn("Failed to load local jobs:", localResult.reason);
+      setJobs([...localJobs, ...rapidJobs].sort((a, b) => parseTime(b) - parseTime(a)));
+    } catch (externalErr) {
+      if (fetchGeneration !== externalFetchGenerationRef.current) return;
+      console.warn("Failed to load external jobs:", externalErr);
+      if (localJobs.length === 0) {
+        setError("Unable to load jobs right now. Please try again later.");
       }
-      if (
-        externalResult.status === "rejected" &&
-        localResult.status === "fulfilled"
-      ) {
-        console.warn("Failed to load external jobs:", externalResult.reason);
-      }
-    } catch (err) {
-      console.error("Error fetching jobs:", err);
-      setError("Unable to load jobs right now. Please try again later.");
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (fetchGeneration === externalFetchGenerationRef.current) {
+        setLoadingExternal(false);
+      }
     }
   };
 
@@ -915,6 +915,13 @@ export default function JobList() {
               <p className="text-[20px] leading-[22px] text-black/75">See available vacancies</p>
             </div>
           </div>
+
+          {loadingExternal && (
+            <div className="mb-4 flex items-center gap-2 px-[58px] text-sm text-[#3170A5]">
+              <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-[#3170A5] border-t-transparent" aria-hidden />
+              <span>Loading additional listings from the web…</span>
+            </div>
+          )}
 
           {error ? (
             <div className="rounded-md border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">{error}</div>

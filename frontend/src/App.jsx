@@ -21,6 +21,7 @@ import IndustryCertificatePublishPage from './components/IndustryCertificatePubl
 import StudentDatabase from './components/StudentDatabase';
 import StudentDatabaseIntro from './components/StudentDatabaseIntro';
 import DemoViewSwitcher from './components/DemoViewSwitcher';
+import JobsFooter from './components/JobsFooter';
 import { useAuth } from './context/AuthContext';
 import { redirectToSomethingX } from './config/redirectUrls';
 
@@ -79,6 +80,7 @@ function AppShell() {
         <Route path="/student-database" element={<StudentDatabaseIntro />} />
         <Route path="/student-database/browse" element={<StudentDatabase />} />
       </Routes>
+      {!isEmbeddedProfileBuilder && <JobsFooter />}
       <ToastContainer
         position="top-right"
         autoClose={3000}
