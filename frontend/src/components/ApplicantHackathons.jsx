@@ -823,18 +823,18 @@ export default function ApplicantHackathons() {
                       </div>
                     </div>
 
-                    <div className="mt-auto flex w-full flex-col gap-2 pt-2">
+                    <div className="mt-auto flex w-full flex-row items-center justify-center gap-3 pt-2">
                       <button
                         type="button"
                         onClick={() => handleApply(hackathon)}
-                        className="mx-auto h-[40px] w-full max-w-[200px] rounded-lg bg-[#3170A5] text-[15px] font-semibold text-white shadow-sm transition hover:bg-[#2b6494]"
+                        className="h-[40px] w-[136px] rounded-lg bg-[#3170A5] text-[15px] font-semibold text-white shadow-sm transition hover:bg-[#2b6494]"
                       >
                         Apply now
                       </button>
                       <button
                         type="button"
                         onClick={() => handleViewDetails(hackathon)}
-                        className="mx-auto inline-flex h-[36px] w-full max-w-[200px] items-center justify-center gap-2 rounded-lg border border-[#3170A5] bg-white text-[14px] font-semibold text-[#3170A5] transition hover:bg-gray-50"
+                        className="inline-flex h-[40px] w-[136px] items-center justify-center gap-2 rounded-lg border border-[#3170A5] bg-white text-[14px] font-semibold text-[#3170A5] transition hover:bg-gray-50"
                       >
                         View details
                         <img src={externalLinkIcon} alt="" className="h-[14px] w-[14px] object-contain" />
