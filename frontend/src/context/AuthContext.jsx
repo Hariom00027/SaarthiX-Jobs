@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { checkAuth } from '../api/authApi';
+import { getSomethingXUserProfile } from '../api/jobApi';
 
 const AuthContext = createContext(null);
 
@@ -9,12 +10,104 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   const cacheSomethingXAuth = (token, authUser) => {
+    const existingUser = readCachedSomethingXUser();
+    const mergedUser = { ...existingUser, ...(authUser || {}) };
     if (token) {
       localStorage.setItem('somethingx_auth_token', token);
     }
-    if (authUser) {
-      localStorage.setItem('somethingx_auth_user', JSON.stringify(authUser));
+    if (authUser || existingUser) {
+      localStorage.setItem('somethingx_auth_user', JSON.stringify(mergedUser));
     }
+  };
+
+  const readCachedSomethingXUser = () => {
+    try {
+      const raw = localStorage.getItem('somethingx_auth_user');
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const resolveDisplayName = (authData = {}) => {
+    const cached = readCachedSomethingXUser();
+    const tokenClaims = readJwtClaims();
+    const candidateFromNames = `${authData?.given_name || ''} ${authData?.family_name || ''}`.trim();
+    const candidateFromCachedNames = `${cached?.given_name || ''} ${cached?.family_name || ''}`.trim();
+    const candidateFromTokenNames = `${tokenClaims?.given_name || ''} ${tokenClaims?.family_name || ''}`.trim();
+    const candidates = [
+      cached?.name,
+      tokenClaims?.name,
+      authData?.name,
+      authData?.fullName,
+      cached?.fullName,
+      candidateFromNames,
+      candidateFromCachedNames,
+      candidateFromTokenNames,
+      authData?.preferred_username,
+      authData?.username,
+      tokenClaims?.preferred_username,
+      tokenClaims?.nickname,
+      cached?.preferred_username,
+      cached?.username,
+      authData?.email?.split('@')?.[0],
+      tokenClaims?.email?.split('@')?.[0],
+      cached?.email?.split('@')?.[0],
+    ]
+      .map((value) => (value || '').toString().trim())
+      .filter(Boolean)
+      .filter((value) => value.toLowerCase() !== 'user');
+
+    if (candidates.length === 0) return 'User';
+
+    // Prefer fuller human names (contains a space) over handles like "m2".
+    const withSpace = candidates.find((value) => value.includes(' '));
+    return withSpace || candidates[0];
+  };
+
+  const readJwtClaims = () => {
+    try {
+      const token = localStorage.getItem('token') || localStorage.getItem('somethingx_auth_token');
+      if (!token || token.split('.').length < 2) return {};
+      const payload = token.split('.')[1];
+      const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+      const decoded = atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '='));
+      return JSON.parse(decoded);
+    } catch {
+      return {};
+    }
+  };
+
+  const normalizeAuthData = (authData = {}) => {
+    const cached = readCachedSomethingXUser();
+    return {
+      ...authData,
+      name: resolveDisplayName(authData),
+      email: authData?.email || cached?.email || '',
+      userType: authData?.userType || cached?.userType || 'APPLICANT',
+      picture: authData?.picture || cached?.picture || '',
+    };
+  };
+
+  /** Jobs /auth/me uses Jobs DB pictureUrl — often empty for SaarthiX SSO students. Use Home User.picture like SaarthiX Home navbar. */
+  const mergeSomethingXProfilePicture = async (userLike) => {
+    if (!userLike) return userLike;
+    const token = localStorage.getItem('token') || localStorage.getItem('somethingx_auth_token');
+    if (!token) return userLike;
+    const studentLike = userLike.userType === 'STUDENT' || userLike.userType === 'APPLICANT';
+    try {
+      const home = await getSomethingXUserProfile();
+      if (!home?.picture) return userLike;
+      if (studentLike) {
+        return { ...userLike, picture: home.picture };
+      }
+      if (!userLike.picture) {
+        return { ...userLike, picture: home.picture };
+      }
+    } catch {
+      /* Home unreachable — keep Jobs user */
+    }
+    return userLike;
   };
 
   // Load auth state from JWT token
@@ -22,9 +115,18 @@ export const AuthProvider = ({ children }) => {
     try {
       const authData = await checkAuth();
       if (authData.authenticated) {
-        setUser(authData);
+        let normalized = normalizeAuthData(authData);
+        normalized = await mergeSomethingXProfilePicture(normalized);
+        setUser(normalized);
         setIsAuthenticated(true);
-        console.log('[AuthContext] User authenticated with role:', authData.userType);
+        const tok = localStorage.getItem('token') || localStorage.getItem('somethingx_auth_token');
+        cacheSomethingXAuth(tok, {
+          email: normalized.email || '',
+          name: normalized.name || '',
+          userType: normalized.userType || 'APPLICANT',
+          picture: normalized.picture || '',
+        });
+        console.log('[AuthContext] User authenticated with role:', normalized.userType);
       } else {
         setUser(null);
         setIsAuthenticated(false);
@@ -88,6 +190,27 @@ export const AuthProvider = ({ children }) => {
     }
   }, []); // Only run once on mount
 
+  useEffect(() => {
+    const refreshStudentPicture = async () => {
+      const token = localStorage.getItem('token') || localStorage.getItem('somethingx_auth_token');
+      if (!token) return;
+      try {
+        const home = await getSomethingXUserProfile();
+        if (!home?.picture) return;
+        setUser((prev) => {
+          if (!prev) return prev;
+          if (prev.userType !== 'STUDENT' && prev.userType !== 'APPLICANT') return prev;
+          return { ...prev, picture: home.picture };
+        });
+        cacheSomethingXAuth(token, { picture: home.picture });
+      } catch {
+        /* ignore */
+      }
+    };
+    window.addEventListener('profileSaved', refreshStudentPicture);
+    return () => window.removeEventListener('profileSaved', refreshStudentPicture);
+  }, []);
+
   const exchangeToken = async (token, email, name, userType) => {
     try {
       if (!token) return false;
@@ -116,16 +239,15 @@ export const AuthProvider = ({ children }) => {
 
   const updateAuth = (authData) => {
     if (authData.authenticated) {
-      const normalized = {
-        ...authData,
-        userType: authData.userType || 'APPLICANT',
-      };
+      const normalized = normalizeAuthData(authData);
       setUser(normalized);
       setIsAuthenticated(true);
-      cacheSomethingXAuth(localStorage.getItem('token'), {
+      const tok = localStorage.getItem('token') || localStorage.getItem('somethingx_auth_token');
+      cacheSomethingXAuth(tok, {
         email: normalized.email || '',
         name: normalized.name || '',
-        userType: normalized.userType || 'APPLICANT'
+        userType: normalized.userType || 'APPLICANT',
+        picture: normalized.picture || '',
       });
     } else {
       setUser(null);

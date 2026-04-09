@@ -264,7 +264,15 @@ export default function JobList() {
       return Number.isNaN(ts) ? 0 : ts;
     };
 
-    setJobs([...localJobs].sort((a, b) => parseTime(b) - parseTime(a)));
+    // Local listings always appear above external, then newest-first within each group.
+    const compareJobs = (a, b) => {
+      const aLocal = a.source === "Local";
+      const bLocal = b.source === "Local";
+      if (aLocal !== bLocal) return aLocal ? -1 : 1;
+      return parseTime(b) - parseTime(a);
+    };
+
+    setJobs([...localJobs].sort(compareJobs));
     setLoading(false);
     setRefreshing(false);
 
@@ -296,7 +304,7 @@ export default function JobList() {
         raw: job,
       }));
 
-      setJobs([...localJobs, ...rapidJobs].sort((a, b) => parseTime(b) - parseTime(a)));
+      setJobs([...localJobs, ...rapidJobs].sort(compareJobs));
     } catch (externalErr) {
       if (fetchGeneration !== externalFetchGenerationRef.current) return;
       console.warn("Failed to load external jobs:", externalErr);
@@ -662,7 +670,7 @@ export default function JobList() {
     "h-[39px] rounded-[6px] border border-[#F5D2BC] bg-[#F5D2BC] px-[18px] py-[10px] text-[14px] font-semibold leading-[17px] text-[#1a140e] no-underline shadow-[0_4px_20px_rgba(245,210,188,0.35)]";
 
   return (
-    <div className="min-h-screen bg-[#ffffff] px-0 py-3 sm:px-0 lg:px-0">
+    <div className="min-h-screen bg-[#ffffff] px-0 pb-3 pt-0 sm:px-0 lg:px-0">
       <div className="w-full max-w-none">
         <section
           className="relative min-h-[400px] overflow-visible border border-[#d5dde8] md:min-h-[456px]"
@@ -670,7 +678,6 @@ export default function JobList() {
             width: "100%",
             maxWidth: "100%",
             borderRadius: "10px",
-            marginTop: "8px",
             backgroundColor: "#143a56",
             backgroundImage: `
               radial-gradient(ellipse 90% 58% at 12% 30%, rgba(245, 210, 188, 0.2) 0%, transparent 54%),
@@ -941,9 +948,12 @@ export default function JobList() {
                     key={job.id}
                     className="mx-auto flex h-[331px] w-full max-w-[346px] flex-col rounded-[10px] border border-black/20 bg-white p-6 shadow-[inset_2px_2px_4px_rgba(0,0,0,0.12)]"
                   >
-                    <div className="mb-3 flex items-center justify-end">
-                      <span className={`rounded-[10px] px-3 py-1 text-[15px] font-medium ${job.source === "Local" ? "bg-[#EAF4FF] text-[#3170A5]" : "bg-[#EAFFF6] text-[#18430B]"}`}>
-                        {job.source}
+                    <div className="mb-3 flex items-center justify-start">
+                      <span
+                        className={`rounded-[10px] px-3 py-1 text-[13px] font-semibold uppercase tracking-wide ${job.source === "Local" ? "bg-[#EAF4FF] text-[#3170A5]" : "bg-[#EAFFF6] text-[#18430B]"}`}
+                        title={job.source === "Local" ? "Posted on SaarthiX" : "Sourced from external listings"}
+                      >
+                        {job.source === "External" ? "External" : "Local"}
                       </span>
                     </div>
                     <h3 className="line-clamp-1 text-[18px] font-semibold leading-[27px] text-[#0A1905]">{job.title}</h3>

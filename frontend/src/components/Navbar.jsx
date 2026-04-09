@@ -11,7 +11,7 @@ const getAuthToken = () =>
   localStorage.getItem("token") || localStorage.getItem("somethingx_auth_token") || "";
 
 const Navbar = () => {
-  const { user, isAuthenticated, clearAuth, updateAuth } = useAuth();
+  const { user, isAuthenticated, clearAuth, loading } = useAuth();
   const location = useLocation();
   const isHomePage = location.pathname === "/";
   const isStudent =
@@ -34,7 +34,6 @@ const Navbar = () => {
   const dropdownRef = useRef(null);
   const mobileMenuRef = useRef(null);
   const mobileToggleRef = useRef(null);
-  const industryLogoInputRef = useRef(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -49,7 +48,6 @@ const Navbar = () => {
   const instNavCloseTimer = useRef(null);
   const [openIndustryNav, setOpenIndustryNav] = useState(null); // 'talent' | null
   const industryNavCloseTimer = useRef(null);
-  const [industryLogoSrc, setIndustryLogoSrc] = useState("");
 
   const showDashboard = true;
 
@@ -182,14 +180,82 @@ const Navbar = () => {
     return () => document.removeEventListener("mousedown", handleOutside);
   }, [openStudentNav]);
 
-  const studentAvatarInitials = useMemo(() => {
-    const name = (user?.name || "").trim();
-    if (!name) return "U";
-    const parts = name.split(/\s+/).filter(Boolean);
+  const userAvatarInitials = useMemo(() => {
+    const first = (user?.firstName || user?.firstname || user?.first_name || "").trim();
+    const last = (user?.lastName || user?.lastname || user?.last_name || "").trim();
+    const oauthCombined = `${user?.given_name || ""} ${user?.family_name || ""}`.trim();
+
+    let cachedName = "";
+    try {
+      const cached = JSON.parse(localStorage.getItem("somethingx_auth_user") || "{}");
+      cachedName = (cached?.name || cached?.fullName || "").trim();
+    } catch {
+      cachedName = "";
+    }
+
+    let tokenName = "";
+    try {
+      const token = localStorage.getItem("token") || localStorage.getItem("somethingx_auth_token");
+      if (token && token.split(".").length >= 2) {
+        const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+        const decoded = JSON.parse(atob(payload.padEnd(Math.ceil(payload.length / 4) * 4, "=")));
+        tokenName = (decoded?.name || `${decoded?.given_name || ""} ${decoded?.family_name || ""}`).trim();
+      }
+    } catch {
+      tokenName = "";
+    }
+
+    const directInitials = `${first?.[0] || ""}${last?.[0] || ""}`.toUpperCase();
+    if (directInitials) return directInitials;
+
+    const preferredName =
+      [cachedName, oauthCombined, tokenName, user?.name, user?.fullName]
+        .map((val) => (val || "").toString().trim())
+        .find((val) => val && val.toLowerCase() !== "user") || "";
+
+    if (!preferredName) return "U";
+    const parts = preferredName.split(/\s+/).filter(Boolean);
     const a = parts[0]?.[0] || "U";
     const b = parts.length > 1 ? (parts[parts.length - 1]?.[0] || "") : "";
     return (a + b).toUpperCase();
-  }, [user?.name]);
+  }, [user]);
+
+  const studentAvatarSrc = useMemo(
+    () =>
+      user?.picture ||
+      user?.profilePicture ||
+      user?.avatar ||
+      user?.photoURL ||
+      "",
+    [user]
+  );
+
+  const userDisplayName = useMemo(() => {
+    const first = (user?.firstName || user?.firstname || "").trim();
+    const last = (user?.lastName || user?.lastname || "").trim();
+    const combined = `${first} ${last}`.trim();
+    const oauthCombined = `${user?.given_name || ""} ${user?.family_name || ""}`.trim();
+    const candidates = [
+      combined,
+      oauthCombined,
+      user?.name,
+      user?.fullName,
+      user?.preferred_username,
+      user?.username,
+      user?.email?.split("@")?.[0],
+    ]
+      .map((val) => (val || "").toString().trim())
+      .filter(Boolean)
+      .filter((val) => val.toLowerCase() !== "user");
+
+    if (candidates.length === 0) return "User";
+    return candidates[0];
+  }, [user]);
+
+  const userDisplayNameShort = useMemo(() => {
+    const firstToken = (userDisplayName || "").trim().split(/\s+/)[0];
+    return firstToken || "User";
+  }, [userDisplayName]);
 
   const openStudentDropdown = (key) => {
     // Enable Student dropdowns on desktop + tablet; disable only on mobile drawer UI.
@@ -220,61 +286,8 @@ const Navbar = () => {
       redirectToSomethingX("/edit-your-details", getAuthToken(), user);
       return;
     }
-    window.location.href = "/build-profile";
+    redirectToSomethingX("/profile-builder", getAuthToken(), user);
   };
-  const industryLogoStorageKey = useMemo(() => {
-    const identity = user?.email || user?.id || "default";
-    return `jobs_industry_logo_${identity}`;
-  }, [user?.email, user?.id]);
-
-  useEffect(() => {
-    if (!isIndustry) {
-      setIndustryLogoSrc("");
-      return;
-    }
-    const storedLogo = localStorage.getItem(industryLogoStorageKey) || "";
-    setIndustryLogoSrc(storedLogo);
-  }, [isIndustry, industryLogoStorageKey]);
-
-  const industryAvatarSrc =
-    industryLogoSrc ||
-    user?.picture ||
-    user?.profilePicture ||
-    user?.avatar ||
-    "";
-
-  const handleIndustryLogoUpload = (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!file.type?.startsWith("image/")) {
-      window.alert("Please upload a valid image file.");
-      event.target.value = "";
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      window.alert("Image size should be less than 5MB.");
-      event.target.value = "";
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const logoData = typeof reader.result === "string" ? reader.result : "";
-      if (!logoData) return;
-      setIndustryLogoSrc(logoData);
-      localStorage.setItem(industryLogoStorageKey, logoData);
-      if (updateAuth && user) {
-        updateAuth({
-          ...user,
-          picture: logoData,
-          authenticated: true,
-        });
-      }
-      setShowUserMenu(false);
-    };
-    reader.readAsDataURL(file);
-    event.target.value = "";
-  };
-
   const openInstDropdown = (key) => {
     if (!isInstitute || isMobile) return;
     if (instNavCloseTimer.current) clearTimeout(instNavCloseTimer.current);
@@ -310,6 +323,52 @@ const Navbar = () => {
     if (industryNavCloseTimer.current) clearTimeout(industryNavCloseTimer.current);
     setOpenIndustryNav((prev) => (prev === key ? null : key));
   };
+
+  // Avoid a brief flash of stale navbar state while auth context bootstraps.
+  if (loading) {
+    return (
+      <nav
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          padding: "10px 48px",
+          background: "#FFFFFF",
+          borderBottom: "1px solid #F3F4F6",
+          boxShadow:
+            "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.05)",
+          width: "100%",
+          boxSizing: "border-box",
+          minHeight: "72px",
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "1344px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <img
+            src="/assets/Saarthi logoimg.png"
+            alt="SaarthiX Logo"
+            style={{ height: "45px", width: "auto", objectFit: "contain", display: "block" }}
+          />
+          <div
+            aria-hidden="true"
+            style={{
+              width: "120px",
+              height: "34px",
+              borderRadius: "9999px",
+              background: "#F3F4F6",
+            }}
+          />
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <>
@@ -413,7 +472,7 @@ const Navbar = () => {
           align-items: center;
           justify-content: center;
           padding: 10px 14px;
-          background: #115FD5;
+          background-color: rgb(49 112 165);
           color: #FFFFFF;
           border: none;
           border-radius: 8px;
@@ -421,7 +480,7 @@ const Navbar = () => {
           font-size: 14px;
           cursor: pointer;
           font-family: 'Inter', sans-serif;
-          box-shadow: 0 6px 14px rgba(17, 95, 213, 0.25);
+          box-shadow: 0 6px 14px rgba(49, 112, 165, 0.25);
         }
         .student-user-trigger {
           display: inline-flex;
@@ -451,6 +510,14 @@ const Navbar = () => {
           color: #FFFFFF;
           font-weight: 700;
           font-size: 12px;
+          flex: 0 0 auto;
+        }
+        .student-avatar-image {
+          width: 28px;
+          height: 28px;
+          border-radius: 9999px;
+          object-fit: cover;
+          border: 1px solid #E5E7EB;
           flex: 0 0 auto;
         }
       `}</style>
@@ -963,23 +1030,7 @@ const Navbar = () => {
                   <button
                     type="button"
                     onClick={() => goHome(dashboardPath)}
-                    className={isStudent ? "student-dashboard-btn" : "navbar-button-text"}
-                    style={isStudent ? undefined : {
-                      display: 'flex',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      width: '156px',
-                      height: '36px',
-                      background: '#3170A5',
-                      border: 'none',
-                      borderRadius: '18px',
-                      fontWeight: 500,
-                      fontSize: '14px',
-                      color: '#FFFFFF',
-                      cursor: 'pointer',
-                      fontFamily: "'Inter', sans-serif",
-                      whiteSpace: 'nowrap'
-                    }}
+                    className="student-dashboard-btn"
                   >
                     Dashboard
                   </button>
@@ -1081,43 +1132,20 @@ const Navbar = () => {
                   >
                     {isStudent ? (
                       <>
-                        <span className="student-avatar" aria-hidden="true">{studentAvatarInitials}</span>
+                        {studentAvatarSrc ? (
+                          <img
+                            src={studentAvatarSrc}
+                            alt=""
+                            className="student-avatar-image"
+                          />
+                        ) : (
+                          <span className="student-avatar" aria-hidden="true">{userAvatarInitials}</span>
+                        )}
                         <span>User</span>
                         <span className="student-nav-caret" aria-hidden="true" style={{ marginLeft: 2, borderRightColor: "rgba(17, 24, 39, 0.55)", borderBottomColor: "rgba(17, 24, 39, 0.55)" }} />
                       </>
                     ) : (
-                      <>
-                        {isIndustry && industryAvatarSrc ? (
-                          <img
-                            src={industryAvatarSrc}
-                            alt={user?.name || "Industry logo"}
-                            style={{
-                              width: "38px",
-                              height: "36px",
-                              borderRadius: "9999px",
-                              objectFit: "cover",
-                              border: "1px solid #D1D5DB",
-                              display: "inline-flex",
-                              flex: "0 0 auto",
-                            }}
-                          />
-                        ) : (
-                          <span
-                            aria-hidden="true"
-                            style={{
-                              width: "38px",
-                              height: "36px",
-                              borderRadius: "9999px",
-                              background: "#D9D9D9",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              flex: "0 0 auto",
-                            }}
-                          />
-                        )}
-                        <span>Profile</span>
-                      </>
+                      <span>{userDisplayNameShort}</span>
                     )}
                   </button>
                   {showUserMenu && createPortal(
@@ -1161,37 +1189,6 @@ const Navbar = () => {
                       >
                         Profile
                       </button>
-                      {isIndustry && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => industryLogoInputRef.current?.click()}
-                            style={{
-                              display: "block",
-                              width: "100%",
-                              padding: "12px 16px",
-                              background: "none",
-                              border: "none",
-                              borderBottom: "1px solid #F3F4F6",
-                              color: "#333333",
-                              textAlign: "left",
-                              fontWeight: 500,
-                              fontSize: "15px",
-                              cursor: "pointer",
-                              fontFamily: "'Inter', sans-serif",
-                            }}
-                          >
-                            Upload Industry Logo
-                          </button>
-                          <input
-                            ref={industryLogoInputRef}
-                            type="file"
-                            accept="image/*"
-                            onChange={handleIndustryLogoUpload}
-                            style={{ display: "none" }}
-                          />
-                        </>
-                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -1920,20 +1917,9 @@ const Navbar = () => {
                     {showDashboard && (
                       <button
                         type="button"
+                        className="student-dashboard-btn"
                         onClick={() => goHome(dashboardPath, () => setIsMobileMenuOpen(false))}
-                        style={{
-                          width: '100%',
-                          padding: '8px 12px',
-                          background: '#FFFFFF',
-                          border: '1px solid #115FD5',
-                          borderRadius: '24px',
-                          fontWeight: 500,
-                          fontSize: '14px',
-                          color: '#115FD5',
-                          cursor: 'pointer',
-                          fontFamily: "'Inter', sans-serif",
-                          marginTop: '4px'
-                        }}
+                        style={{ width: '100%', marginTop: '4px' }}
                       >
                         Dashboard
                       </button>

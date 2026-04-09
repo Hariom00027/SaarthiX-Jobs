@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { getUserProfile, getSomethingXUserProfile, saveUserProfile } from '../api/jobApi';
@@ -175,6 +175,17 @@ export default function ProfileBuilder() {
     projects: [],
   });
 
+  const profilePicturePreviewSrc = useMemo(() => {
+    const raw = formData.profilePictureBase64;
+    if (!raw || typeof raw !== 'string') return '';
+    const s = raw.trim();
+    if (!s) return '';
+    if (s.startsWith('data:')) return s;
+    if (/^https?:\/\//i.test(s)) return s;
+    const type = formData.profilePictureFileType || 'image/jpeg';
+    return `data:${type};base64,${s}`;
+  }, [formData.profilePictureBase64, formData.profilePictureFileType]);
+
   const [resume, setResume] = useState(null);
   const [skillsInput, setSkillsInput] = useState('');
   const [rolePreferenceInput, setRolePreferenceInput] = useState('');
@@ -207,13 +218,29 @@ export default function ProfileBuilder() {
 
   const mapSomethingXProfileToJobsProfile = (homeProfile) => {
     if (!homeProfile) return {};
+    let profilePictureBase64 = '';
+    let profilePictureFileType = '';
+    let profilePictureFileName = '';
+    const pic = homeProfile.picture;
+    if (pic && typeof pic === 'string' && pic.trim()) {
+      const dataMatch = pic.trim().match(/^data:([^;]+);base64,([\s\S]+)$/);
+      if (dataMatch) {
+        profilePictureBase64 = dataMatch[2].replace(/\s/g, '');
+        profilePictureFileType = dataMatch[1];
+        profilePictureFileName = 'profile-picture.jpg';
+      } else {
+        profilePictureBase64 = pic.trim();
+        profilePictureFileType = 'image/jpeg';
+        profilePictureFileName = 'profile-picture.jpg';
+      }
+    }
     return {
       fullName: homeProfile.name || '',
       phoneNumber: homeProfile.phone || '',
       email: homeProfile.email || '',
-      profilePictureBase64: homeProfile.picture || '',
-      profilePictureFileType: homeProfile.picture ? 'image/jpeg' : '',
-      profilePictureFileName: homeProfile.picture ? 'profile-picture.jpg' : '',
+      profilePictureBase64,
+      profilePictureFileType,
+      profilePictureFileName,
       profilePictureFileSize: 0,
       experience: homeProfile.experience || '',
       skills: parseArrayField(homeProfile.skills),
@@ -266,9 +293,21 @@ export default function ProfileBuilder() {
       const profile = profileResult.status === 'fulfilled' ? profileResult.value : null;
       const homeProfileRaw = homeProfileResult.status === 'fulfilled' ? homeProfileResult.value : null;
       const mappedHomeProfile = mapSomethingXProfileToJobsProfile(homeProfileRaw);
-      const effectiveProfile = profile
+      let effectiveProfile = profile
         ? mergeProfileData(profile, mappedHomeProfile)
         : mappedHomeProfile;
+
+      // Navbar uses GET /auth/profile (User.picture). Prefer that for preview so we never keep a corrupt
+      // merged value (e.g. full data URL stuffed into profilePictureBase64 → broken data:data:… src).
+      if (homeProfileRaw?.picture && mappedHomeProfile.profilePictureBase64) {
+        effectiveProfile = {
+          ...effectiveProfile,
+          profilePictureBase64: mappedHomeProfile.profilePictureBase64,
+          profilePictureFileType: mappedHomeProfile.profilePictureFileType,
+          profilePictureFileName:
+            mappedHomeProfile.profilePictureFileName || effectiveProfile.profilePictureFileName,
+        };
+      }
 
       if (profileResult.status === 'rejected') {
         console.warn('Jobs profile fetch failed. Continuing with SaarthiX Home profile:', profileResult.reason);
@@ -1227,10 +1266,10 @@ export default function ProfileBuilder() {
                   <div className="flex items-center gap-6">
                     {/* Profile Picture Preview */}
                     <div className="flex-shrink-0">
-                      {formData.profilePictureBase64 ? (
+                      {profilePicturePreviewSrc ? (
                         <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-indigo-300 bg-white flex items-center justify-center">
                           <img
-                            src={`data:${formData.profilePictureFileType};base64,${formData.profilePictureBase64}`}
+                            src={profilePicturePreviewSrc}
                             alt="Profile Preview"
                             className="w-full h-full object-cover"
                           />
