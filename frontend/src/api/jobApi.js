@@ -192,6 +192,37 @@ const saveJobsBackendProfile = async (profileData) => {
   return response.data || null;
 };
 
+/**
+ * Home /auth/profile returns User.picture as a full data URL (or raw base64 / https URL).
+ * Jobs profile UI builds src as data:${type};base64,${base64} — must not put the whole data URL in base64.
+ */
+const normalizeAuthPictureToJobsProfileFields = (picture) => {
+  if (!picture || typeof picture !== 'string' || !picture.trim()) {
+    return { profilePictureBase64: '', profilePictureFileType: '', profilePictureFileName: '' };
+  }
+  const trimmed = picture.trim();
+  if (/^https?:\/\//i.test(trimmed)) {
+    return {
+      profilePictureBase64: trimmed,
+      profilePictureFileType: 'image/jpeg',
+      profilePictureFileName: 'profile-picture.jpg',
+    };
+  }
+  const dataMatch = trimmed.match(/^data:([^;]+);base64,([\s\S]+)$/);
+  if (dataMatch) {
+    return {
+      profilePictureBase64: dataMatch[2].replace(/\s/g, ''),
+      profilePictureFileType: dataMatch[1],
+      profilePictureFileName: 'profile-picture.jpg',
+    };
+  }
+  return {
+    profilePictureBase64: trimmed,
+    profilePictureFileType: 'image/jpeg',
+    profilePictureFileName: 'profile-picture.jpg',
+  };
+};
+
 export const getUserProfile = async () => {
   if (shouldUseLocalOnlyProfile()) {
     return readLocalJobsProfile();
@@ -208,13 +239,14 @@ export const getUserProfile = async () => {
     const homeUnifiedProfile = homeUnifiedResult.status === 'fulfilled' ? homeUnifiedResult.value : null;
     const homeAuthProfile = homeAuthResult.status === 'fulfilled' ? homeAuthResult.value : null;
 
+    const authPic = homeAuthProfile ? normalizeAuthPictureToJobsProfileFields(homeAuthProfile.picture) : null;
     const mappedHomeAuthProfile = homeAuthProfile ? {
       fullName: homeAuthProfile.name || '',
       phoneNumber: homeAuthProfile.phone || '',
       email: homeAuthProfile.email || '',
-      profilePictureBase64: homeAuthProfile.picture || '',
-      profilePictureFileType: homeAuthProfile.picture ? 'image/jpeg' : '',
-      profilePictureFileName: homeAuthProfile.picture ? 'profile-picture.jpg' : '',
+      profilePictureBase64: authPic?.profilePictureBase64 || '',
+      profilePictureFileType: authPic?.profilePictureFileType || '',
+      profilePictureFileName: authPic?.profilePictureFileName || '',
       profilePictureFileSize: 0,
       experience: homeAuthProfile.experience || '',
       skills: Array.isArray(homeAuthProfile.skills) ? homeAuthProfile.skills : [],
@@ -391,6 +423,92 @@ const saveSomethingXUnifiedProfile = async (profileData) => {
   throw lastError || new Error('Unable to save unified SaarthiX Home profile');
 };
 
+/** Build a data-URI for User.picture (Home /auth/profile) from Jobs profile builder fields. */
+const buildProfilePictureDataUri = (profileData) => {
+  const raw = profileData?.profilePictureBase64;
+  if (!raw || typeof raw !== 'string' || !String(raw).trim()) return null;
+  const trimmed = String(raw).trim();
+  if (trimmed.startsWith('data:')) return trimmed;
+  const mime = profileData?.profilePictureFileType || 'image/jpeg';
+  if (typeof mime !== 'string' || !mime.includes('/')) return null;
+  return `data:${mime};base64,${trimmed}`;
+};
+
+/**
+ * Home navbar reads AuthContext user.picture from GET /auth/profile (User document).
+ * Unified POST /api/profile does not necessarily update that field — sync explicitly.
+ */
+const putSomethingXAuthProfilePicture = async (pictureDataUri) => {
+  const token = getProfileAuthToken();
+  if (!token || !pictureDataUri) return null;
+
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+  };
+  const baseCandidates = [];
+  const pushUnique = (url) => {
+    if (url && !baseCandidates.includes(url)) baseCandidates.push(url);
+  };
+
+  try {
+    const somethingXUrl = getSomethingXUrl();
+    if (somethingXUrl && somethingXUrl !== '/') {
+      pushUnique(`${somethingXUrl.replace(/\/$/, '')}/api`);
+    }
+  } catch (_) {}
+
+  if (!shouldAvoidRelativeApiBase()) {
+    pushUnique('/api');
+  }
+  pushUnique('http://localhost:3000/api');
+  pushUnique('http://127.0.0.1:3000/api');
+  pushUnique('http://localhost:8080/api');
+  pushUnique('http://127.0.0.1:8080/api');
+
+  let lastError = null;
+  for (const baseURL of baseCandidates) {
+    try {
+      const response = await axios.put(
+        `${baseURL}/auth/profile`,
+        { picture: pictureDataUri },
+        { headers, timeout: 120000 }
+      );
+      return response.data;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error('Unable to sync profile picture to SaarthiX Home auth profile');
+};
+
+const notifySomethingXParentAuthRefresh = () => {
+  if (typeof window === 'undefined' || !window.parent || window.parent === window) return;
+  let targetOrigin = '*';
+  try {
+    const u = getSomethingXUrl();
+    if (u && u !== '/') targetOrigin = new URL(u).origin;
+  } catch (_) {}
+  try {
+    window.parent.postMessage(
+      { type: 'saarthix-auth-profile-sync', source: 'jobs-profile' },
+      targetOrigin
+    );
+  } catch (_) {}
+};
+
+const syncAuthPictureAfterJobsProfileSave = async (profileData) => {
+  const uri = buildProfilePictureDataUri(profileData);
+  if (!uri) return;
+  try {
+    await putSomethingXAuthProfilePicture(uri);
+    notifySomethingXParentAuthRefresh();
+  } catch (e) {
+    console.warn('SaarthiX Home navbar picture sync failed (auth User.picture):', e?.message || e);
+  }
+};
+
 export const saveUserProfile = async (profileData) => {
   if (shouldUseLocalOnlyProfile()) {
     writeLocalJobsProfile(profileData);
@@ -415,6 +533,8 @@ export const saveUserProfile = async (profileData) => {
       console.warn('Shared profile saved, but Jobs mirror sync failed:', syncError?.message || syncError);
     }
 
+    await syncAuthPictureAfterJobsProfileSave(profileData);
+
     return savedProfile;
   } catch (error) {
     console.error('Error saving user profile to shared Home backend:', error);
@@ -426,6 +546,7 @@ export const saveUserProfile = async (profileData) => {
         ? jobsSavedProfile
         : profileData;
       writeLocalJobsProfile(savedProfile);
+      await syncAuthPictureAfterJobsProfileSave(profileData);
       return savedProfile;
     } catch (jobsError) {
       console.error('Error saving user profile to Jobs backend:', jobsError);

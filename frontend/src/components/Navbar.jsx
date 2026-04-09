@@ -11,7 +11,7 @@ const getAuthToken = () =>
   localStorage.getItem("token") || localStorage.getItem("somethingx_auth_token") || "";
 
 const Navbar = () => {
-  const { user, isAuthenticated, clearAuth, updateAuth } = useAuth();
+  const { user, isAuthenticated, clearAuth, loading } = useAuth();
   const location = useLocation();
   const isHomePage = location.pathname === "/";
   const isStudent =
@@ -34,7 +34,6 @@ const Navbar = () => {
   const dropdownRef = useRef(null);
   const mobileMenuRef = useRef(null);
   const mobileToggleRef = useRef(null);
-  const industryLogoInputRef = useRef(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -49,7 +48,6 @@ const Navbar = () => {
   const instNavCloseTimer = useRef(null);
   const [openIndustryNav, setOpenIndustryNav] = useState(null); // 'talent' | null
   const industryNavCloseTimer = useRef(null);
-  const [industryLogoSrc, setIndustryLogoSrc] = useState("");
 
   const showDashboard = true;
 
@@ -222,6 +220,16 @@ const Navbar = () => {
     return (a + b).toUpperCase();
   }, [user]);
 
+  const studentAvatarSrc = useMemo(
+    () =>
+      user?.picture ||
+      user?.profilePicture ||
+      user?.avatar ||
+      user?.photoURL ||
+      "",
+    [user]
+  );
+
   const userDisplayName = useMemo(() => {
     const first = (user?.firstName || user?.firstname || "").trim();
     const last = (user?.lastName || user?.lastname || "").trim();
@@ -280,59 +288,6 @@ const Navbar = () => {
     }
     redirectToSomethingX("/profile-builder", getAuthToken(), user);
   };
-  const industryLogoStorageKey = useMemo(() => {
-    const identity = user?.email || user?.id || "default";
-    return `jobs_industry_logo_${identity}`;
-  }, [user?.email, user?.id]);
-
-  useEffect(() => {
-    if (!isIndustry) {
-      setIndustryLogoSrc("");
-      return;
-    }
-    const storedLogo = localStorage.getItem(industryLogoStorageKey) || "";
-    setIndustryLogoSrc(storedLogo);
-  }, [isIndustry, industryLogoStorageKey]);
-
-  const industryAvatarSrc =
-    industryLogoSrc ||
-    user?.picture ||
-    user?.profilePicture ||
-    user?.avatar ||
-    "";
-
-  const handleIndustryLogoUpload = (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!file.type?.startsWith("image/")) {
-      window.alert("Please upload a valid image file.");
-      event.target.value = "";
-      return;
-    }
-    if (file.size > 5 * 1024 * 1024) {
-      window.alert("Image size should be less than 5MB.");
-      event.target.value = "";
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const logoData = typeof reader.result === "string" ? reader.result : "";
-      if (!logoData) return;
-      setIndustryLogoSrc(logoData);
-      localStorage.setItem(industryLogoStorageKey, logoData);
-      if (updateAuth && user) {
-        updateAuth({
-          ...user,
-          picture: logoData,
-          authenticated: true,
-        });
-      }
-      setShowUserMenu(false);
-    };
-    reader.readAsDataURL(file);
-    event.target.value = "";
-  };
-
   const openInstDropdown = (key) => {
     if (!isInstitute || isMobile) return;
     if (instNavCloseTimer.current) clearTimeout(instNavCloseTimer.current);
@@ -368,6 +323,52 @@ const Navbar = () => {
     if (industryNavCloseTimer.current) clearTimeout(industryNavCloseTimer.current);
     setOpenIndustryNav((prev) => (prev === key ? null : key));
   };
+
+  // Avoid a brief flash of stale navbar state while auth context bootstraps.
+  if (loading) {
+    return (
+      <nav
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          padding: "10px 48px",
+          background: "#FFFFFF",
+          borderBottom: "1px solid #F3F4F6",
+          boxShadow:
+            "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.05)",
+          width: "100%",
+          boxSizing: "border-box",
+          minHeight: "72px",
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            maxWidth: "1344px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <img
+            src="/assets/Saarthi logoimg.png"
+            alt="SaarthiX Logo"
+            style={{ height: "45px", width: "auto", objectFit: "contain", display: "block" }}
+          />
+          <div
+            aria-hidden="true"
+            style={{
+              width: "120px",
+              height: "34px",
+              borderRadius: "9999px",
+              background: "#F3F4F6",
+            }}
+          />
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <>
@@ -509,6 +510,14 @@ const Navbar = () => {
           color: #FFFFFF;
           font-weight: 700;
           font-size: 12px;
+          flex: 0 0 auto;
+        }
+        .student-avatar-image {
+          width: 28px;
+          height: 28px;
+          border-radius: 9999px;
+          object-fit: cover;
+          border: 1px solid #E5E7EB;
           flex: 0 0 auto;
         }
       `}</style>
@@ -1021,23 +1030,7 @@ const Navbar = () => {
                   <button
                     type="button"
                     onClick={() => goHome(dashboardPath)}
-                    className={isStudent ? "student-dashboard-btn" : "navbar-button-text"}
-                    style={isStudent ? undefined : {
-                      display: 'flex',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      width: '156px',
-                      height: '36px',
-                      backgroundColor: 'rgb(49 112 165)',
-                      border: 'none',
-                      borderRadius: '18px',
-                      fontWeight: 500,
-                      fontSize: '14px',
-                      color: '#FFFFFF',
-                      cursor: 'pointer',
-                      fontFamily: "'Inter', sans-serif",
-                      whiteSpace: 'nowrap'
-                    }}
+                    className="student-dashboard-btn"
                   >
                     Dashboard
                   </button>
@@ -1139,48 +1132,20 @@ const Navbar = () => {
                   >
                     {isStudent ? (
                       <>
-                        <span className="student-avatar" aria-hidden="true">{userAvatarInitials}</span>
+                        {studentAvatarSrc ? (
+                          <img
+                            src={studentAvatarSrc}
+                            alt=""
+                            className="student-avatar-image"
+                          />
+                        ) : (
+                          <span className="student-avatar" aria-hidden="true">{userAvatarInitials}</span>
+                        )}
                         <span>User</span>
                         <span className="student-nav-caret" aria-hidden="true" style={{ marginLeft: 2, borderRightColor: "rgba(17, 24, 39, 0.55)", borderBottomColor: "rgba(17, 24, 39, 0.55)" }} />
                       </>
                     ) : (
-                      <>
-                        {isIndustry && industryAvatarSrc ? (
-                          <img
-                            src={industryAvatarSrc}
-                            alt={user?.name || "Industry logo"}
-                            style={{
-                              width: "38px",
-                              height: "36px",
-                              borderRadius: "9999px",
-                              objectFit: "cover",
-                              border: "1px solid #D1D5DB",
-                              display: "inline-flex",
-                              flex: "0 0 auto",
-                            }}
-                          />
-                        ) : (
-                          <span
-                            aria-hidden="true"
-                            style={{
-                              width: "38px",
-                              height: "36px",
-                              borderRadius: "9999px",
-                              background: "#D9D9D9",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              flex: "0 0 auto",
-                              color: "#111827",
-                              fontWeight: 700,
-                              fontSize: "13px",
-                            }}
-                          >
-                            {userAvatarInitials}
-                          </span>
-                        )}
-                        <span>{userDisplayNameShort}</span>
-                      </>
+                      <span>{userDisplayNameShort}</span>
                     )}
                   </button>
                   {showUserMenu && createPortal(
@@ -1224,37 +1189,6 @@ const Navbar = () => {
                       >
                         Profile
                       </button>
-                      {isIndustry && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => industryLogoInputRef.current?.click()}
-                            style={{
-                              display: "block",
-                              width: "100%",
-                              padding: "12px 16px",
-                              background: "none",
-                              border: "none",
-                              borderBottom: "1px solid #F3F4F6",
-                              color: "#333333",
-                              textAlign: "left",
-                              fontWeight: 500,
-                              fontSize: "15px",
-                              cursor: "pointer",
-                              fontFamily: "'Inter', sans-serif",
-                            }}
-                          >
-                            Upload Industry Logo
-                          </button>
-                          <input
-                            ref={industryLogoInputRef}
-                            type="file"
-                            accept="image/*"
-                            onChange={handleIndustryLogoUpload}
-                            style={{ display: "none" }}
-                          />
-                        </>
-                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -1983,20 +1917,9 @@ const Navbar = () => {
                     {showDashboard && (
                       <button
                         type="button"
+                        className="student-dashboard-btn"
                         onClick={() => goHome(dashboardPath, () => setIsMobileMenuOpen(false))}
-                        style={{
-                          width: '100%',
-                          padding: '8px 12px',
-                          backgroundColor: 'rgb(49 112 165)',
-                          border: 'none',
-                          borderRadius: '24px',
-                          fontWeight: 500,
-                          fontSize: '14px',
-                          color: '#FFFFFF',
-                          cursor: 'pointer',
-                          fontFamily: "'Inter', sans-serif",
-                          marginTop: '4px'
-                        }}
+                        style={{ width: '100%', marginTop: '4px' }}
                       >
                         Dashboard
                       </button>

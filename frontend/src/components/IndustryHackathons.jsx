@@ -221,18 +221,6 @@ export default function IndustryHackathons() {
   return (
     <div className="min-h-screen bg-white px-6 py-6">
       <div className="mx-auto w-full max-w-[1360px]">
-        <div className="mb-4 flex items-center gap-2">
-          <button className="flex h-[41px] items-center gap-2 rounded-[6px] border border-black bg-white px-4 text-[14px] font-medium text-[#0F1724]">
-            <span className="text-[16px]">👥</span> Candidates
-          </button>
-          <button className="flex h-[41px] items-center gap-2 rounded-[6px] border border-black bg-white px-4 text-[14px] font-medium text-[#0F1724]">
-            <span className="text-[16px]">⚙</span> Settings
-          </button>
-          <button className="flex h-[41px] items-center gap-2 rounded-[6px] border border-black bg-white px-4 text-[14px] font-medium text-[#0F1724]">
-            <span className="text-[16px]">✉</span> Messages
-          </button>
-        </div>
-
         <div className="mb-6 flex items-start justify-between">
           <div className="flex items-start gap-4">
             <div className="flex h-[62px] w-[62px] items-center justify-center rounded-[10px] border border-black bg-white">
@@ -240,9 +228,9 @@ export default function IndustryHackathons() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <h1 className="text-[42px] font-bold leading-[1.1] tracking-[-0.5px] text-[#0F1724]">Hackathons Dashboard</h1>
-              <p className="mt-1 text-[15px] text-black/75">
+              <p className="mt-1 w-full overflow-hidden text-ellipsis whitespace-nowrap text-[15px] text-black/75">
                 Manage, track and improve your hackathons from one place. Post new challenges and track participation and find top talent with ease.
               </p>
             </div>
@@ -441,7 +429,9 @@ export default function IndustryHackathons() {
                   ['4', 'Connect & Hire', 'Network with the high performers to explore future potential'],
                 ].map(([n, title, desc]) => (
                   <div key={n} className="relative z-10 flex items-start gap-4">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#3170A5] text-[12px] font-semibold text-white">{n}</div>
+                    <div className="flex h-6 w-6 min-h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-[#3170A5] text-[12px] font-semibold leading-none text-white">
+                      {n}
+                    </div>
                     <div>
                       <div className="text-[14px] font-semibold text-[#0F1724]">{title}</div>
                       <div className="text-[13px] leading-[18px] text-black/75">{desc}</div>

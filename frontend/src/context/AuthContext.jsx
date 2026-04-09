@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { checkAuth } from '../api/authApi';
+import { getSomethingXUserProfile } from '../api/jobApi';
 
 const AuthContext = createContext(null);
 
@@ -84,7 +85,29 @@ export const AuthProvider = ({ children }) => {
       name: resolveDisplayName(authData),
       email: authData?.email || cached?.email || '',
       userType: authData?.userType || cached?.userType || 'APPLICANT',
+      picture: authData?.picture || cached?.picture || '',
     };
+  };
+
+  /** Jobs /auth/me uses Jobs DB pictureUrl — often empty for SaarthiX SSO students. Use Home User.picture like SaarthiX Home navbar. */
+  const mergeSomethingXProfilePicture = async (userLike) => {
+    if (!userLike) return userLike;
+    const token = localStorage.getItem('token') || localStorage.getItem('somethingx_auth_token');
+    if (!token) return userLike;
+    const studentLike = userLike.userType === 'STUDENT' || userLike.userType === 'APPLICANT';
+    try {
+      const home = await getSomethingXUserProfile();
+      if (!home?.picture) return userLike;
+      if (studentLike) {
+        return { ...userLike, picture: home.picture };
+      }
+      if (!userLike.picture) {
+        return { ...userLike, picture: home.picture };
+      }
+    } catch {
+      /* Home unreachable — keep Jobs user */
+    }
+    return userLike;
   };
 
   // Load auth state from JWT token
@@ -92,13 +115,16 @@ export const AuthProvider = ({ children }) => {
     try {
       const authData = await checkAuth();
       if (authData.authenticated) {
-        const normalized = normalizeAuthData(authData);
+        let normalized = normalizeAuthData(authData);
+        normalized = await mergeSomethingXProfilePicture(normalized);
         setUser(normalized);
         setIsAuthenticated(true);
-        cacheSomethingXAuth(localStorage.getItem('token'), {
+        const tok = localStorage.getItem('token') || localStorage.getItem('somethingx_auth_token');
+        cacheSomethingXAuth(tok, {
           email: normalized.email || '',
           name: normalized.name || '',
           userType: normalized.userType || 'APPLICANT',
+          picture: normalized.picture || '',
         });
         console.log('[AuthContext] User authenticated with role:', normalized.userType);
       } else {
@@ -164,6 +190,27 @@ export const AuthProvider = ({ children }) => {
     }
   }, []); // Only run once on mount
 
+  useEffect(() => {
+    const refreshStudentPicture = async () => {
+      const token = localStorage.getItem('token') || localStorage.getItem('somethingx_auth_token');
+      if (!token) return;
+      try {
+        const home = await getSomethingXUserProfile();
+        if (!home?.picture) return;
+        setUser((prev) => {
+          if (!prev) return prev;
+          if (prev.userType !== 'STUDENT' && prev.userType !== 'APPLICANT') return prev;
+          return { ...prev, picture: home.picture };
+        });
+        cacheSomethingXAuth(token, { picture: home.picture });
+      } catch {
+        /* ignore */
+      }
+    };
+    window.addEventListener('profileSaved', refreshStudentPicture);
+    return () => window.removeEventListener('profileSaved', refreshStudentPicture);
+  }, []);
+
   const exchangeToken = async (token, email, name, userType) => {
     try {
       if (!token) return false;
@@ -195,10 +242,12 @@ export const AuthProvider = ({ children }) => {
       const normalized = normalizeAuthData(authData);
       setUser(normalized);
       setIsAuthenticated(true);
-      cacheSomethingXAuth(localStorage.getItem('token'), {
+      const tok = localStorage.getItem('token') || localStorage.getItem('somethingx_auth_token');
+      cacheSomethingXAuth(tok, {
         email: normalized.email || '',
         name: normalized.name || '',
-        userType: normalized.userType || 'APPLICANT'
+        userType: normalized.userType || 'APPLICANT',
+        picture: normalized.picture || '',
       });
     } else {
       setUser(null);
