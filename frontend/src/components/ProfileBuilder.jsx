@@ -921,29 +921,13 @@ export default function ProfileBuilder() {
     });
   };
 
-  const handleSectionChange = async (newIndex) => {
-    // Auto-save before changing section
-    if (formData.fullName.trim()) {
-      const profileData = { ...formData };
-      
-      if (resume) {
-        if (resume.isFromProfile && resume.base64) {
-          profileData.resumeFileName = resume.name;
-          profileData.resumeFileType = resume.type;
-          profileData.resumeBase64 = resume.base64;
-          profileData.resumeFileSize = resume.size;
-        }
-      }
-      
-      await autoSaveProfile(profileData);
-    }
-
+  const handleSectionChange = (newIndex) => {
     // Update completion for current section before navigating away
     const currentSection = PROFILE_SECTIONS[currentSectionIndex];
     if (isSectionComplete(currentSection)) {
-      setCompletedSections(prev => new Set([...prev, currentSection.id]));
+      setCompletedSections((prev) => new Set([...prev, currentSection.id]));
     } else {
-      setCompletedSections(prev => {
+      setCompletedSections((prev) => {
         const updated = new Set(prev);
         updated.delete(currentSection.id);
         return updated;
@@ -951,6 +935,18 @@ export default function ProfileBuilder() {
     }
 
     setCurrentSectionIndex(newIndex);
+
+    // Save in the background so the UI does not wait on the network (was blocking every section change)
+    if (formData.fullName.trim()) {
+      const profileData = { ...formData };
+      if (resume?.isFromProfile && resume.base64) {
+        profileData.resumeFileName = resume.name;
+        profileData.resumeFileType = resume.type;
+        profileData.resumeBase64 = resume.base64;
+        profileData.resumeFileSize = resume.size;
+      }
+      void autoSaveProfile(profileData);
+    }
   };
 
   const handleNext = () => {
