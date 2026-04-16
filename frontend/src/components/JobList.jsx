@@ -683,8 +683,7 @@ export default function JobList() {
               radial-gradient(ellipse 90% 58% at 12% 30%, rgba(245, 210, 188, 0.2) 0%, transparent 54%),
               radial-gradient(ellipse 72% 48% at 92% 16%, rgba(186, 230, 253, 0.18) 0%, transparent 50%),
               radial-gradient(ellipse 52% 44% at 70% 88%, rgba(49, 112, 165, 0.5) 0%, transparent 48%),
-              linear-gradient(165deg, rgba(10, 32, 52, 0.97) 0%, rgba(30, 88, 130, 0.9) 42%, rgba(49, 112, 165, 0.82) 72%, rgba(15, 45, 72, 0.95) 100%),
-              url('/Group.png')
+              linear-gradient(165deg, rgba(10, 32, 52, 0.97) 0%, rgba(30, 88, 130, 0.9) 42%, rgba(49, 112, 165, 0.82) 72%, rgba(15, 45, 72, 0.95) 100%)
             `,
             backgroundSize: "cover",
             backgroundPosition: "center",
@@ -771,7 +770,6 @@ export default function JobList() {
 
               <div className="relative flex min-h-[220px] justify-center md:justify-end md:pr-2 lg:min-h-[260px] lg:pr-4">
                 <div className="absolute right-[6%] top-[4%] hidden h-12 w-12 rounded-2xl border border-white/15 bg-white/5 backdrop-blur-md sm:block" aria-hidden />
-                <div className="absolute bottom-[10%] left-[2%] h-10 w-10 rounded-full border border-[#F5D2BC]/30 bg-[#F5D2BC]/10 sm:h-11 sm:w-11" aria-hidden />
                 <div
                   className="absolute left-1/2 top-1/2 -z-10 h-[200px] w-[240px] -translate-x-1/2 -translate-y-1/2 rounded-[45%] opacity-50 blur-3xl md:left-auto md:right-8 md:translate-x-0"
                   style={{
