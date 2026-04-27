@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { getUserProfile, getSomethingXUserProfile, saveUserProfile } from '../api/jobApi';
+import { getUserProfile, getSomethingXUserProfile, saveUserProfile, enhanceProfileSummaryWithAI } from '../api/jobApi';
 import { useAuth } from '../context/AuthContext';
 
 const STORAGE_KEY = 'jobApplicationFormData';
@@ -52,6 +52,26 @@ const OPPORTUNITY_TYPE_OPTIONS = [
   { value: 'FULL_TIME', label: 'Full-time' },
   { value: 'PART_TIME', label: 'Part-time' }
 ];
+
+const EDUCATION_LEVEL_OPTIONS = [
+  'Class 10th',
+  'Class 12th',
+  'Diploma',
+  'Graduation',
+  'Post Graduation',
+  'Other'
+];
+
+const DEGREE_OPTIONS_BY_LEVEL = {
+  'Class 10th': ['SSC', 'CBSE 10th', 'ICSE 10th', 'State Board 10th'],
+  'Class 12th': ['HSC', 'CBSE 12th', 'ICSE 12th', 'State Board 12th'],
+  Diploma: ['Polytechnic Diploma', 'Diploma in Engineering', 'ITI', 'Diploma in Computer Applications'],
+  Graduation: ['B.Tech', 'B.E.', 'B.Sc', 'B.Com', 'B.A.', 'BCA', 'BBA', 'B.Arch', 'B.Pharm'],
+  'Post Graduation': ['M.Tech', 'M.E.', 'M.Sc', 'M.Com', 'M.A.', 'MCA', 'MBA', 'PG Diploma', 'M.Pharm'],
+  Other: ['Certificate Course', 'Vocational Course', 'Distance Learning Program']
+};
+
+const MIN_EDUCATION_YEAR = 1980;
 
 // Section definitions for the journey
 const PROFILE_SECTIONS = [
@@ -196,9 +216,14 @@ export default function ProfileBuilder() {
   const [showSkillsSuggestions, setShowSkillsSuggestions] = useState(false);
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
   const [showHobbiesSuggestions, setShowHobbiesSuggestions] = useState(false);
+  const [enhancingField, setEnhancingField] = useState('');
   const autoSaveTimerRef = useRef(null);
   const skipNextDraftAutoSaveRef = useRef(true);
   const certificationFileInputRef = useRef(null);
+  const yearOptions = useMemo(() => {
+    const thisYear = new Date().getFullYear();
+    return Array.from({ length: thisYear - MIN_EDUCATION_YEAR + 3 }, (_, index) => String(thisYear + 2 - index));
+  }, []);
 
   const parseArrayField = (value) => {
     if (!value) return [];
@@ -421,12 +446,11 @@ export default function ProfileBuilder() {
   };
 
   useEffect(() => {
-    if (loading || authLoading || !isAuthenticated) return;
+    if (loading) return;
     if (skipNextDraftAutoSaveRef.current) {
       skipNextDraftAutoSaveRef.current = false;
       return;
     }
-    if (!formData.fullName?.trim()) return;
 
     if (autoSaveTimerRef.current) {
       clearTimeout(autoSaveTimerRef.current);
@@ -453,14 +477,14 @@ export default function ProfileBuilder() {
       } catch (error) {
         console.error('Draft auto-save failed:', error);
       }
-    }, 1200);
+    }, 400);
 
     return () => {
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
       }
     };
-  }, [formData, resume, loading, authLoading, isAuthenticated]);
+  }, [formData, resume, loading]);
 
   const isFieldFilled = (fieldName) => {
     const value = formData[fieldName];
@@ -517,31 +541,29 @@ export default function ProfileBuilder() {
     setCompletedSections(completed);
 
     // Auto-save the current form data to database whenever a section is completed
-    if (formData.fullName.trim()) {
-      const profileData = { ...formData };
-      
-      // Include resume if present
-      if (resume) {
-        if (resume.isFromProfile && resume.base64) {
+    const profileData = { ...formData };
+
+    // Include resume if present
+    if (resume) {
+      if (resume.isFromProfile && resume.base64) {
+        profileData.resumeFileName = resume.name;
+        profileData.resumeFileType = resume.type;
+        profileData.resumeBase64 = resume.base64;
+        profileData.resumeFileSize = resume.size;
+      } else if (resume && resume.size) {
+        // For newly selected files, convert to base64
+        const reader = new FileReader();
+        reader.onload = async (e) => {
           profileData.resumeFileName = resume.name;
           profileData.resumeFileType = resume.type;
-          profileData.resumeBase64 = resume.base64;
+          profileData.resumeBase64 = e.target.result.split(',')[1];
           profileData.resumeFileSize = resume.size;
-        } else if (resume && resume.size) {
-          // For newly selected files, convert to base64
-          const reader = new FileReader();
-          reader.onload = async (e) => {
-            profileData.resumeFileName = resume.name;
-            profileData.resumeFileType = resume.type;
-            profileData.resumeBase64 = e.target.result.split(',')[1];
-            profileData.resumeFileSize = resume.size;
-            await autoSaveProfile(profileData);
-          };
-          reader.readAsDataURL(resume);
-        }
-      } else {
-        await autoSaveProfile(profileData);
+          await autoSaveProfile(profileData);
+        };
+        reader.readAsDataURL(resume);
       }
+    } else {
+      await autoSaveProfile(profileData);
     }
   };
 
@@ -566,6 +588,277 @@ export default function ProfileBuilder() {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+  };
+
+  const enhanceWrittenContent = (content) => {
+    if (!content || typeof content !== 'string') return '';
+
+    const typoCorrections = {
+      mysel: 'myself',
+      priyanshuu: 'priyanshu',
+      thi: 'this',
+      ths: 'this',
+      teh: 'the',
+      adn: 'and',
+      recieve: 'receive',
+      experiance: 'experience',
+      exprience: 'experience',
+      proffesional: 'professional',
+      summmary: 'summary',
+      compny: 'company',
+      comnapy: 'company',
+      conmnapy: 'company',
+      compnay: 'company',
+      copmany: 'company',
+      wokred: 'worked',
+      wrked: 'worked',
+      workend: 'worked',
+      worknd: 'worked',
+      wrk: 'work',
+      hrd: 'hard',
+      veru: 'very',
+      alot: 'a lot',
+      lipt: 'lot',
+      lomt: 'lot',
+      lompt: 'lot',
+      lomptt: 'lot',
+      prokts: 'projects',
+      projkts: 'projects',
+      prjcts: 'projects'
+    };
+
+    let normalized = content
+      .replace(/\r\n/g, ' ')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/[^a-zA-Z0-9\s.,;:!?'"()-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!normalized) return '';
+
+    Object.entries(typoCorrections).forEach(([wrong, correct]) => {
+      const regex = new RegExp(`\\b${wrong}\\b`, 'gi');
+      normalized = normalized.replace(regex, correct);
+    });
+
+    let corrected = normalized
+      .replace(/\bi\b/g, 'I')
+      .replace(/\bmyself\s+([a-z])/gi, 'My name is $1')
+      .replace(/\bmy name ([a-z])/gi, 'My name is $1')
+      .replace(/\bI doing\b/gi, 'I am doing')
+      .replace(/\bI working\b/gi, 'I am working')
+      .replace(/\bI work(ed)? hard\b/gi, (m, wasWorked) => (wasWorked ? 'I worked hard' : 'I work hard'))
+      .replace(/\bI done\b/gi, 'I have done')
+      .replace(/\bI am work\b/gi, 'I am working')
+      .replace(/\bI was work\b/gi, 'I was working')
+      .replace(/\bworked on company\b/gi, 'worked at the company')
+      .replace(/\bworked on the company\b/gi, 'worked at the company')
+      .replace(/\bin company\b/gi, 'at the company')
+      .replace(/\bin the company\b/gi, 'at the company')
+      .replace(/\ba lot of work so many\b/gi, 'a lot of work')
+      .replace(/\bso many work\b/gi, 'a lot of work')
+      .replace(/\bworked and worked\b/gi, 'worked')
+      .replace(/\bwork and work\b/gi, 'work')
+      .replace(/\s*([,;:!?])\s*/g, '$1 ')
+      .replace(/\s*\.\s*/g, '. ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+
+    // Split and clean each sentence without changing intent.
+    const sentenceParts = corrected
+      .split(/[.?!]+/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        let sentence = part
+          .replace(/\bI am working in\b/gi, 'I am working at')
+          .replace(/\bI was working in\b/gi, 'I was working at')
+          .replace(/\bI currently working\b/gi, 'I am currently working')
+          .replace(/\bI worked hard at this company and I am doing work\b/gi, 'I worked hard at this company and did my work sincerely')
+          .replace(/\bI worked hard at this company and I am working\b/gi, 'I worked hard at this company and worked sincerely')
+          .replace(/\bI am doing work\b/gi, 'I am doing my work')
+          .replace(/\bI do work\b/gi, 'I do my work')
+          .replace(/\bnow I was\b/gi, 'Now I am')
+          .replace(/\bnow I am working\b/gi, 'Now I am working')
+          .replace(/\bnow I working\b/gi, 'Now I am working')
+          .replace(/\bI am working at ([a-z0-9&.\- ]+)\s+in\s+((?:19|20)\d{2})\b/gi, 'I worked at $1 in $2')
+          .replace(/\bI was working at ([a-z0-9&.\- ]+)\s+currently\b/gi, 'I am currently working at $1')
+          .replace(/\bI was working at ([a-z0-9&.\- ]+)\s+now\b/gi, 'I am now working at $1')
+          .replace(/\bI am currently\b(?!\s+working)/gi, 'I am currently working')
+          .replace(/\bI worked at ([a-z0-9&.\- ]+)\s+now I am working at ([a-z0-9&.\- ]+)\b/gi, 'I worked at $1, and I am now working at $2')
+          .replace(/\bI worked at ([a-z0-9&.\- ]+)\s+and now I was working at ([a-z0-9&.\- ]+)\b/gi, 'I worked at $1, and I am now working at $2')
+          .replace(/\bI am working at ([a-z0-9&.\- ]+)\s+currently\b/gi, 'I am currently working at $1')
+          .replace(/\bI am currently working at ([a-z0-9&.\- ]+)\s+in\s+((?:19|20)\d{2})\b/gi, 'I worked at $1 in $2')
+          .replace(/\bcurrently\./gi, 'currently')
+          .trim();
+
+        // Normalize shouty title-case text to sentence case, then restore proper "I".
+        sentence = sentence.toLowerCase();
+        sentence = sentence.replace(/\bi\b/g, 'I');
+        sentence = sentence.replace(/\bgoogle\b/g, 'Google').replace(/\bmicrosoft\b/g, 'Microsoft');
+        sentence = sentence.charAt(0).toUpperCase() + sentence.slice(1);
+        return sentence;
+      });
+
+    if (sentenceParts.length === 0) return '';
+    return `${sentenceParts.join('. ')}.`;
+  };
+
+  const handleEnhanceTextField = async (fieldName) => {
+    const sourceText = formData[fieldName];
+    if (!sourceText || !String(sourceText).trim()) {
+      toast.info('Please write something first, then click enhance.');
+      return;
+    }
+
+    setEnhancingField(fieldName);
+    try {
+      let enhanced = '';
+      if (fieldName === 'summary') {
+        try {
+          enhanced = await enhanceProfileSummaryWithAI(sourceText);
+        } catch (_) {
+          // Fallback to local enhancement if AI service is unavailable.
+          enhanced = enhanceWrittenContent(sourceText);
+          toast.info('AI enhancement unavailable right now. Applied local text correction instead.');
+        }
+      } else {
+        enhanced = enhanceWrittenContent(sourceText);
+      }
+
+      const normalizedEnhanced = String(enhanced || '').trim();
+      const safeEnhanced = normalizedEnhanced || enhanceWrittenContent(sourceText);
+      if (safeEnhanced.trim() === String(sourceText).trim()) {
+        toast.info('No further improvements found in this text.');
+      } else {
+        setFormData(prev => ({ ...prev, [fieldName]: safeEnhanced }));
+        setTimeout(() => updateCompletedSections(), 100);
+        toast.success('Text enhanced successfully.');
+      }
+    } finally {
+      setEnhancingField('');
+    }
+  };
+
+  const handleEnhanceExperienceDescription = async (index) => {
+    const sourceText = formData.professionalExperiences[index]?.description || '';
+    if (!sourceText.trim()) {
+      toast.info('Please write a description first, then click enhance.');
+      return;
+    }
+
+    setEnhancingField(`experience-description-${index}`);
+    try {
+      const enhancedDescription = enhanceWrittenContent(sourceText, 'experience');
+      if (enhancedDescription.trim() === sourceText.trim()) {
+        toast.info('No further improvements found in this description.');
+        return;
+      }
+      setFormData(prev => {
+        const updated = [...prev.professionalExperiences];
+        updated[index] = {
+          ...updated[index],
+          description: enhancedDescription
+        };
+        return { ...prev, professionalExperiences: updated };
+      });
+      setTimeout(() => updateCompletedSections(), 100);
+      toast.success('Description enhanced successfully.');
+    } finally {
+      setEnhancingField('');
+    }
+  };
+
+  const handleEnhanceProjectDescription = async (index) => {
+    const sourceText = formData.projects[index]?.description || '';
+    if (!sourceText.trim()) {
+      toast.info('Please write a project description first, then click enhance.');
+      return;
+    }
+
+    setEnhancingField(`project-description-${index}`);
+    try {
+      const enhancedDescription = enhanceWrittenContent(sourceText, 'project');
+      if (enhancedDescription.trim() === sourceText.trim()) {
+        toast.info('No further improvements found in this description.');
+        return;
+      }
+      setFormData(prev => {
+        const updated = [...prev.projects];
+        updated[index] = {
+          ...updated[index],
+          description: enhancedDescription
+        };
+        return { ...prev, projects: updated };
+      });
+      setTimeout(() => updateCompletedSections(), 100);
+      toast.success('Project description enhanced successfully.');
+    } finally {
+      setEnhancingField('');
+    }
+  };
+
+  const buildCoverLetterFromProfile = () => {
+    const name = formData.fullName?.trim() || 'Hiring Manager';
+    const experience = formData.experience?.trim();
+    const topSkills = (Array.isArray(formData.skills) ? formData.skills : [])
+      .filter(Boolean)
+      .slice(0, 6)
+      .join(', ');
+    const currentRole = formData.currentPosition?.trim();
+    const summary = formData.summary?.trim();
+    const latestEducation = (Array.isArray(formData.educationEntries) ? formData.educationEntries : [])
+      .find((entry) => entry?.degree || entry?.level || entry?.institution);
+    const latestProject = (Array.isArray(formData.projects) ? formData.projects : [])
+      .find((project) => project?.name || project?.description);
+
+    const opening = `Dear Hiring Manager,\n\nI am excited to apply for opportunities aligned with my profile. My name is ${name}${currentRole ? `, and I am currently focused on ${currentRole}` : ''}.`;
+    const experienceLine = experience
+      ? `I bring ${experience} of hands-on experience and a strong commitment to delivering high-quality results.`
+      : 'I bring strong practical exposure and a consistent focus on quality execution.';
+    const skillsLine = topSkills
+      ? `My core skills include ${topSkills}, and I am comfortable adapting quickly to new tools and workflows.`
+      : 'I am adaptable, quick to learn, and focused on building reliable solutions.';
+    const educationLine = latestEducation
+      ? `My academic background includes ${latestEducation.degree || latestEducation.level}${latestEducation.institution ? ` from ${latestEducation.institution}` : ''}${latestEducation.passingYear ? ` (${latestEducation.passingYear})` : ''}.`
+      : '';
+    const projectLine = latestProject
+      ? `One of my key projects is "${latestProject.name || 'a major project'}"${latestProject.description ? `, where I ${latestProject.description}` : '.'}`
+      : '';
+    const summaryLine = summary
+      ? `In short, ${summary}`
+      : 'I am eager to contribute to impactful projects and grow with a performance-driven team.';
+
+    const links = [formData.linkedInUrl, formData.githubUrl, formData.portfolioUrl, formData.websiteUrl]
+      .filter((value) => typeof value === 'string' && value.trim())
+      .join(' | ');
+    const linksLine = links ? `\n\nProfile Links: ${links}` : '';
+
+    return [
+      opening,
+      '',
+      experienceLine,
+      skillsLine,
+      educationLine,
+      projectLine,
+      summaryLine,
+      '',
+      'Thank you for your time and consideration. I would welcome the opportunity to discuss how I can contribute to your team.',
+      '',
+      'Sincerely,',
+      name,
+    ]
+      .filter(Boolean)
+      .join('\n')
+      .concat(linksLine);
+  };
+
+  const handleBuildCoverLetterFromProfile = () => {
+    const generatedCoverLetter = buildCoverLetterFromProfile();
+    setFormData((prev) => ({ ...prev, coverLetterTemplate: generatedCoverLetter }));
+    setTimeout(() => updateCompletedSections(), 100);
+    toast.success('Cover letter generated from Hire Me profile.');
   };
 
   const handleAddSkill = (skill) => {
@@ -745,6 +1038,7 @@ export default function ProfileBuilder() {
         degree: '',
         institution: '',
         board: '',
+        startYear: '',
         passingYear: '',
         percentage: '',
         stream: ''
@@ -752,10 +1046,103 @@ export default function ProfileBuilder() {
     }));
   };
 
+  const getEducationYearRange = (entries, index) => {
+    const thisYear = new Date().getFullYear();
+    const prevPassingYear = Number(entries[index - 1]?.passingYear) || MIN_EDUCATION_YEAR;
+    const nextStartYear = Number(entries[index + 1]?.startYear) || thisYear + 2;
+    const currentStartYear = Number(entries[index]?.startYear) || prevPassingYear;
+    const currentPassingYear = Number(entries[index]?.passingYear) || nextStartYear;
+
+    return {
+      minStartYear: Math.max(MIN_EDUCATION_YEAR, prevPassingYear),
+      maxStartYear: Math.min(thisYear, currentPassingYear || nextStartYear, nextStartYear),
+      minPassingYear: Math.max(prevPassingYear, currentStartYear),
+      maxPassingYear: Math.max(currentStartYear, Math.min(thisYear + 2, nextStartYear))
+    };
+  };
+
+  const validateEducationEntries = (entries, options = {}) => {
+    const { requireBothYears = true } = options;
+    const seenLevels = new Set();
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = entries[index];
+      const startYear = Number(entry.startYear);
+      const passingYear = Number(entry.passingYear);
+      const prevPassingYear = Number(entries[index - 1]?.passingYear);
+      const nextStartYear = Number(entries[index + 1]?.startYear);
+      const thisYear = new Date().getFullYear();
+
+      if (entry.level) {
+        if (seenLevels.has(entry.level)) {
+          return `Education level "${entry.level}" is duplicated. Please keep each education level only once.`;
+        }
+        seenLevels.add(entry.level);
+      }
+
+      if (!entry.startYear || !entry.passingYear) {
+        if (!requireBothYears) {
+          continue;
+        }
+        return `Please select both start year and passing year for education entry ${index + 1}.`;
+      }
+
+      if (startYear > passingYear) {
+        return `Education entry ${index + 1}: start year cannot be later than passing year.`;
+      }
+
+      if (startYear > thisYear) {
+        return `Education entry ${index + 1}: start year cannot be in the future.`;
+      }
+
+      if (prevPassingYear && startYear < prevPassingYear) {
+        return `Education entry ${index + 1}: start year must be ${prevPassingYear} or later to keep chronology valid.`;
+      }
+
+      if (nextStartYear && passingYear > nextStartYear) {
+        return `Education entry ${index + 1}: passing year must be ${nextStartYear} or earlier because next degree starts in ${nextStartYear}.`;
+      }
+    }
+
+    return '';
+  };
+
   const handleUpdateEducation = (index, field, value) => {
     setFormData(prev => {
       const updated = [...prev.educationEntries];
-      updated[index] = { ...updated[index], [field]: value };
+      const current = { ...updated[index], [field]: value };
+
+      if (field === 'level') {
+        const duplicateLevel = prev.educationEntries.some(
+          (entry, idx) => idx !== index && entry?.level === value
+        );
+        if (value && duplicateLevel) {
+          toast.warning(`"${value}" is already added. Please choose a different education level.`);
+          return prev;
+        }
+
+        const options = DEGREE_OPTIONS_BY_LEVEL[value] || [];
+        if (current.degree && options.length > 0 && !options.includes(current.degree)) {
+          current.degree = '';
+        }
+        if (value !== 'Class 10th' && value !== 'Class 12th') {
+          current.board = '';
+          current.stream = '';
+        }
+      }
+
+      if (field === 'startYear' && value) {
+        const thisYear = new Date().getFullYear();
+        if (Number(value) > thisYear) {
+          toast.warning('Start year cannot be in the future.');
+          current.startYear = '';
+        }
+      }
+
+      updated[index] = current;
+      const validationMessage = validateEducationEntries(updated, { requireBothYears: false });
+      if (validationMessage) {
+        toast.warning(validationMessage);
+      }
       return { ...prev, educationEntries: updated };
     });
     setTimeout(() => updateCompletedSections(), 100);
@@ -937,16 +1324,14 @@ export default function ProfileBuilder() {
     setCurrentSectionIndex(newIndex);
 
     // Save in the background so the UI does not wait on the network (was blocking every section change)
-    if (formData.fullName.trim()) {
-      const profileData = { ...formData };
-      if (resume?.isFromProfile && resume.base64) {
-        profileData.resumeFileName = resume.name;
-        profileData.resumeFileType = resume.type;
-        profileData.resumeBase64 = resume.base64;
-        profileData.resumeFileSize = resume.size;
-      }
-      void autoSaveProfile(profileData);
+    const profileData = { ...formData };
+    if (resume?.isFromProfile && resume.base64) {
+      profileData.resumeFileName = resume.name;
+      profileData.resumeFileType = resume.type;
+      profileData.resumeBase64 = resume.base64;
+      profileData.resumeFileSize = resume.size;
     }
+    void autoSaveProfile(profileData);
   };
 
   const handleNext = () => {
@@ -969,6 +1354,14 @@ export default function ProfileBuilder() {
     if (!formData.fullName.trim()) {
       setError('Full name is required');
       setCurrentSectionIndex(0);
+      return;
+    }
+
+    const educationValidationError = validateEducationEntries(formData.educationEntries);
+    if (educationValidationError) {
+      setError(educationValidationError);
+      setCurrentSectionIndex(PROFILE_SECTIONS.findIndex(section => section.id === 'education'));
+      toast.error(educationValidationError);
       return;
     }
 
@@ -1497,7 +1890,17 @@ export default function ProfileBuilder() {
                             </label>
                           </div>
                           <div className="md:col-span-2">
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>
+                            <div className="mb-1 flex items-center justify-between">
+                              <label className="block text-xs font-medium text-gray-600">Description</label>
+                              <button
+                                type="button"
+                                onClick={() => handleEnhanceExperienceDescription(index)}
+                                disabled={enhancingField === `experience-description-${index}`}
+                                className="text-xs font-medium text-indigo-700 hover:text-indigo-800 disabled:text-gray-400"
+                              >
+                                {enhancingField === `experience-description-${index}` ? 'Enhancing...' : 'Enhance text'}
+                              </button>
+                            </div>
                             <textarea
                               value={exp.description || ''}
                               onChange={(e) => handleUpdateExperience(index, 'description', e.target.value)}
@@ -1586,10 +1989,20 @@ export default function ProfileBuilder() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                    Professional Summary
-                    {isFieldFilled('summary') && <span className="text-blue-600 text-xs">✓</span>}
-                  </label>
+                  <div className="mb-2 flex items-center justify-between">
+                    <label className="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                      Professional Summary
+                      {isFieldFilled('summary') && <span className="text-blue-600 text-xs">✓</span>}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => handleEnhanceTextField('summary')}
+                      disabled={enhancingField === 'summary'}
+                      className="text-xs font-medium text-indigo-700 hover:text-indigo-800 disabled:text-gray-400"
+                    >
+                      {enhancingField === 'summary' ? 'Enhancing...' : 'Enhance summary'}
+                    </button>
+                  </div>
                   <textarea
                     name="summary"
                     value={formData.summary}
@@ -1647,22 +2060,36 @@ export default function ProfileBuilder() {
                                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-purple-300 focus:outline-none focus:ring-1 focus:ring-purple-100"
                               >
                                 <option value="">Select Level</option>
-                                <option value="Class 12th">Class 12th</option>
-                                <option value="Graduation">Graduation</option>
-                                <option value="Post Graduation">Post Graduation</option>
-                                <option value="Diploma">Diploma</option>
-                                <option value="Other">Other</option>
+                                {EDUCATION_LEVEL_OPTIONS.map(level => (
+                                  <option
+                                    key={level}
+                                    value={level}
+                                    disabled={
+                                      formData.educationEntries.some(
+                                        (entry, idx) => idx !== index && entry?.level === level
+                                      )
+                                    }
+                                  >
+                                    {level}
+                                  </option>
+                                ))}
                               </select>
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-gray-600 mb-1">Degree/Course</label>
-                              <input
-                                type="text"
+                              <select
                                 value={edu.degree || ''}
                                 onChange={(e) => handleUpdateEducation(index, 'degree', e.target.value)}
-                                placeholder="e.g., B.Tech, B.Sc, M.Tech"
-                                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100"
-                              />
+                                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                              >
+                                <option value="">Select Degree/Course</option>
+                                {(DEGREE_OPTIONS_BY_LEVEL[edu.level] || DEGREE_OPTIONS_BY_LEVEL.Other).map(option => (
+                                  <option key={option} value={option}>{option}</option>
+                                ))}
+                                {edu.degree && !(DEGREE_OPTIONS_BY_LEVEL[edu.level] || DEGREE_OPTIONS_BY_LEVEL.Other).includes(edu.degree) && (
+                                  <option value={edu.degree}>{edu.degree}</option>
+                                )}
+                              </select>
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-gray-600 mb-1">Institution/University *</label>
@@ -1674,7 +2101,7 @@ export default function ProfileBuilder() {
                                 className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100"
                               />
                             </div>
-                            {edu.level === 'Class 12th' && (
+                            {(edu.level === 'Class 10th' || edu.level === 'Class 12th') && (
                               <div>
                                 <label className="block text-xs font-medium text-gray-600 mb-1">Board</label>
                                 <input
@@ -1702,14 +2129,42 @@ export default function ProfileBuilder() {
                               </div>
                             )}
                             <div>
-                              <label className="block text-xs font-medium text-gray-600 mb-1">Passing Year</label>
-                              <input
-                                type="text"
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Start Year *</label>
+                              <select
+                                value={edu.startYear || ''}
+                                onChange={(e) => handleUpdateEducation(index, 'startYear', e.target.value)}
+                                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                              >
+                                <option value="">Select Start Year</option>
+                                {yearOptions
+                                  .filter((year) => {
+                                    const numericYear = Number(year);
+                                    const { minStartYear, maxStartYear } = getEducationYearRange(formData.educationEntries, index);
+                                    return numericYear >= minStartYear && numericYear <= maxStartYear;
+                                  })
+                                  .map(year => (
+                                    <option key={year} value={year}>{year}</option>
+                                  ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Passing Year *</label>
+                              <select
                                 value={edu.passingYear || ''}
                                 onChange={(e) => handleUpdateEducation(index, 'passingYear', e.target.value)}
-                                placeholder="e.g., 2020"
-                                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100"
-                              />
+                                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:border-indigo-300 focus:outline-none focus:ring-1 focus:ring-indigo-100"
+                              >
+                                <option value="">Select Passing Year</option>
+                                {yearOptions
+                                  .filter((year) => {
+                                    const numericYear = Number(year);
+                                    const { minPassingYear, maxPassingYear } = getEducationYearRange(formData.educationEntries, index);
+                                    return numericYear >= minPassingYear && numericYear <= maxPassingYear;
+                                  })
+                                  .map(year => (
+                                    <option key={year} value={year}>{year}</option>
+                                  ))}
+                              </select>
                             </div>
                             <div>
                               <label className="block text-xs font-medium text-gray-600 mb-1">Percentage/CGPA</label>
@@ -1722,6 +2177,9 @@ export default function ProfileBuilder() {
                               />
                             </div>
                           </div>
+                          <p className="mt-3 text-xs text-gray-500">
+                            Keep entries in chronological order. Each start year should be on/after the previous passing year, and passing year should not exceed the next entry&apos;s start year.
+                          </p>
                         </div>
                       ))}
                     </div>
@@ -2107,7 +2565,17 @@ export default function ProfileBuilder() {
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-gray-600 mb-1">Description *</label>
+                              <div className="mb-1 flex items-center justify-between">
+                                <label className="block text-xs font-medium text-gray-600">Description *</label>
+                                <button
+                                  type="button"
+                                  onClick={() => handleEnhanceProjectDescription(index)}
+                                  disabled={enhancingField === `project-description-${index}`}
+                                  className="text-xs font-medium text-indigo-700 hover:text-indigo-800 disabled:text-gray-400"
+                                >
+                                  {enhancingField === `project-description-${index}` ? 'Enhancing...' : 'Enhance text'}
+                                </button>
+                              </div>
                               <textarea
                                 value={project.description || ''}
                                 onChange={(e) => handleUpdateProject(index, 'description', e.target.value)}
@@ -2407,10 +2875,19 @@ export default function ProfileBuilder() {
                 )}
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                    Cover Letter Template
-                    {isFieldFilled('coverLetterTemplate') && <span className="text-blue-600 text-xs">✓</span>}
-                  </label>
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                      Cover Letter Template
+                      {isFieldFilled('coverLetterTemplate') && <span className="text-blue-600 text-xs">✓</span>}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleBuildCoverLetterFromProfile}
+                      className="text-xs px-3 py-1.5 rounded-md border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition-colors whitespace-nowrap"
+                    >
+                      Build from Hire Me Profile
+                    </button>
+                  </div>
                   <textarea
                     name="coverLetterTemplate"
                     value={formData.coverLetterTemplate}

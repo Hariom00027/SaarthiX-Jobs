@@ -32,6 +32,31 @@ const mergePreferIncoming = (baseProfile, incomingProfile) => ({
   ...(incomingProfile || {}),
 });
 
+const hasNonEmptyEducationYear = (entries, key) => (
+  Array.isArray(entries) && entries.some((entry) => {
+    const value = entry?.[key];
+    return value !== null && value !== undefined && String(value).trim() !== '';
+  })
+);
+
+const getEducationEntriesScore = (entries) => {
+  if (!Array.isArray(entries) || entries.length === 0) return 0;
+  let score = entries.length;
+  if (hasNonEmptyEducationYear(entries, 'startYear')) score += 100;
+  if (hasNonEmptyEducationYear(entries, 'passingYear')) score += 50;
+  const withInstitution = entries.filter((entry) => entry?.institution && String(entry.institution).trim()).length;
+  score += withInstitution;
+  return score;
+};
+
+const pickRicherEducationEntries = (firstEntries, secondEntries) => {
+  const firstScore = getEducationEntriesScore(firstEntries);
+  const secondScore = getEducationEntriesScore(secondEntries);
+  if (firstScore > secondScore) return firstEntries;
+  if (secondScore > firstScore) return secondEntries;
+  return !isBlankValue(secondEntries) ? secondEntries : firstEntries;
+};
+
 const readLocalJobsProfile = () => {
   try {
     const raw = localStorage.getItem(JOBS_PROFILE_LOCAL_KEY);
@@ -224,8 +249,9 @@ const normalizeAuthPictureToJobsProfileFields = (picture) => {
 };
 
 export const getUserProfile = async () => {
+  const localCachedProfile = readLocalJobsProfile();
   if (shouldUseLocalOnlyProfile()) {
-    return readLocalJobsProfile();
+    return localCachedProfile;
   }
 
   try {
@@ -266,15 +292,26 @@ export const getUserProfile = async () => {
       ? mergeProfileData(mergedFromHome, jobsProfile)
       : jobsProfile;
 
+    if (mergedProfile) {
+      const mergedEducationEntries = pickRicherEducationEntries(
+        mergedFromHome?.educationEntries,
+        jobsProfile?.educationEntries
+      );
+      mergedProfile.educationEntries = pickRicherEducationEntries(
+        mergedEducationEntries,
+        localCachedProfile?.educationEntries
+      );
+    }
+
     if (mergedProfile && Object.keys(mergedProfile).length > 0) {
       writeLocalJobsProfile(mergedProfile);
       return mergedProfile;
     }
 
-    return readLocalJobsProfile();
+    return localCachedProfile;
   } catch (error) {
     console.error('Error fetching user profile:', error);
-    return readLocalJobsProfile();
+    return localCachedProfile;
   }
 };
 
@@ -528,7 +565,13 @@ export const saveUserProfile = async (profileData) => {
 
     // Best-effort mirror into Jobs backend profile collection.
     try {
-      await saveJobsBackendProfile(savedProfile);
+      const jobsMirroredProfile = await saveJobsBackendProfile(savedProfile);
+      if (jobsMirroredProfile && Object.keys(jobsMirroredProfile).length > 0) {
+        savedProfile.educationEntries = pickRicherEducationEntries(
+          savedProfile.educationEntries,
+          jobsMirroredProfile.educationEntries
+        );
+      }
     } catch (syncError) {
       console.warn('Shared profile saved, but Jobs mirror sync failed:', syncError?.message || syncError);
     }
@@ -786,6 +829,20 @@ export const generateHackathonFieldWithAI = async (fieldType, context = '') => {
     return response.data.content;
   } catch (error) {
     console.error('Error generating AI content:', error);
+    throw error;
+  }
+};
+
+// Enhance profile summary text using AI while preserving meaning
+export const enhanceProfileSummaryWithAI = async (summaryText) => {
+  try {
+    const response = await apiClient.post('/hackathons/ai/generate', {
+      fieldType: 'summary',
+      context: summaryText
+    });
+    return response.data?.content || '';
+  } catch (error) {
+    console.error('Error enhancing profile summary with AI:', error);
     throw error;
   }
 };
