@@ -329,6 +329,7 @@ public class UserProfileController {
                         edu.setDegree((String) eduMap.getOrDefault("degree", ""));
                         edu.setInstitution((String) eduMap.getOrDefault("institution", ""));
                         edu.setBoard((String) eduMap.getOrDefault("board", ""));
+                        edu.setStartYear((String) eduMap.getOrDefault("startYear", ""));
                         edu.setPassingYear((String) eduMap.getOrDefault("passingYear", ""));
                         edu.setPercentage((String) eduMap.getOrDefault("percentage", ""));
                         edu.setStream((String) eduMap.getOrDefault("stream", ""));

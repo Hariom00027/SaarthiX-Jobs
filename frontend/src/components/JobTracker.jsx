@@ -189,7 +189,7 @@ export default function JobTracker() {
             onClick={() => navigate("/browse-hackathons")}
             className="h-[39px] rounded-[6px] border border-black bg-white px-[18px] text-[14px] font-medium text-black shadow-[0px_1px_2px_rgba(37,99,235,0.2)]"
           >
-            Hackathons
+            Hackathons 
           </button>
           <button
             onClick={() => navigate("/job-tracker")}

@@ -237,6 +237,7 @@ public class UserProfile {
         private String degree;  // "B.Tech", "B.Sc", "M.Tech", etc.
         private String institution;
         private String board;  // For Class 12th
+        private String startYear;
         private String passingYear;
         private String percentage;
         private String stream;  // Science, Commerce, Arts, etc.
@@ -253,6 +254,9 @@ public class UserProfile {
 
         public String getBoard() { return board; }
         public void setBoard(String board) { this.board = board; }
+
+        public String getStartYear() { return startYear; }
+        public void setStartYear(String startYear) { this.startYear = startYear; }
 
         public String getPassingYear() { return passingYear; }
         public void setPassingYear(String passingYear) { this.passingYear = passingYear; }
